@@ -100,7 +100,7 @@ Back up `diary_data/diary.db` (or a `python -m diary export` dump) with the rest
 ### Updating the server
 
 ```bash
-./venv/bin/pip install pytest          # once: lets the update run the tests before restarting
+./venv/bin/python -m pip install pytest          # once: lets the update run the tests before restarting
 ./scripts/update.sh --check            # what would come in
 ./scripts/update.sh                    # pull + check + restart
 ```
@@ -127,7 +127,7 @@ DIARY_SMTP_PASSWORD=abcdefghijklmnop     # Gmail app password, myaccount.google.
 
 ```bash
 ./scripts/diary_backup.sh   # test once – check your inbox
-crontab -e                  # add: 17 3 * * 0  /root/Flask_Telemetry/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
+crontab -e                  # add: 17 3 * * 0  /root/Shooting_Diary_Suite/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
 ```
 
 Backups contain your licence numbers – they only go to your own mailbox.

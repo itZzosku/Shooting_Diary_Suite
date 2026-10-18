@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Weekly shooting-diary backup: dated JSON + SQLite copy in diary_backups/, JSON emailed to you.
 # Needs DIARY_SMTP_USER and DIARY_SMTP_PASSWORD (Gmail app password) in the repo's .env.
-# Cron (Sundays 03:17):  17 3 * * 0  /root/Flask_Telemetry/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
+# Cron (Sundays 03:17):  17 3 * * 0  /root/Shooting_Diary_Suite/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
