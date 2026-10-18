@@ -51,6 +51,8 @@ h1 span{color:var(--accent)}
 .hbtns{display:flex;gap:8px;flex-wrap:wrap}
 .ghost{background:none;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:.85rem;color:var(--fg)}
 .ghost:hover{border-color:var(--fg)}
+.ghost.icon{display:inline-flex;align-items:center;justify-content:center;padding:7px 11px}
+.ghost.icon svg{width:18px;height:18px}
 .banner{background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;font-size:.9rem}
 
 /* Licence strip */
@@ -272,7 +274,7 @@ header.top{padding-top:6px!important}
     <h1>Muzzle <span>velocity</span></h1>
     <div class="hbtns">
       <button class="ghost" id="loadsBtn" type="button">Loads</button>
-      <form method="post" action="logout" style="display:contents"><button class="ghost" type="submit">Log out</button></form>
+      <form method="post" action="logout" style="display:contents"><button class="ghost icon" type="submit" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></form>
     </div>
   </header>
 
@@ -449,7 +451,7 @@ function render(){
   const counts={};inGun.forEach(d=>{const k=d.load_id||"";counts[k]=(counts[k]||0)+1});
   if(S.load&&!(S.load in counts))S.load="";
   const ids=Object.keys(counts).filter(Boolean).sort((a,b)=>loadName(a).localeCompare(loadName(b),"fi",{numeric:true}));
-  $("loadSel").innerHTML=`<option value="">All loads (${inGun.length} strings)</option>`
+  $("loadSel").innerHTML=`<option value="">All loads (${inGun.length} string${inGun.length===1?"":"s"})</option>`
     +ids.map(id=>`<option value="${esc(id)}" ${S.load===id?"selected":""}>${esc(loadName(id))} · ${counts[id]} strings</option>`).join("")
     +(counts[""]?`<option value="-" ${S.load==="-"?"selected":""}>No load · ${counts[""]} strings</option>`:"");
   lsSet({gun:S.gun,load:S.load});

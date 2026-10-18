@@ -54,6 +54,8 @@ h1 span{color:var(--accent)}
 .hbtns{display:flex;gap:8px;flex-wrap:wrap}
 .ghost{background:none;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:.85rem;color:var(--fg)}
 .ghost:hover{border-color:var(--fg)}
+.ghost.icon{display:inline-flex;align-items:center;justify-content:center;padding:7px 11px}
+.ghost.icon svg{width:18px;height:18px}
 .banner{background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;font-size:.9rem}
 
 /* Licence strip */
@@ -220,7 +222,7 @@ header.top{padding-top:6px!important}
       <button class="ghost" id="pwBtn" type="button">Password</button>
       <button class="ghost" id="myData" type="button">My data</button>
       <button class="ghost" id="accBtn" type="button" hidden>Accounts</button>
-      <form method="post" action="logout" style="display:contents"><button class="ghost" type="submit">Log out</button></form>
+      <form method="post" action="logout" style="display:contents"><button class="ghost icon" type="submit" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></form>
     </div>
   </header>
   <div class="banner" id="offNote" hidden>Offline – showing the last summary fetched.</div>
