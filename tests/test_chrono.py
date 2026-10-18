@@ -243,6 +243,8 @@ def test_api_parse_commit_idempotent(client):
     assert days[0]["stats"]["n"] == 3 and days[0]["temp_c"] == 23.0
     lad = client.get("/diary/api/chrono/ladder?gun=g-t3x").get_json()
     assert lad[0]["charge_gr"] == 44.0 and lad[0]["n"] == 3
+    every = client.get("/diary/api/chrono/ladder").get_json()      # all guns: same point, tagged with its gun
+    assert [(p["gun_id"], p["charge_gr"]) for p in every] == [("g-t3x", 44.0)]
 
     # Excluding a shot changes the figures on read
     sid = client.get("/diary/api/chrono/strings").get_json()[0]["id"]

@@ -507,22 +507,26 @@ def trend(conn, gun, load):
     return {"points": pts, "temp_sensitivity": temp_sensitivity([(d["temp_c"], d["stats"]["avg"]) for d in ds])}
 
 
-def ladder(conn, gun):
-    """One point per load (handloads with a charge) for this gun, pooled over every day."""
-    shots = _shots_by_string(conn, " WHERE st.gun_id=?", (gun,))
+def ladder(conn, gun=None):
+    """One point per (gun, load) for handloads with a charge, pooled over every day. gun=None: every gun –
+    a ladder is still drawn per gun, since each barrel gives its own velocities."""
+    where, args = (" WHERE st.gun_id=?", (gun,)) if gun else (" WHERE st.gun_id IS NOT NULL", ())
+    shots = _shots_by_string(conn, where, args)
     by_load = defaultdict(lambda: {"v": [], "days": set()})
-    for r in conn.execute("SELECT id, date, load_id FROM chrono_strings WHERE gun_id=? AND load_id IS NOT NULL", (gun,)):
-        g = by_load[r["load_id"]]
+    for r in conn.execute("SELECT st.id, st.date, st.load_id, st.gun_id FROM chrono_strings st" + where
+                          + " AND st.load_id IS NOT NULL", args):
+        g = by_load[(r["gun_id"], r["load_id"])]
         g["v"] += [x["v_ms"] for x in shots.get(r["id"], []) if not x["excluded"]]
         g["days"].add(r["date"])
+    loads = {l["id"]: l for l in load_rows(conn)}
     out = []
-    for lrow in load_rows(conn):
-        if lrow["id"] not in by_load or lrow["kind"] != "handload" or lrow["charge_gr"] is None:
+    for (gid, lid), g in by_load.items():
+        lrow = loads.get(lid)
+        if not lrow or lrow["kind"] != "handload" or lrow["charge_gr"] is None:
             continue
-        g = by_load[lrow["id"]]
-        out.append({"load_id": lrow["id"], "group": chrono_loads.ladder_group(lrow), "name": lrow["name"],
+        out.append({"load_id": lid, "gun_id": gid, "group": chrono_loads.ladder_group(lrow), "name": lrow["name"],
                     "charge_gr": lrow["charge_gr"], "days": sorted(g["days"]), **stats(g["v"], lrow["bullet_gr"])})
-    out.sort(key=lambda p: (p["group"], p["charge_gr"]))
+    out.sort(key=lambda p: (p["gun_id"], p["group"], p["charge_gr"]))
     return out
 
 
@@ -758,10 +762,7 @@ def api_trend():
 @bp.get("/api/chrono/ladder")
 @login_required
 def api_ladder():
-    gun = request.args.get("gun")
-    if not gun:
-        return jsonify(error="gun_required"), 400
-    return jsonify(ladder(db(), gun))
+    return jsonify(ladder(db(), request.args.get("gun") or None))
 
 
 def load_usage(conn):

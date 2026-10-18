@@ -647,13 +647,17 @@ async function renderLoad(){
 }
 
 /* ---------- ladder ---------- */
+// Charge ladders: per gun + bullet/powder/brass. With a load picked, only the ladder that load is part of.
 async function renderLadder(){
   fitW();
   const box=$("ladderView");
-  if(!S.gun||S.gun==="-"||S.load){box.hidden=true;return}
-  let pts;try{pts=await api("GET","chrono/ladder?gun="+encodeURIComponent(S.gun))}catch(e){box.hidden=true;return}
-  const groups=new Map();pts.forEach(p=>{const k=p.group;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p)});
-  const html=[...groups.entries()].filter(([,g])=>g.length>=2).map(([k,g])=>ladderChart(k,g)).join("");
+  if(S.gun==="-"||S.load==="-"){box.hidden=true;return}
+  let pts;try{pts=await api("GET","chrono/ladder"+(S.gun?"?gun="+encodeURIComponent(S.gun):""))}catch(e){box.hidden=true;return}
+  const groups=new Map();pts.forEach(p=>{const k=p.gun_id+"\u0000"+p.group;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p)});
+  const gunName=id=>(S.guns.find(g=>g.id===id)||{}).name||"";
+  const html=[...groups.values()].filter(g=>g.length>=2&&(!S.load||g.some(p=>p.load_id===S.load)))
+    .sort((a,b)=>a[0].group.localeCompare(b[0].group,"fi",{numeric:true})||gunName(a[0].gun_id).localeCompare(gunName(b[0].gun_id)))
+    .map(g=>ladderChart(S.gun?g[0].group:`${gunName(g[0].gun_id)} — ${g[0].group}`,g)).join("");
   box.hidden=!html;$("ladders").innerHTML=html;bindTips(box);
 }
 

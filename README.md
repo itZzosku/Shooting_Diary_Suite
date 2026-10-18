@@ -180,7 +180,7 @@ workbooks and Kestrel DROP weather logs. Open it from the diary header (*Velocit
   overlaps a stored day only fills missing weather — fliers you removed in a workbook stay removed.
 - **Statistics** are computed from included shots: average, sample SD (÷ n−1), Garmin's SD (÷ n), ES,
   95 % CI, KE. Days pool all strings of the same gun + load; the same load in two guns is tracked separately.
-- Views: per-day list, trend of a load (average + CI, SD per day), charge ladder per gun, shot dot-plot with
+- Views: per-day list, trend of a load (average + CI, SD per day), charge ladders (per gun; all guns at once, or just the ladder of the picked load), shot dot-plot with
   exclude/include per shot, manual weather per string.
 - **Loads**: like guns, each load is a set of fields — handload: bullet maker, bullet,
   weight, brass, powder, charge, primer, COAL; factory: maker, product, bullet weight. The name is generated,
