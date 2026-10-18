@@ -1,4 +1,4 @@
-from flask import Flask, Response, abort
+from flask import Flask, Response, abort, render_template
 from influxdb_client import InfluxDBClient
 from dotenv import load_dotenv
 import os
@@ -29,21 +29,10 @@ app = Flask(__name__)
 diary.init_app(app)
 
 
-# Landing page route with links
+# Landing page: live house reading, shooting diary, scope app, notes (templates/index.html)
 @app.route('/')
 def index():
-    note_links = "".join(
-        '\n    <p>Click <a href="/notes/{slug}">here</a> to open: {title}.</p>'.format(
-            slug=slug, title=note["title"])
-        for slug, note in list_notes().items()
-    )
-    return '''
-    <h1>Flask is running!</h1>
-    <p>Click <a href="/house">here</a> to get telemetry of the house.</p>
-    <p>Click <a href="/ammo">here</a> to open the ammo cost calculator.</p>
-    <p>Click <a href="/diary/">here</a> to open the shooting diary (login required).</p>''' + note_links + '''
-    <p>Click <a href="https://github.com/itZzosku/Scope_Adjustment_Calculator_App/releases/latest">here</a> to get latest version of the Scope Adjustment Calculator App.</p>
-    '''
+    return render_template('index.html', notes=list_notes())
 
 
 # InfluxDB settings from environment variables
@@ -103,188 +92,6 @@ def get_data():
     except Exception as e:
         print(f"Error querying InfluxDB: {e}")
         abort(500, description="Internal Server Error while querying InfluxDB")
-
-
-# Per-round prices in EUR (one list: the diary's "lent guns" cost uses the same defaults)
-from diary.loans import DEFAULT_AMMO_PRICES as AMMO_PRICES  # noqa: E402
-
-
-# Ammo cost calculator: set price per round x rounds used -> total (client-side)
-def build_ammo_page():
-    rows = ""
-    for name, price in AMMO_PRICES.items():
-        key = name.replace(" ", "_").replace(".", "")
-        rows += '''
-      <div class="cart" data-key="{key}">
-        <div class="name">{name}</div>
-        <div class="row">
-          <div>
-            <label>Price / round (&euro;)</label>
-            <input type="number" class="price" step="0.001" value="{price}">
-          </div>
-          <div>
-            <label>Rounds used</label>
-            <input type="number" class="count" step="1" min="0" value="0">
-          </div>
-        </div>
-        <div class="sub"><span>Subtotal</span><span class="subval">&euro;0.00</span></div>
-      </div>'''.format(key=key, name=name, price=price)
-
-    return '''<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ammo Cost Calculator</title>
-<style>
-  :root {
-    --bg: #14171c;
-    --card: #1c2027;
-    --line: #2c313b;
-    --text: #e6e9ef;
-    --muted: #8a93a3;
-    --accent: #5aa9e6;
-    --good: #6bcf8e;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 15px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    padding: 24px 16px 64px;
-  }
-  .wrap { max-width: 640px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub-title { color: var(--muted); margin: 0 0 24px; font-size: 13px; }
-  .cart {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 14px;
-  }
-  .name { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px; }
-  input {
-    width: 100%;
-    background: #0f1216;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    color: var(--text);
-    padding: 8px 10px;
-    font-size: 15px;
-  }
-  input:focus { outline: none; border-color: var(--accent); }
-  .row { display: flex; gap: 12px; }
-  .row > div { flex: 1; }
-  .sub {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid var(--line);
-    font-size: 13px;
-    color: var(--muted);
-  }
-  .sub .subval { color: var(--text); font-variant-numeric: tabular-nums; }
-  .total {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 20px;
-    margin-top: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-  }
-  .total .tval { font-size: 30px; font-weight: 700; color: var(--good); font-variant-numeric: tabular-nums; }
-  .foot { display: flex; justify-content: space-between; margin-top: 16px; align-items: center; }
-  a.back { color: var(--accent); font-size: 13px; text-decoration: none; }
-  button {
-    background: transparent;
-    border: 1px solid var(--line);
-    color: var(--muted);
-    border-radius: 6px;
-    padding: 8px 14px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  button:hover { border-color: var(--accent); color: var(--text); }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <a class="back" href="/">&larr; back</a>
-  <h1>Ammo Cost Calculator</h1>
-  <p class="sub-title">Enter rounds used per caliber. Prices are per round &mdash; edit to match the website.</p>
-
-  ''' + rows + '''
-
-  <div class="total">
-    <span>Total</span>
-    <span class="tval" id="grandTotal">&euro;0.00</span>
-  </div>
-
-  <div class="foot">
-    <span style="color:var(--muted);font-size:13px;" id="roundCount">0 rounds</span>
-    <button id="reset">Reset counts</button>
-  </div>
-</div>
-
-<script>
-  var carts = Array.prototype.slice.call(document.querySelectorAll('.cart'));
-
-  function num(el) { var v = parseFloat(el.value); return isFinite(v) ? v : 0; }
-
-  function calc() {
-    var total = 0, roundsTotal = 0, store = {};
-    carts.forEach(function(c) {
-      var price = num(c.querySelector('.price'));
-      var count = num(c.querySelector('.count'));
-      var sub = price * count;
-      total += sub;
-      roundsTotal += count;
-      c.querySelector('.subval').textContent = '\\u20ac' + sub.toFixed(2);
-      store[c.dataset.key] = { price: c.querySelector('.price').value, count: c.querySelector('.count').value };
-    });
-    document.getElementById('grandTotal').textContent = '\\u20ac' + total.toFixed(2);
-    document.getElementById('roundCount').textContent = roundsTotal + (roundsTotal === 1 ? ' round' : ' rounds');
-    try { localStorage.setItem('ammoCost', JSON.stringify(store)); } catch(e) {}
-  }
-
-  (function restore() {
-    try {
-      var s = JSON.parse(localStorage.getItem('ammoCost') || '{}');
-      carts.forEach(function(c) {
-        var d = s[c.dataset.key];
-        if (d) {
-          if (d.price !== undefined) c.querySelector('.price').value = d.price;
-          if (d.count !== undefined) c.querySelector('.count').value = d.count;
-        }
-      });
-    } catch(e) {}
-  })();
-
-  carts.forEach(function(c) {
-    c.querySelector('.price').addEventListener('input', calc);
-    c.querySelector('.count').addEventListener('input', calc);
-  });
-
-  document.getElementById('reset').addEventListener('click', function() {
-    carts.forEach(function(c) { c.querySelector('.count').value = 0; });
-    calc();
-  });
-
-  calc();
-</script>
-</body>
-</html>'''
-
-
-@app.route('/ammo')
-def ammo_calculator():
-    return Response(build_ammo_page(), mimetype='text/html')
 
 
 # Markdown notes: drop a .md file into the notes/ folder and it shows up on the site.
@@ -445,7 +252,6 @@ if __name__ == '__main__':
     print("Flask app starting")
     print(f"http://{local_ip}:{port}/")
     print(f"http://{local_ip}:{port}/house")
-    print(f"http://{local_ip}:{port}/ammo")
     print(f"http://{local_ip}:{port}/diary/")
     for slug in list_notes():
         print(f"http://{local_ip}:{port}/notes/{slug}")

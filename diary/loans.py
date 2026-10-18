@@ -2,8 +2,7 @@
 
 A loan is one trip: date, event, and lines {who, gunId, gun, cal, rounds, price}. Its shots count toward the
 gun's round count but never toward your own shooting record (the licence PDF/CSV) – you didn't shoot them.
-Prices are per round in EUR, kept per account (kv 'ammo_prices'); the defaults are the public /ammo
-calculator's list.
+Prices are per round in EUR, kept per account (kv 'ammo_prices'), starting from DEFAULT_AMMO_PRICES.
 """
 import json
 import time
@@ -13,7 +12,7 @@ from flask import abort, jsonify, request
 
 from . import DATE_RE, ID_RE, bp, db, kv_get, kv_set, login_required
 
-# Per-round prices in EUR – also the defaults of the public ammo calculator (main.py /ammo)
+# Starting per-round prices in EUR; each account edits its own on the Loans page
 DEFAULT_AMMO_PRICES = OrderedDict([
     (".223 Rem", 0.60),
     ("9 mm", 0.30),

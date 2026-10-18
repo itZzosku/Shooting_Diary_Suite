@@ -1,5 +1,11 @@
 # Flask_Telemetry
 
+## Landing page (`/`)
+
+`templates/index.html`: the house sensor's latest reading (temperature, humidity, pressure from `/house`,
+refreshed every minute), and links to the shooting diary, the Scope Adjustment Calculator app on GitHub and any
+Markdown notes in `notes/`. `/house` still returns the raw JSON.
+
 ## Shooting diary (`/diary/`)
 
 Password-protected shooting diary. Code lives in `diary/`; `main.py` only calls `diary.init_app(app)`.
@@ -140,7 +146,7 @@ counts. The cost is worked out per friend; tick *Paid*, and *Share cost* sends t
 totals show at the top of the page, per friend (across all trips) and on the landing page.
 
 *Ammo prices* holds the price per round by calibre (a new line takes its gun's calibre price, editable per
-line). Defaults are the public `/ammo` calculator's list (`diary/loans.py`, also used by `main.py`). Loans and
+line). Starting prices are in `diary/loans.py` (`DEFAULT_AMMO_PRICES`); each account edits its own. Loans and
 prices are part of export / import / backup and *My data*.
 
 ## Language
