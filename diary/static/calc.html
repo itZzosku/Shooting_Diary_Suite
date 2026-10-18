@@ -215,7 +215,7 @@ header.top{padding-top:6px!important}
 .readout div{padding:12px 4px;display:flex;flex-direction:column;gap:2px;min-width:0}
 .readout div+div{border-left:1px solid var(--line);padding-left:14px}
 .readout small{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600}
-.readout b{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:clamp(1.6rem,8vw,2.4rem);font-weight:600;line-height:1.05;white-space:nowrap}
+.readout b{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:clamp(1.35rem,6.6vw,2.4rem);font-weight:600;line-height:1.05;white-space:nowrap}
 .readout span{white-space:pre-line;font-family:var(--f-mono);font-size:.8rem;color:var(--muted);line-height:1.4}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:.95rem}
@@ -284,7 +284,7 @@ function calc(){
   const mE=-C.y*y/dm,mW=-C.x*x/dm,ce=mE*MRAD_MOA/cv,cw=mW*MRAD_MOA/cv;     // correction = opposite of the group
   const one=(m,cl,pos,neg)=>{const r=Math.round(Math.abs(cl));return r?`${m>0?pos:neg} ${r}`:"0"};
   const det=(m,cl)=>{const r=Math.round(Math.abs(cl));return`${r===1?"click":"clicks"} (${Math.abs(cl).toFixed(2)} exact)\n${Math.abs(m).toFixed(2)} MRAD · ${Math.abs(m*MRAD_MOA).toFixed(2)} MOA`};
-  $("cE").textContent=one(mE,ce,"UP","DOWN");$("cW").textContent=one(mW,cw,"RIGHT","LEFT");
+  $("cE").textContent=one(mE,ce,"↑ UP","↓ DOWN");$("cW").textContent=one(mW,cw,"→ RIGHT","← LEFT");
   $("cEs").textContent=y?det(mE,ce):"no change";$("cWs").textContent=x?det(mW,cw):"no change";
 }
 $("cDist").value=st.dist||"100";$("cDistU").value=st.distU||"m";$("cOffU").value=st.offU||"mm";
