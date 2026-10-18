@@ -1,10 +1,11 @@
-# Flask_Telemetry
+# Shooting Diary Suite
+
+A self-hosted shooting diary for a few people: range visits and the licence record, muzzle velocities
+(Garmin Xero), scope zeroes and guns loaned to friends. Flask + SQLite, installable on the phone.
 
 ## Landing page (`/`)
 
-`templates/index.html`: the house sensor's latest reading (temperature, humidity, pressure from `/house`,
-refreshed every minute), and links to the shooting diary, the Scope Adjustment Calculator app on GitHub and any
-Markdown notes in `notes/`. `/house` still returns the raw JSON.
+`templates/index.html`: a link to the shooting diary and any Markdown notes dropped into `notes/`.
 
 ## Shooting diary (`/diary/`)
 
