@@ -120,6 +120,7 @@ input[type=text],input[type=date],input[type=time],input[type=number],select{wid
 .chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.9rem}
 .chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .chip.add{border-style:dashed}
+#ladders:empty{display:none!important}
 .chip.lad{border-radius:12px;text-align:left;line-height:1.35;font-size:.85rem}
 .chip.lad b{font-size:.92rem}
 .chip.lad small{color:var(--muted)}
@@ -284,8 +285,17 @@ header.top{padding-top:6px!important}
 
   <div class="banner" id="offNote" hidden></div>
 
-  <section class="filters" aria-label="Filter">
+  <section class="filters" aria-label="Gun">
     <div class="chips" id="gunChips"></div>
+  </section>
+
+  <section id="ladderView" hidden>
+    <div class="sechead"><h2>Charge ladders</h2></div>
+    <div class="chips" id="ladChips"></div>
+    <div id="ladders" style="display:flex;flex-direction:column;gap:12px;margin-top:12px"></div>
+  </section>
+
+  <section class="filters" aria-label="Load">
     <label class="f">Load<select id="loadSel"></select></label>
   </section>
 
@@ -295,12 +305,6 @@ header.top{padding-top:6px!important}
     <div class="chart" id="trendBox"></div>
     <div class="chart" id="sdBox" style="margin-top:12px"></div>
     <div class="chart" id="tempBox" style="margin-top:12px"></div>
-  </section>
-
-  <section id="ladderView" hidden>
-    <div class="sechead"><h2>Charge ladders</h2></div>
-    <div class="chips" id="ladChips"></div>
-    <div id="ladders" style="display:flex;flex-direction:column;gap:12px;margin-top:12px"></div>
   </section>
 
   <section>
