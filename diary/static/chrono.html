@@ -120,6 +120,10 @@ input[type=text],input[type=date],input[type=time],input[type=number],select{wid
 .chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.9rem}
 .chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .chip.add{border-style:dashed}
+.chip.lad{border-radius:12px;text-align:left;line-height:1.35;font-size:.85rem}
+.chip.lad b{font-size:.92rem}
+.chip.lad small{color:var(--muted)}
+.chip.lad[aria-pressed="true"] small{color:inherit;opacity:.75}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .grid3{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
 
@@ -295,7 +299,8 @@ header.top{padding-top:6px!important}
 
   <section id="ladderView" hidden>
     <div class="sechead"><h2>Charge ladders</h2></div>
-    <div id="ladders" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div class="chips" id="ladChips"></div>
+    <div id="ladders" style="display:flex;flex-direction:column;gap:12px;margin-top:12px"></div>
   </section>
 
   <section>
@@ -647,19 +652,29 @@ async function renderLoad(){
 }
 
 /* ---------- ladder ---------- */
-// Charge ladders: per gun + bullet/powder/brass. With a load picked, only the ladder that load is part of.
+// Charge ladders: per gun + bullet/powder/brass, one button each; the chart opens on a tap so the strings stay
+// near the top. With a load picked, the ladder that load is part of is shown straight away.
 async function renderLadder(){
   fitW();
   const box=$("ladderView");
   if(S.gun==="-"||S.load==="-"){box.hidden=true;return}
   let pts;try{pts=await api("GET","chrono/ladder"+(S.gun?"?gun="+encodeURIComponent(S.gun):""))}catch(e){box.hidden=true;return}
-  const groups=new Map();pts.forEach(p=>{const k=p.gun_id+"\u0000"+p.group;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p)});
+  const groups=new Map();pts.forEach(p=>{const k=p.gun_id+"|"+p.group;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(p)});
   const gunName=id=>(S.guns.find(g=>g.id===id)||{}).name||"";
-  const html=[...groups.values()].filter(g=>g.length>=2&&(!S.load||g.some(p=>p.load_id===S.load)))
-    .sort((a,b)=>a[0].group.localeCompare(b[0].group,"fi",{numeric:true})||gunName(a[0].gun_id).localeCompare(gunName(b[0].gun_id)))
-    .map(g=>ladderChart(S.gun?g[0].group:`${gunName(g[0].gun_id)} — ${g[0].group}`,g)).join("");
-  box.hidden=!html;$("ladders").innerHTML=html;bindTips(box);
+  const title=g=>S.gun?g[0].group:`${gunName(g[0].gun_id)} — ${g[0].group}`;
+  const list=[...groups.entries()].filter(([,g])=>g.length>=2&&(!S.load||g.some(p=>p.load_id===S.load)))
+    .sort((a,b)=>a[1][0].group.localeCompare(b[1][0].group,"fi",{numeric:true})||gunName(a[1][0].gun_id).localeCompare(gunName(b[1][0].gun_id)));
+  S.ladders=new Map(list);
+  if(S.load){$("ladChips").innerHTML="";$("ladders").innerHTML=list.map(([,g])=>ladderChart(title(g),g)).join("")}
+  else{
+    if(!S.ladders.has(S.ladOpen))S.ladOpen=null;
+    $("ladChips").innerHTML=list.map(([k,g])=>`<button type="button" class="chip lad" data-lad="${esc(k)}" aria-pressed="${S.ladOpen===k}">${S.gun?"":`<b>${esc(gunName(g[0].gun_id))}</b><br>`}${esc(g[0].group)} <small>· ${g.length} charges</small></button>`).join("");
+    $("ladders").innerHTML=S.ladOpen?ladderChart(title(S.ladders.get(S.ladOpen)),S.ladders.get(S.ladOpen)):"";
+  }
+  box.hidden=!list.length;bindTips(box);
 }
+$("ladChips").addEventListener("click",e=>{const b=e.target.closest("[data-lad]");if(!b)return;
+  S.ladOpen=S.ladOpen===b.dataset.lad?null:b.dataset.lad;renderLadder()});
 
 /* ---------- sheets ---------- */
 function openSheet(id){["iSheet","dSheet","lSheet"].forEach(s=>$(s).hidden=s!==id);document.body.style.overflow="hidden"}
