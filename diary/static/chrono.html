@@ -451,9 +451,14 @@ function render(){
   const counts={};inGun.forEach(d=>{const k=d.load_id||"";counts[k]=(counts[k]||0)+1});
   if(S.load&&!(S.load in counts))S.load="";
   const ids=Object.keys(counts).filter(Boolean).sort((a,b)=>loadName(a).localeCompare(loadName(b),"fi",{numeric:true}));
+  // Grouped by calibre (the load's own, else the gun it was shot in), loads named without the calibre prefix
+  const groups=new Map();ids.forEach(id=>{const d=inGun.find(x=>x.load_id===id),c=rowCal(d||{load_id:id})||"Other";
+    if(!groups.has(c))groups.set(c,[]);groups.get(c).push(id)});
+  const opt=id=>`<option value="${esc(id)}" ${S.load===id?"selected":""}>${esc(loadShort(id))} · ${counts[id]} string${counts[id]===1?"":"s"}</option>`;
   $("loadSel").innerHTML=`<option value="">All loads (${inGun.length} string${inGun.length===1?"":"s"})</option>`
-    +ids.map(id=>`<option value="${esc(id)}" ${S.load===id?"selected":""}>${esc(loadName(id))} · ${counts[id]} strings</option>`).join("")
-    +(counts[""]?`<option value="-" ${S.load==="-"?"selected":""}>No load · ${counts[""]} strings</option>`:"");
+    +[...groups.entries()].sort((a,b)=>a[0]==="Other"?1:b[0]==="Other"?-1:a[0].localeCompare(b[0],"fi",{numeric:true}))
+      .map(([c,l])=>`<optgroup label="${esc(c)}">${l.map(opt).join("")}</optgroup>`).join("")
+    +(counts[""]?`<option value="-" ${S.load==="-"?"selected":""}>No load · ${counts[""]} string${counts[""]===1?"":"s"}</option>`:"");
   lsSet({gun:S.gun,load:S.load});
   renderDays(inGun.filter(d=>!S.load||(S.load==="-"?!d.load_id:d.load_id===S.load)));
   renderLoad();renderLadder();
