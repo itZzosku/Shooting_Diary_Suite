@@ -220,7 +220,7 @@ def test_backup_round_trip(client):
 
 
 def test_pages_and_home_summary(client):
-    for path in ("/diary/", "/diary/log", "/diary/velocity", "/diary/zeroes"):
+    for path in ("/diary/", "/diary/log", "/diary/velocity", "/diary/zeroes", "/diary/calculator"):
         assert client.get(path).status_code == 200, path
     assert client.get("/diary/chrono?shared=2").headers["Location"].endswith("/diary/velocity?shared=2")
     _import()
@@ -236,6 +236,7 @@ def test_pages_and_home_summary(client):
     app = flask.Flask(__name__)
     diary.init_app(app)
     anon = app.test_client()
+    assert anon.get("/diary/calculator").status_code == 302
     assert anon.get("/diary/").status_code == 302 and anon.get("/diary/api/home").status_code == 401
 
 

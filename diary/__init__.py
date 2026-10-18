@@ -313,6 +313,12 @@ def page_loans():
     return static_page("loans.html")
 
 
+@bp.get("/calculator")
+@login_required
+def page_calc():
+    return static_page("calc.html")
+
+
 @bp.get("/lent")
 def old_lent_url():
     return redirect(url_for("diary.page_loans"), code=301)

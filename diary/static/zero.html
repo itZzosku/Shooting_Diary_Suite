@@ -236,8 +236,6 @@ details>summary{cursor:pointer;color:var(--muted);font-size:.88rem;padding:4px 0
 .sec{display:flex;flex-direction:column;gap:12px}
 .ok{color:var(--accent)}
 a.ghost{text-decoration:none;display:inline-block}
-#cSheet .readout b{font-size:clamp(1.5rem,7vw,2rem)}
-#cSheet .readout span{line-height:1.35}
 .wsel{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:8px}
 /* Page switcher (same on every page) */
 .pnav{display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px;margin-top:max(12px,env(safe-area-inset-top,0px))}
@@ -297,8 +295,7 @@ header.top{padding-top:6px!important}
     <section aria-labelledby="posH">
       <div class="sechead stack"><h2 id="posH">Dial positions</h2><span class="target" id="posInfo"></span></div>
       <div id="zList"></div>
-      <div class="row2"><button class="ghost" type="button" id="addZeroBtn">+ Add position</button>
-        <button class="ghost" type="button" id="calcBtn">Click calculator</button></div>
+      <div class="row2"><button class="ghost" type="button" id="addZeroBtn">+ Add position</button></div>
     </section>
 
     <section aria-labelledby="allH">
@@ -338,7 +335,6 @@ header.top{padding-top:6px!important}
         <div class="dial"><button type="button" data-de="-1">DOWN</button><div class="val"><b id="aE">0</b><small id="aEc">0 clicks</small></div><button type="button" data-de="1">UP</button></div></div>
       <div class="field"><span class="lbl">Windage</span>
         <div class="dial"><button type="button" data-dw="-1">LEFT</button><div class="val"><b id="aW">0</b><small id="aWc">0 clicks</small></div><button type="button" data-dw="1">RIGHT</button></div></div>
-      <div class="row2"><button class="ghost" type="button" id="aCalc">From the target…</button></div>
       <div class="newpos" id="aNew"></div>
       <div class="grid2"><label class="f">Date<input type="date" id="aDate"></label><label class="f">Note<input type="text" id="aNote" maxlength="300" placeholder="e.g. 100 m, 5 shots, cold barrel"></label></div>
       <div class="actions"><button class="primary" type="button" id="aSave" disabled>Save adjustment</button>
@@ -368,28 +364,6 @@ header.top{padding-top:6px!important}
     </form>
     <section id="zHist" class="sec"><h2 style="font-size:1.05rem">History</h2><div class="card"><div class="log" id="zLog"></div></div></section>
   </div>
-</div>
-
-<!-- Correction from the target (the Scope Adjustment Calculator app, in the page) -->
-<div class="sheet" id="cSheet" hidden role="dialog" aria-modal="true" aria-labelledby="cTitle" style="z-index:12">
-  <form class="sheet-in" id="cForm" autocomplete="off">
-    <div class="sheet-bar"><h2 id="cTitle">Correction from the target</h2><button class="ghost" type="button" id="cClose">Close</button></div>
-    <p class="hint" style="margin:0">Where did the group hit, measured from the aiming point? The correction is the opposite way: a group <b>low</b> needs <b>UP</b>, a group <b>left</b> needs <b>RIGHT</b>.</p>
-    <div class="grid2"><label class="f">Distance<input type="text" id="cDist" inputmode="decimal" placeholder="100"></label>
-      <label class="f">Unit<select id="cDistU"><option value="m">metres</option><option value="yd">yards</option><option value="ft">feet</option></select></label></div>
-    <div class="grid2"><label class="f">Group vertically<input type="text" id="cY" inputmode="decimal" placeholder="0"></label>
-      <div class="field"><span class="lbl">&nbsp;</span><div class="chips"><button type="button" class="chip" data-cy="1" aria-pressed="false">High</button><button type="button" class="chip" data-cy="-1" aria-pressed="true">Low</button></div></div></div>
-    <div class="grid2"><label class="f">Group horizontally<input type="text" id="cX" inputmode="decimal" placeholder="0"></label>
-      <div class="field"><span class="lbl">&nbsp;</span><div class="chips"><button type="button" class="chip" data-cx="-1" aria-pressed="true">Left</button><button type="button" class="chip" data-cx="1" aria-pressed="false">Right</button></div></div></div>
-    <div class="grid2"><label class="f">Measured in<select id="cOffU"><option value="mm">millimetres</option><option value="cm">centimetres</option><option value="in">inches</option></select></label>
-      <label class="f">Click value<select id="cClick"></select></label></div>
-    <div class="readout" aria-live="polite">
-      <div><small>Elevation</small><b id="cE">–</b><span id="cEs"></span></div>
-      <div><small>Windage</small><b id="cW">–</b><span id="cWs"></span></div>
-    </div>
-    <div class="actions" id="cApplyRow" hidden><button class="primary" type="button" id="cApply">Use as this position's adjustment</button></div>
-    <p class="hint" style="margin:0" id="cNote"></p>
-  </form>
 </div>
 
 <!-- Scope settings -->
@@ -727,7 +701,7 @@ const SHEETS=["zSheet","sSheet"];
 function openSheet(id){SHEETS.forEach(s=>$(s).hidden=s!==id);document.body.style.overflow="hidden";$(id).scrollTop=0}
 function closeSheets(){SHEETS.forEach(s=>$(s).hidden=true);document.body.style.overflow="";S.zid=null}
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",closeSheets));
-document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if(!$("cSheet").hidden){$("cSheet").hidden=true;return}closeSheets()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
 const gunOpts=sel=>`<option value="">— no gun —</option>`+S.guns.filter(g=>!g.archived||g.id===sel).sort((a,b)=>String(a.name).localeCompare(b.name)).map(g=>`<option value="${esc(g.id)}" ${g.id===sel?"selected":""}>${esc(g.name)}</option>`).join("");
 // "6.5 Creedmoor" = "6.5 CM", ".223 Remington" = ".223 Rem": compare calibres by a normalised key.
 const calKey=c=>String(c||"").toLowerCase().replace(/creedmoor/g,"cm").replace(/remington/g,"rem").replace(/winchester/g,"win")
@@ -746,58 +720,6 @@ function confirmTap(btn,label,fn){      // two taps instead of a browser dialog
   btn.dataset.label=btn.dataset.label||btn.textContent;btn.dataset.armed="1";btn.textContent=label;
   setTimeout(()=>{if(btn.dataset.armed){delete btn.dataset.armed;btn.textContent=btn.dataset.label}},4000);
 }
-
-/* ---------- correction from the target (Scope Adjustment Calculator) ----------
-   angle (mrad) = offset (mm) / distance (m); 1 mrad = 3.4377 MOA; clicks = angle / click value.
-   Group low → dial UP, group left → dial RIGHT. */
-const MRAD_MOA=21600/(2*Math.PI*1000);
-const CLICKS=[["0.25 MOA","¼ MOA",0.25],["0.5 MOA","½ MOA",0.5],["1 MOA","1 MOA",1],["0.1 MRAD","0.1 MRAD",0.1*MRAD_MOA],["0.05 MRAD","0.05 MRAD",0.05*MRAD_MOA],["0.1 MIL","0.1 mil (NATO, 1/6400)",0.3375]];
-const CK="zero-calc";const C={y:-1,x:-1,fromZero:null};
-function scopeClickMoa(){const s=scope();if(!s)return null;return s.unit==="MOA"?+s.click:+s.click*MRAD_MOA}
-function openCalc(fromZero){
-  C.fromZero=fromZero||null;
-  let st={};try{st=JSON.parse(localStorage.getItem(CK)||"{}")}catch(e){}
-  const z=fromZero?zOf(fromZero):null,s=scope();
-  $("cDist").value=z&&z.distance_m?z.distance_m:(st.dist||"");$("cDistU").value=z&&z.distance_m?"m":(st.distU||"m");
-  $("cOffU").value=st.offU||"mm";$("cY").value="";$("cX").value="";C.y=-1;C.x=-1;
-  const mine=s?`${+s.click} ${s.unit} – ${esc(s.name)}`:null;
-  $("cClick").innerHTML=(mine?`<option value="scope">${mine}</option>`:"")+CLICKS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join("");
-  $("cClick").value=mine?"scope":(st.click||"0.1 MRAD");
-  $("cTitle").textContent=z?"From the target – "+z.name:"Click calculator";
-  calc();$("cSheet").hidden=false;document.body.style.overflow="hidden";$("cY").focus();
-}
-function calc(){
-  const n=v=>{v=parseFloat(String(v||"").replace(",","."));return isFinite(v)?v:null};
-  document.querySelectorAll("[data-cy]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.cy===C.y));
-  document.querySelectorAll("[data-cx]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.cx===C.x));
-  const dm=(n($("cDist").value)||0)*{m:1,yd:0.9144,ft:0.3048}[$("cDistU").value],k={mm:1,cm:10,in:25.4}[$("cOffU").value];
-  const cv=$("cClick").value==="scope"?scopeClickMoa():(CLICKS.find(c=>c[0]===$("cClick").value)||[])[2];
-  const y=(n($("cY").value)||0)*k,x=(n($("cX").value)||0)*k;
-  try{localStorage.setItem(CK,JSON.stringify({dist:$("cDist").value,distU:$("cDistU").value,offU:$("cOffU").value,click:$("cClick").value}))}catch(e){}
-  C.res=null;
-  if(!(dm>0)||!cv){$("cE").textContent=$("cW").textContent="–";$("cEs").textContent=$("cWs").textContent="";$("cApplyRow").hidden=true;
-    $("cNote").textContent=dm>0?"":"Enter the distance.";return}
-  // correction = opposite of where the group is
-  const mE=-C.y*y/dm,mW=-C.x*x/dm,ce=mE*MRAD_MOA/cv,cw=mW*MRAD_MOA/cv;
-  const one=(m,cl,pos,neg)=>{const r=Math.round(Math.abs(cl));return r?`${m>0?pos:neg} ${r}`:"0"};
-  $("cE").textContent=one(mE,ce,"UP","DOWN");$("cW").textContent=one(mW,cw,"RIGHT","LEFT");
-  const det=(m,cl)=>{const r=Math.round(Math.abs(cl));return`${r===1?"click":"clicks"} (${Math.abs(cl).toFixed(2)} exact) · ${Math.abs(m).toFixed(2)} MRAD · ${Math.abs(m*MRAD_MOA).toFixed(2)} MOA`};
-  $("cEs").textContent=y?det(mE,ce):"no change";$("cWs").textContent=x?det(mW,cw):"no change";
-  C.res={e:Math.sign(mE)*Math.round(Math.abs(ce)),w:Math.sign(mW)*Math.round(Math.abs(cw))};
-  const canApply=!!C.fromZero&&$("cClick").value==="scope";
-  $("cApplyRow").hidden=!C.fromZero;$("cApply").disabled=!canApply||!(C.res.e||C.res.w);
-  $("cNote").textContent=C.fromZero&&!canApply?"Pick the scope's own click value to use the result as the adjustment.":"";
-}
-$("cForm").addEventListener("input",calc);$("cForm").addEventListener("change",calc);
-$("cForm").addEventListener("submit",e=>e.preventDefault());
-$("cForm").addEventListener("click",e=>{const y=e.target.closest("[data-cy]"),x=e.target.closest("[data-cx]");if(y)C.y=+y.dataset.cy;if(x)C.x=+x.dataset.cx;if(x||y)calc()});
-const calcClose=()=>{$("cSheet").hidden=true;if(SHEETS.every(id=>$(id).hidden))document.body.style.overflow=""};
-$("cClose").addEventListener("click",calcClose);
-$("cApply").addEventListener("click",()=>{if(!C.res)return;S.adj={e:C.res.e,w:C.res.w};
-  const d=$("cDist").value,u=$("cDistU").value;if(!$("aNote").value&&d)$("aNote").value=`from target at ${d} ${u==="m"?"m":u}`;
-  calcClose();showAdj()});
-$("aCalc").addEventListener("click",()=>openCalc(S.zid));
-$("calcBtn").addEventListener("click",()=>openCalc(null));
 
 /* ---------- position sheet ---------- */
 function openZero(zid,keepAdj){

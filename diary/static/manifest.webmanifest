@@ -94,6 +94,16 @@
           "sizes": "192x192"
         }
       ]
+    },
+    {
+      "name": "Click calculator",
+      "url": "calculator",
+      "icons": [
+        {
+          "src": "static/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
