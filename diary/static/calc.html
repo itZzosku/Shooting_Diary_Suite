@@ -247,7 +247,10 @@ header.top{padding-top:6px!important}
       <div><small>Elevation</small><b id="cE">–</b><span id="cEs"></span></div>
       <div><small>Windage</small><b id="cW">–</b><span id="cWs"></span></div>
     </div>
-    <p class="hint" style="margin:0" id="cNote"></p>
+    <div style="display:flex;align-items:center;gap:12px;justify-content:space-between">
+      <p class="hint" style="margin:0" id="cNote"></p>
+      <button type="button" class="ghost" id="cReset" style="margin-left:auto">Reset</button>
+    </div>
   </form>
 </div>
 <script>
@@ -290,6 +293,7 @@ function calc(){
 $("cDist").value=st.dist||"100";$("cDistU").value=st.distU||"m";$("cOffU").value=st.offU||"mm";
 fillClicks();calc();
 $("cForm").addEventListener("input",calc);$("cForm").addEventListener("change",calc);$("cForm").addEventListener("submit",e=>e.preventDefault());
+$("cReset").addEventListener("click",()=>{$("cY").value=$("cX").value="";calc();$("cY").focus()});   // keeps distance, units, click value
 $("cForm").addEventListener("click",e=>{const y=e.target.closest("[data-cy]"),x=e.target.closest("[data-cx]");if(y)C.y=+y.dataset.cy;if(x)C.x=+x.dataset.cx;if(x||y)calc()});
 // Your scopes' own click values first (works offline with the last list)
 fetch("api/zero",{credentials:"same-origin",headers:{"X-Requested-With":"fetch"}}).then(r=>{if(r.status===401){location.href="login";return null}return r.ok?r.json():null})
