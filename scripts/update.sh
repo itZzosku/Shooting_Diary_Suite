@@ -17,7 +17,6 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PYTHON="${PYTHON:-$REPO_DIR/venv/bin/python}"
-PIP="${PIP:-$REPO_DIR/venv/bin/pip}"
 SERVICE="${SERVICE:-flask-telemetry.service}"
 RESTART_CMD="${RESTART_CMD:-}"
 BRANCH="${BRANCH:-main}"
@@ -96,7 +95,7 @@ fi
 rollback() {
   printf '\n!! %s – rolling back to %s\n' "$1" "${OLD:0:7}" >&2
   git reset --quiet --hard "$OLD"
-  if [ "$REQ_CHANGED" = 1 ]; then "$PIP" install --quiet -r requirements.txt || true; fi
+  if [ "$REQ_CHANGED" = 1 ]; then "$PYTHON" -m pip install --quiet -r requirements.txt || true; fi
   fail "Update aborted. The old version is still the one on disk; nothing was restarted."
 }
 
@@ -108,7 +107,7 @@ REQ_CHANGED=0
 if ! git diff --quiet "$OLD" "$NEW" -- requirements.txt; then
   REQ_CHANGED=1
   say "requirements.txt changed – installing"
-  "$PIP" install --quiet -r requirements.txt || rollback "pip install failed"
+  "$PYTHON" -m pip install --quiet -r requirements.txt || rollback "pip install failed"
 fi
 
 # 4. Checks: everything compiles, the app imports, tests pass (tests use a throwaway data folder)
@@ -119,7 +118,7 @@ DIARY_DATA_DIR="$(mktemp -d)" "$PYTHON" -c "import diary, flask; a = flask.Flask
 if "$PYTHON" -c "import pytest" 2>/dev/null; then
   "$PYTHON" -m pytest -q tests || rollback "Tests failed"
 else
-  echo "  (pytest not installed in the venv – skipping tests; install with: $PIP install pytest)"
+  echo "  (pytest not installed in the venv – skipping tests; install with: $PYTHON -m pip install pytest)"
 fi
 
 # 5. Restart
