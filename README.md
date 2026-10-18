@@ -207,6 +207,10 @@ the scope's own frame where the reference position is 0 / 0. Open it from the di
 - **Cap readings**: with the turret turn sizes set in *Scope info* (e.g. 10 MRAD), the swap also says where
   the caps stop if they read 0 / 0 now — elevation numbered one way (DOWN 2.9 → `7.1`, one turn below 0), windage
   both ways to the half-turn mark (`1 L … 4 L, 5, 4 R … 1 R`) with a warning when a move passes that mark.
+- **From the target / Click calculator** (the Scope Adjustment Calculator app, built in): distance (m / yd / ft)
+  and where the group hit (high/low, left/right in mm / cm / in) → the correction in clicks, MRAD and MOA, for
+  the scope's own click or ¼, ½, 1 MOA, 0.1 / 0.05 MRAD, 0.1 mil. From a position's *Adjust zero* it opens with
+  the position's zero distance and *Use as this position's adjustment* fills in the clicks.
 - **Adjust zero**: tap UP/DOWN and LEFT/RIGHT by clicks for what you corrected at the range; the position
   moves by that much and the change is logged with date and note. *Undo* reverts the newest change of a
   position. Exact values can also be typed under *Details* (logged as “set”).
