@@ -739,7 +739,7 @@ function openZero(zid,keepAdj){
   $("fRifle").value=z?z.rifle:"";$("fGun").innerHTML=gunOpts(g);$("fLabel").value=z?z.label||"":"";
   $("fCal").value=z?z.cal||"":"";$("fDist").value=z&&z.distance_m?z.distance_m:"";$("fMount").value=z?z.mount||"":"";
   $("fLoad").innerHTML=loadOpts(z?z.load_id:"",$("fCal").value,g);
-  $("fElev").value=z?(isZ(z.elev)?"0":(z.elev>0?"+":"")+fx(z.elev).replace(/^/,z.elev<0?"-":"")):"";
+  $("fElev").value=z?(isZ(z.elev)?fx(0):(z.elev>0?"+":"")+fx(z.elev).replace(/^/,z.elev<0?"-":"")):"";
   $("fWind").value=z?fx(z.wind):"";$("fWdir").value=z&&z.wind>0?"1":"-1";
   $("fHint").hidden=!z;
   $("zSave").textContent=z?"Save details":"Add position";
