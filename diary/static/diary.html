@@ -327,11 +327,11 @@ header.top{padding-top:6px!important}
   </form>
 </div>
 
-<datalist id="dlFriend"></datalist><datalist id="dlEvent"></datalist>
+<datalist id="dlFriend"></datalist><datalist id="dlEvent"></datalist><datalist id="dlPrCal"></datalist>
 <div class="sheet" id="lnSheet" hidden role="dialog" aria-modal="true" aria-labelledby="lnTitle">
   <form class="sheet-in" id="lnForm" autocomplete="off">
     <div class="sheet-bar"><h2 id="lnTitle">Lent guns</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
-    <p class="hint" style="margin:0">Friends shooting your guns with your ammo. Their shots count toward each gun's round count, not toward your own shooting record or the licence export.</p>
+    <p class="hint" style="margin:0">Friends shooting your guns and/or your ammo. Shots in your guns count toward each gun's round count (not toward your own shooting record or the licence export). For a friend's own gun, choose <b>Not my gun – ammo only</b> and the ammo's calibre: only the cost is counted.</p>
     <div class="grid2">
       <label class="f">Date<input type="date" id="lnDate" required></label>
       <label class="f">Match / event<input type="text" id="lnEvent" list="dlEvent" placeholder="e.g. Club match, Hyvinkää"></label>
@@ -943,6 +943,7 @@ const calKey=c=>String(c||"").toLowerCase().replace(/creedmoor/g,"cm").replace(/
   .replace(/springfield/g,"spring").replace(/parabellum/g,"luger").replace(/[^a-z0-9]/g,"");
 function priceFor(cal){const k=calKey(cal);if(!k)return null;for(const[c,p]of Object.entries(S.prices||{}))if(calKey(c)===k)return+p;return null}
 const loanCost=l=>(+l.rounds||0)*(+l.price||0);
+const lineLabel=l=>l.gunId?(l.gun||"gun"):("ammo"+(l.cal?" "+l.cal:""));   // a friend's own gun: only your ammo
 function byWho(n){   // {who: {rounds, cost, guns:[{gun, rounds}]}} in line order
   const m=new Map();(n.lines||[]).forEach(l=>{const w=l.who||"–";const e=m.get(w)||{rounds:0,cost:0,guns:[]};
     e.rounds+=+l.rounds||0;e.cost+=loanCost(l);e.guns.push(l);m.set(w,e)});return m}
@@ -957,7 +958,7 @@ function renderLoans(){
   $("loansCount").textContent=list.length?`${list.length} trip${list.length>1?"s":""} · ${fmt(shots)} shots`+(unpaid>0.004?` · ${eur(unpaid)} unpaid`:""):"";
   $("loans").innerHTML=list.length?list.map(n=>{const paid=new Set(n.paid||[]),tot=(n.lines||[]).reduce((a,l)=>a+loanCost(l),0);
     return`<button type="button" class="loan" data-loan="${esc(n.id)}"><span class="lh"><span>${fiDate(n.date)}${n.event?" · "+esc(n.event):""}</span><span class="num">${eur(tot)}</span></span>`
-      +[...byWho(n).entries()].map(([w,e])=>`<span class="lp"><span><b>${esc(w)}</b> <small>${e.guns.map(g=>esc(g.gun||"gun")+" "+fmt(+g.rounds||0)).join(" · ")}</small></span>
+      +[...byWho(n).entries()].map(([w,e])=>`<span class="lp"><span><b>${esc(w)}</b> <small>${e.guns.map(g=>esc(lineLabel(g))+" "+fmt(+g.rounds||0)).join(" · ")}</small></span>
         <span class="num">${eur(e.cost)}<span class="paid ${paid.has(w)?"":"no"}">${paid.has(w)?"paid":"unpaid"}</span></span></span>`).join("")+`</button>`}).join("")
     :'<div class="empty">Lend a gun to a friend for a match: their shots go on the gun\'s round count and the ammo cost is worked out per person.</div>';
 }
@@ -965,7 +966,7 @@ $("loans").addEventListener("click",e=>{const b=e.target.closest("[data-loan]");
 $("addLoanBtn").addEventListener("click",()=>openLoan(null));
 
 let LN=null;     // the loan being edited: {id, date, event, note, lines:[], paid:Set}
-function gunOptsLn(sel){return`<option value="">— gun —</option>`+gunsSorted().filter(g=>!g.archived||g.id===sel).map(g=>`<option value="${esc(g.id)}" ${g.id===sel?"selected":""}>${esc(g.name)}${g.cal?" · "+esc(g.cal):""}</option>`).join("")}
+function gunOptsLn(sel){return`<option value="">Not my gun – ammo only</option>`+gunsSorted().filter(g=>!g.archived||g.id===sel).map(g=>`<option value="${esc(g.id)}" ${g.id===sel?"selected":""}>${esc(g.name)}${g.cal?" · "+esc(g.cal):""}</option>`).join("")}
 function openLoan(id){
   const n=id?S.loans.find(x=>x.id===id):null;
   LN={id:id||newLoanId(),isNew:!n,date:n?n.date:todayStr(),event:n?n.event||"":"",note:n?n.note||"":"",
@@ -974,7 +975,8 @@ function openLoan(id){
   $("lnDel").hidden=!n;$("lnDel").textContent="Delete";$("lnMsg").hidden=true;
   const friends=new Set(),events=new Set();S.loans.forEach(x=>{(x.lines||[]).forEach(l=>l.who&&friends.add(l.who));x.event&&events.add(x.event)});
   S.sessions.slice(0,60).forEach(s=>s.place&&events.add(s.place));
-  $("dlFriend").innerHTML=[...friends].map(v=>`<option value="${esc(v)}">`).join("");$("dlEvent").innerHTML=[...events].map(v=>`<option value="${esc(v)}">`).join("");
+  $("dlFriend").innerHTML=[...friends].map(v=>`<option value="${esc(v)}">`).join("");
+  $("dlPrCal").innerHTML=[...new Set(Object.keys(S.prices||{}).concat(S.guns.map(g=>g.cal).filter(Boolean)))].map(v=>`<option value="${esc(v)}">`).join("");$("dlEvent").innerHTML=[...events].map(v=>`<option value="${esc(v)}">`).join("");
   renderLnLines();$("lnSheet").hidden=false;document.body.style.overflow="hidden";$("lnSheet").scrollTop=0;
 }
 function renderLnLines(){
@@ -983,8 +985,9 @@ function renderLnLines(){
     <label class="f">Gun<select data-ln="${i}" data-k="gunId">${gunOptsLn(l.gunId)}</select></label>
     <button type="button" class="x" data-lnx="${i}" aria-label="Remove line">✕</button>
     <label class="f">Shots<input type="number" inputmode="numeric" min="0" step="1" data-ln="${i}" data-k="rounds" value="${l.rounds||""}" placeholder="0"></label>
-    <label class="f">€ / round${l.cal?" ("+esc(l.cal)+")":""}<input type="text" inputmode="decimal" data-ln="${i}" data-k="price" value="${l.price===""||l.price==null?"":l.price}" placeholder="0.00"></label>
+    <label class="f">€ / round${l.gunId&&l.cal?" ("+esc(l.cal)+")":""}<input type="text" inputmode="decimal" data-ln="${i}" data-k="price" value="${l.price===""||l.price==null?"":l.price}" placeholder="0.00"></label>
     <span></span>
+    ${l.gunId?"":`<label class="f" style="grid-column:1/3">Calibre of the ammo (their own gun)<input type="text" list="dlPrCal" data-ln="${i}" data-k="cal" value="${esc(l.cal)}" placeholder="e.g. .223 Rem"></label><span></span>`}
     <span class="sub">${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}</span></div>`).join("");
   renderLnWho();
 }
@@ -1000,7 +1003,9 @@ $("lnLines").addEventListener("input",e=>{const t=e.target,i=t.dataset.ln;if(i==
   if(k==="rounds")l.rounds=Math.max(0,parseInt(t.value)||0);
   else if(k==="price")l.price=t.value.replace(",",".");
   else if(k==="who")l.who=t.value.trim();
-  if(k==="gunId"){const g=S.guns.find(x=>x.id===t.value)||{};l.gunId=t.value;l.gun=g.name||"";l.cal=g.cal||"";
+  else if(k==="cal"){l.cal=t.value.trim();const p=priceFor(l.cal);
+    if(p!=null){l.price=p;const pi=t.closest(".lnline").querySelector('[data-k="price"]');if(pi)pi.value=p}}
+  if(k==="gunId"){const g=S.guns.find(x=>x.id===t.value)||{};l.gunId=t.value;l.gun=g.name||"";l.cal=t.value?g.cal||"":"";
     const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
   const sub=t.closest(".lnline").querySelector(".sub");sub.textContent=`${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}`;renderLnWho()});
 $("lnLines").addEventListener("click",e=>{const x=e.target.closest("[data-lnx]");if(!x)return;LN.lines.splice(+x.dataset.lnx,1);renderLnLines()});
@@ -1010,13 +1015,13 @@ $("lnWho").addEventListener("change",e=>{const c=e.target.closest("[data-paid]")
 $("lnWho").addEventListener("click",async e=>{const b=e.target.closest("[data-share]");if(!b)return;
   const w=b.dataset.share,en=byWho({lines:LN.lines}).get(w);if(!en)return;
   const ev=$("lnEvent").value.trim(),d=$("lnDate").value;
-  const text=[`${ev||"Shooting"} ${d?fiDate(d):""} – ammo`].concat(en.guns.filter(g=>+g.rounds).map(g=>`${g.gun||"Gun"}${g.cal?" ("+g.cal+")":""}: ${g.rounds} × ${(+g.price||0).toFixed(2)} € = ${eur(loanCost(g))}`),[`Total ${eur(en.cost)}`]).join("\n");
+  const text=[`${ev||"Shooting"} ${d?fiDate(d):""} – ammo`].concat(en.guns.filter(g=>+g.rounds).map(g=>`${g.gunId?(g.gun||"Gun")+(g.cal?" ("+g.cal+")":""):lineLabel(g)}: ${g.rounds} × ${(+g.price||0).toFixed(2)} € = ${eur(loanCost(g))}`),[`Total ${eur(en.cost)}`]).join("\n");
   try{if(navigator.share)await navigator.share({title:"Ammo cost",text});else{await navigator.clipboard.writeText(text);toast("Copied")}}catch(err){}
 });
 document.querySelectorAll("[data-lnclose]").forEach(b=>b.addEventListener("click",closeSheets));
 $("lnForm").addEventListener("submit",async e=>{e.preventDefault();
   const lines=LN.lines.filter(l=>l.who||l.gunId||+l.rounds).map(l=>({who:l.who,gunId:l.gunId||null,gun:l.gun,cal:l.cal,rounds:+l.rounds||0,price:+l.price||0}));
-  if(!lines.length){$("lnMsg").textContent="Add at least one friend and gun.";$("lnMsg").hidden=false;return}
+  if(!lines.length){$("lnMsg").textContent="Add at least one friend and what they shot.";$("lnMsg").hidden=false;return}
   if(lines.some(l=>!l.who)){$("lnMsg").textContent="Every line needs the friend's name.";$("lnMsg").hidden=false;return}
   const whos=new Set(lines.map(l=>l.who));
   const doc={date:$("lnDate").value,event:$("lnEvent").value.trim(),note:$("lnNote").value,lines,paid:[...LN.paid].filter(w=>whos.has(w))};

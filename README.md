@@ -131,10 +131,11 @@ the one e-mail. Restore one account: `python -m diary import --user NAME diary_b
 
 ## Lent guns (diary page)
 
-When friends shoot your guns with your ammo (e.g. at a match): *Lent guns → + Lend*. One entry per trip: date,
+When friends shoot your guns and/or your ammo (e.g. at a match): *Lent guns → + Lend*. One entry per trip: date,
 match / event, and a line per friend and gun with shots and the price per round. Their shots are added to each
 gun's round count (the gun list shows "incl. N lent") but never to your own shooting record or the licence
-PDF/CSV. The cost is worked out per friend; tick *Paid*, and *Share cost* sends them the breakdown. Unpaid
+PDF/CSV. A friend's own gun with your ammo: choose *Not my gun – ammo only* and the calibre – only the cost
+counts. The cost is worked out per friend; tick *Paid*, and *Share cost* sends them the breakdown. Unpaid
 totals show on the diary section and the landing page.
 
 *Ammo prices* holds the price per round by calibre (a new line takes its gun's calibre price, editable per
