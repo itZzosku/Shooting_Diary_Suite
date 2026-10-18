@@ -1,4 +1,4 @@
-from flask import Flask, Response, abort, render_template
+from flask import Flask, Response, abort, redirect
 from dotenv import load_dotenv
 import os
 import re
@@ -18,10 +18,10 @@ app = Flask(__name__)
 diary.init_app(app)
 
 
-# Landing page: the shooting diary and any notes (templates/index.html)
+# The site is the shooting diary: the bare domain goes straight to it
 @app.route('/')
 def index():
-    return render_template('index.html', notes=list_notes())
+    return redirect('/diary/', code=302)
 
 
 # Markdown notes: drop a .md file into the notes/ folder and it shows up on the site.

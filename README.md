@@ -3,9 +3,8 @@
 A self-hosted shooting diary for a few people: range visits and the licence record, muzzle velocities
 (Garmin Xero), scope zeroes and guns loaned to friends. Flask + SQLite, installable on the phone.
 
-## Landing page (`/`)
-
-`templates/index.html`: a link to the shooting diary and any Markdown notes dropped into `notes/`.
+The bare domain (`/`) redirects to the diary (`/diary/`). Markdown notes dropped into `notes/` are served at
+`/notes/<name>`.
 
 ## Shooting diary (`/diary/`)
 
@@ -38,7 +37,7 @@ rm diary_seed.json                          # contains licence numbers
 python main.py
 ```
 
-Open `https://<your-domain>/diary/`. The login lasts 360 days per device.
+Open `https://<your-domain>/` (it goes to `/diary/`). The login lasts 360 days per device.
 
 ### Settings (`.env`, all optional)
 
