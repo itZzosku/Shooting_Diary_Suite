@@ -307,6 +307,12 @@ def page():
     return static_page("diary.html")
 
 
+@bp.get("/lent")
+@login_required
+def page_lent():
+    return static_page("lent.html")
+
+
 @bp.get("/manifest.webmanifest")
 def manifest():
     # Always fresh: Android reads the share target from it when the app is installed.

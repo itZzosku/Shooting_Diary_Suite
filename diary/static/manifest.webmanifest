@@ -84,6 +84,16 @@
           "sizes": "192x192"
         }
       ]
+    },
+    {
+      "name": "Lent guns",
+      "url": "lent",
+      "icons": [
+        {
+          "src": "static/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

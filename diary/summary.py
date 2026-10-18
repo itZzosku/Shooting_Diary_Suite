@@ -58,10 +58,11 @@ def api_home():
     name = (json.loads(kv_get("profile", conn) or "{}") or {}).get("name") or ""
     from . import current_user
     me = current_user()
-    from .loans import unpaid_total
-    d = diary_summary(conn)
-    d["unpaid"] = unpaid_total(conn)
-    return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), diary=d, velocity=vel, zeroes=zero_summary(conn))
+    from .loans import loan_rows, unpaid_total
+    ln = loan_rows(conn)
+    lent = {"trips": len(ln), "shots": sum(int(x.get("rounds") or 0) for l in ln for x in l.get("lines", [])),
+            "unpaid": unpaid_total(conn), "last": max((l["date"] for l in ln), default=None)}
+    return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), diary=diary_summary(conn), lent=lent, velocity=vel, zeroes=zero_summary(conn))
 
 
 def export_data(conn):

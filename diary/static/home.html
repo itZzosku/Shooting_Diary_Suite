@@ -174,11 +174,13 @@ input[type=text],input[type=password],input[type=date],input[type=time],input[ty
 @media (max-width:420px){ .stat b{font-size:1.35rem} .lgrid{grid-template-columns:1fr} }
 @media (prefers-reduced-motion:no-preference){ .toast{animation:up .2s ease-out} @keyframes up{from{opacity:0;transform:translate(-50%,8px)}} }
 /* Page switcher (same on every page) */
-.pnav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px;margin-top:max(12px,env(safe-area-inset-top,0px))}
+.pnav{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px;margin-top:max(12px,env(safe-area-inset-top,0px))}
 .pnav a{display:flex;align-items:center;justify-content:center;gap:5px;min-height:38px;padding:4px 6px;border-radius:999px;color:var(--fg);text-decoration:none;font-weight:600;font-size:.86rem;white-space:nowrap;overflow:hidden}
 .pnav a:hover{background:var(--surface)}
 .pnav a[aria-current="page"]{background:var(--fg);color:var(--bg)}
 .pnav svg{width:16px;height:16px;flex:0 0 auto}
+.pnav a:first-child{padding-inline:12px}
+@media (max-width:480px){.pnav a .t{display:none}.pnav a{font-size:.82rem}}
 header.top{padding-top:6px!important}
 /* ---- landing page ---- */
 .who{color:var(--muted);font-size:.9rem;margin-top:6px}
@@ -210,7 +212,7 @@ header.top{padding-top:6px!important}
 </head>
 <body>
 <div class="wrap">
-  <nav class="pnav" aria-label="Pages"><a href="./" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a></nav>
+  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a><a href="lent">Lent</a></nav>
   <header class="top">
     <div><h1>Shooting <span>diary</span></h1><div class="who" id="who"></div></div>
     <div class="hbtns">
@@ -241,6 +243,12 @@ header.top{padding-top:6px!important}
       <b>Zeroes</b><span class="go" aria-hidden="true">›</span>
       <span class="what">Scope dial positions and swaps</span>
       <span class="now" id="nZero"></span>
+    </a>
+    <a class="tile" href="lent">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><path d="M16 8h5M18.5 5.5 21 8l-2.5 2.5"/></svg></span>
+      <b>Lent guns</b><span class="go" aria-hidden="true">›</span>
+      <span class="what">Friends' shots with your guns and ammo, cost per friend</span>
+      <span class="now" id="nLent"></span>
     </a>
   </nav>
 </div>
@@ -298,10 +306,12 @@ async function load(){
   $("accBtn").hidden=!j.is_admin;
   const d=j.diary,v=j.velocity,z=j.zeroes||[];
   $("nDiary").innerHTML=`<b>${d.visits}</b> <span>visits in ${d.year} ·</span> <b>${nf(d.rounds)}</b> <span>shots</span>`
-    +(d.last?`<br><span>Last:</span> ${fiDate(d.last.date)}${d.last.place?" · "+esc(d.last.place):""}`:"")
-    +(d.unpaid>0.004?`<br><span>Lent guns:</span> <b>${d.unpaid.toFixed(2)} €</b> <span>unpaid ammo</span>`:"");
+    +(d.last?`<br><span>Last:</span> ${fiDate(d.last.date)}${d.last.place?" · "+esc(d.last.place):""}`:"");
   $("nVel").innerHTML=v.last?`<b>${v.last.avg!=null?v.last.avg.toFixed(1):"–"}</b> <span>m/s ⌀ · n ${v.last.n}${v.last.sd!=null?" · SD "+v.last.sd.toFixed(2):""} · ${fiDate(v.last.date)}</span><br>${esc([v.last.load,v.last.gun].filter(Boolean).join(" · "))||"<span>No load</span>"}`
     :`<span>No velocities yet.</span>`;
+  const ln=j.lent||{};
+  $("nLent").innerHTML=ln.trips?`<b>${ln.unpaid>0.004?ln.unpaid.toFixed(2)+" €":"0 €"}</b> <span>unpaid · ${ln.trips} trip${ln.trips>1?"s":""} · ${ln.shots} shots · last ${fiDate(ln.last)}</span>`
+    :`<span>Nothing lent yet.</span>`;
   $("nZero").innerHTML=z.length?z.map(s=>`${esc(s.name)} <span>·</span> ${s.on?`<span>on</span> <b>${esc(s.on)}</b>`:`<span>${s.positions} positions</span>`}`).join("<br>")
     :`<span>No scopes yet.</span>`;
 }

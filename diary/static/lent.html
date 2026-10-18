@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Lent guns</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141714" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Shooting Diary">
+<link rel="apple-touch-icon" href="static/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="static/icons/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: single-column range log; licence strip + totals up top, entries by month, entry sheet over the log. */
+:root{
+  --bg:#eef0ec; --surface:#ffffff; --surface-2:#e3e6e0; --line:#c9cec4;
+  --fg:#1c211c; --muted:#5b6359; --accent:#e2590f; --accent-ink:#ffffff; --accent-soft:#fbe3d4;
+  --danger:#b3261e;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141714; --surface:#1d211d; --surface-2:#272c27; --line:#363d36;
+  --fg:#e8ebe6; --muted:#9aa398; --accent:#ff7a33; --accent-ink:#1a0d05; --accent-soft:#3a2416;
+  --danger:#ff8a80; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#141714; --surface:#1d211d; --surface-2:#272c27; --line:#363d36;
+  --fg:#e8ebe6; --muted:#9aa398; --accent:#ff7a33; --accent-ink:#1a0d05; --accent-soft:#3a2416;
+  --danger:#ff8a80; color-scheme:dark }
+
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+[hidden]{display:none!important}
+body{font-family:var(--f-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:env(safe-area-inset-top,0px) calc(120px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+header.top{padding-top:20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:700;font-size:min(2.4rem,7.6vw);line-height:1;margin:0;letter-spacing:.01em;text-transform:uppercase}
+h1 span{color:var(--accent)}
+.hbtns{display:flex;gap:8px;flex-wrap:wrap}
+.ghost{background:none;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:.85rem;color:var(--fg)}
+.ghost:hover{border-color:var(--fg)}
+.banner{background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;font-size:.9rem}
+
+/* Licence strip */
+.ids{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 16px;padding:12px 0;border-top:2px solid var(--fg)}
+.ids div{min-width:0}
+.ids small,.lbl{display:block;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.ids b{font-weight:600;overflow-wrap:anywhere}
+.ids .num{font-weight:600}
+
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stat{padding:12px 4px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat+.stat{border-left:1px solid var(--line);padding-left:12px}
+.stat b{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:1.7rem;font-weight:600;line-height:1.1}
+.stat small{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em}
+.types{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.9rem;padding-top:10px}
+.types span{color:var(--muted)}
+.types b{font-family:var(--f-mono);font-weight:600;color:var(--fg)}
+
+h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform:uppercase;letter-spacing:.04em;margin:0}
+.loghead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.yrs{display:flex;gap:6px;flex-wrap:wrap}
+.search{position:relative;margin-bottom:12px}
+.search input{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:11px 40px 11px 16px;font-size:1rem;color:var(--fg)}
+.search input::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+.search button{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:0;border-radius:50%;background:var(--surface-2);color:var(--muted);font-size:1rem;line-height:1}
+.found{font-size:.85rem;color:var(--muted);margin:-4px 0 12px}
+.found b{color:var(--fg);font-family:var(--f-mono)}
+.yr{background:none;border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:.82rem;font-family:var(--f-mono)}
+.yr[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.month{font-family:var(--f-display);font-weight:600;font-size:1rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px;display:flex;justify-content:space-between}
+.month:first-child{margin-top:0}
+
+/* Lent guns */
+.loan{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:8px;color:var(--fg)}
+.loan:hover{border-color:var(--muted)}
+.loan .lh{display:flex;justify-content:space-between;gap:10px;font-weight:600}
+.loan .lh .num{font-weight:600}
+.loan .lp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;font-size:.88rem;margin-top:6px}
+.loan .lp span{min-width:0;overflow-wrap:anywhere}
+.loan .lp small{color:var(--muted)}
+.paid{font-size:.68rem;font-weight:600;border-radius:4px;padding:1px 6px;border:1px solid var(--muted);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-left:6px}
+.paid.no{border-color:var(--accent);color:var(--accent)}
+.lnline{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:8px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px;box-shadow:inset 4px 0 0 var(--accent)}
+.lnline .sub{grid-column:1/-1;color:var(--muted);font-size:.82rem;font-family:var(--f-mono)}
+.lnline .x{background:none;border:0;color:var(--muted);font-size:1.1rem;padding:8px 0}
+.whorow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;border-top:1px solid var(--line);padding:10px 0}
+.whorow b{font-family:var(--f-mono)}
+.whorow .act{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.prrow{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px}
+.entry{display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:8px}
+.entry:hover{border-color:var(--muted)}
+.day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-right:1px solid var(--line);padding-right:10px}
+.day b{font-family:var(--f-mono);font-size:.92rem;font-weight:600;line-height:1.1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.day small{font-size:.72rem;color:var(--muted)}
+.e-head{display:flex;gap:4px 10px;align-items:baseline;flex-wrap:wrap}
+.e-place{font-weight:600}
+.e-meta{color:var(--muted);font-size:.85rem}
+.e-lines{display:flex;flex-direction:column;gap:2px;margin-top:6px;font-size:.88rem}
+.e-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+.e-line .what{min-width:0;overflow-wrap:anywhere}
+.e-line .what span{color:var(--muted)}
+.e-line .num{font-weight:600}
+.tm{display:inline-block;font-family:var(--f-mono);font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:4px;color:var(--muted)}
+
+.empty{border:1.5px dashed var(--line);border-radius:var(--r);padding:24px;text-align:center;color:var(--muted)}
+
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:16px 28px;
+  font-family:var(--f-display);font-weight:700;font-size:1.25rem;letter-spacing:.06em;text-transform:uppercase;
+  box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:5;white-space:nowrap}
+
+/* Sheets */
+.sheet{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet-in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.sheet-bar{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);padding-block:12px;z-index:1;border-bottom:1px solid var(--line)}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;min-width:0}
+.field{display:flex;flex-direction:column;gap:6px}
+input[type=text],input[type=date],input[type=time],input[type=number],select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:1rem;color:var(--fg);font-weight:400;text-transform:none;letter-spacing:0;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.9rem}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.chip.add{border-style:dashed}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
+
+.line{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:inset 4px 0 0 var(--accent)}
+.line-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.line-top .lbl{font-size:.75rem}
+.rm{background:none;border:0;color:var(--muted);font-size:.85rem;padding:4px 6px}
+.lgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.step{display:flex;align-items:center;gap:4px}
+.step button{width:44px;height:44px;flex:0 0 44px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:1.3rem;line-height:1}
+.step input{text-align:center;font-family:var(--f-mono);font-weight:600}
+.total{font-family:var(--f-mono);font-size:.9rem;color:var(--muted);text-align:right}
+
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:14px 22px;font-weight:600;font-size:1rem;flex:1 1 auto}
+.danger{background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:13px 16px}
+.msg{font-size:.88rem;color:var(--danger)}
+.opt{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.opt>label.r{display:flex;gap:10px;align-items:center;font-weight:600;cursor:pointer}
+.opt input[type=radio]{width:20px;height:20px;accent-color:var(--accent)}
+.opt .sub{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding-left:30px}
+.hint{font-size:.85rem;color:var(--muted)}
+.hint b{color:var(--fg);font-family:var(--f-mono)}
+/* Guns */
+.guns{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.gunrow{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:stretch;border-top:1px solid var(--line);background:var(--surface)}
+.gunrow:first-child{border-top:0;border-radius:var(--r) var(--r) 0 0}
+.gunrow:last-child{border-radius:0 0 var(--r) var(--r)}
+.grip{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.1rem;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.gunrow.dragging{position:relative;z-index:2;box-shadow:0 6px 18px rgba(0,0,0,.18);background:var(--surface-2)}
+.gunrow.dragging .grip{cursor:grabbing;color:var(--accent)}
+.gun{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;width:100%;text-align:left;background:none;border:0;padding:12px 14px 12px 0}
+.gun:hover{background:var(--surface-2)}
+.gun b{font-weight:600}
+.gun .g-sub{color:var(--muted);font-size:.82rem;grid-column:1}
+.gun .g-r{grid-row:1/3;grid-column:2;text-align:right}
+.gun .g-r .num{font-size:1.3rem;font-weight:600;display:block;line-height:1.1}
+.gun .g-r small{color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+.gun.archived{opacity:.55}
+.sechead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.toggle{display:flex;align-items:baseline;gap:10px;background:none;border:0;padding:4px 0;color:var(--fg);text-align:left}
+.toggle .cnt{font-size:.85rem;color:var(--muted)}
+.toggle .chev{display:inline-block;color:var(--muted);transition:transform .15s}
+.toggle[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.check{display:flex;gap:10px;align-items:center;font-size:.95rem;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.e-line .gname{color:var(--fg);font-weight:500}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:20}
+
+@media (max-width:560px){ .ids{grid-template-columns:repeat(2,minmax(0,1fr))} .grid3{grid-template-columns:1fr 1fr} .grid3>:first-child{grid-column:1/-1} }
+@media (max-width:420px){ .stat b{font-size:1.35rem} .lgrid{grid-template-columns:1fr} }
+@media (prefers-reduced-motion:no-preference){ .toast{animation:up .2s ease-out} @keyframes up{from{opacity:0;transform:translate(-50%,8px)}} }
+/* Page switcher (same on every page) */
+.pnav{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px;margin-top:max(12px,env(safe-area-inset-top,0px))}
+.pnav a{display:flex;align-items:center;justify-content:center;gap:5px;min-height:38px;padding:4px 6px;border-radius:999px;color:var(--fg);text-decoration:none;font-weight:600;font-size:.86rem;white-space:nowrap;overflow:hidden}
+.pnav a:hover{background:var(--surface)}
+.pnav a[aria-current="page"]{background:var(--fg);color:var(--bg)}
+.pnav svg{width:16px;height:16px;flex:0 0 auto}
+.pnav a:first-child{padding-inline:12px}
+@media (max-width:480px){.pnav a .t{display:none}.pnav a{font-size:.82rem}}
+header.top{padding-top:6px!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a><a href="lent" aria-current="page">Lent</a></nav>
+  <header class="top">
+    <h1>Lent <span>guns</span></h1>
+    <div class="hbtns">
+      <button class="ghost" id="pricesBtn" type="button">Ammo prices</button>
+      <form method="post" action="logout" style="display:contents"><button class="ghost" type="submit">Log out</button></form>
+    </div>
+  </header>
+
+  <div class="banner" id="queueNote" hidden></div>
+  <p class="hint" style="margin:0">Friends shooting your guns and/or your ammo, e.g. at a match. Shots in your guns go on each gun's round count
+    (shown on the Diary page), never on your own shooting record or the licence export. The ammo cost is worked out per friend.</p>
+
+  <section aria-label="Summary">
+    <div class="stats">
+      <div class="stat"><b class="num" id="sTrips">–</b><small>Trips</small></div>
+      <div class="stat"><b class="num" id="sShots">–</b><small>Shots</small></div>
+      <div class="stat"><b class="num" id="sUnpaid">–</b><small>€ unpaid</small></div>
+    </div>
+  </section>
+
+  <section id="friendsSec" hidden>
+    <h2 style="margin-bottom:6px">Friends</h2>
+    <div id="friends"></div>
+  </section>
+
+  <section>
+    <h2 style="margin-bottom:10px">Trips</h2>
+    <div id="loans"><div class="empty">Loading…</div></div>
+  </section>
+</div>
+
+<button class="fab" id="addLoanBtn" type="button">+ Lend</button>
+
+<datalist id="dlFriend"></datalist><datalist id="dlEvent"></datalist><datalist id="dlPrCal"></datalist>
+<div class="sheet" id="lnSheet" hidden role="dialog" aria-modal="true" aria-labelledby="lnTitle">
+  <form class="sheet-in" id="lnForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="lnTitle">Lend</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
+    <p class="hint" style="margin:0">Friends shooting your guns and/or your ammo. Shots in your guns count toward each gun's round count (not toward your own shooting record or the licence export). For a friend's own gun, choose <b>Not my gun – ammo only</b> and the ammo's calibre: only the cost is counted.</p>
+    <div class="grid2">
+      <label class="f">Date<input type="date" id="lnDate" required></label>
+      <label class="f">Match / event<input type="text" id="lnEvent" list="dlEvent" placeholder="e.g. Club match, Hyvinkää"></label>
+    </div>
+    <div class="field"><span class="lbl">Who shot what</span>
+      <div id="lnLines" style="display:flex;flex-direction:column;gap:10px"></div>
+      <button class="ghost" type="button" id="lnAdd" style="align-self:flex-start">+ Friend / gun</button>
+    </div>
+    <div id="lnWho"></div>
+    <label class="f">Note<input type="text" id="lnNote" maxlength="2000" placeholder="optional"></label>
+    <div class="msg" id="lnMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="lnDel" hidden>Delete</button></div>
+  </form>
+</div>
+<div class="sheet" id="prSheet" hidden role="dialog" aria-modal="true" aria-labelledby="prTitle">
+  <form class="sheet-in" id="prForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="prTitle">Ammo prices</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
+    <p class="hint" style="margin:0">Price per round in euros, by calibre. A new lending line takes the price of its gun's calibre; you can still change it on the line.</p>
+    <div id="prRows" style="display:flex;flex-direction:column;gap:8px"></div>
+    <button class="ghost" type="button" id="prAdd" style="align-self:flex-start">+ Calibre</button>
+    <div class="actions"><button class="primary" type="submit">Save prices</button></div>
+  </form>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+// Logged-in account (cookie set at login): local storage keys are per account.
+const ACCOUNT=decodeURIComponent((document.cookie.match(/(?:^|; )diary_user=([^;]*)/)||[])[1]||"");
+function ukey(k){const nk=ACCOUNT?k+":"+ACCOUNT:k;
+  try{if(ACCOUNT&&localStorage.getItem(k)!==null&&localStorage.getItem(nk)===null){localStorage.setItem(nk,localStorage.getItem(k));localStorage.removeItem(k)}}catch(e){}
+  return nk}
+const $=id=>document.getElementById(id);
+const S={sessions:[],guns:[],profile:{},loans:[],prices:{},store:null};
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k)||"null")}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+// Same outbox as the Diary page: either page sends whatever is waiting when the connection is back
+const OUTBOX_KEY=ukey("ampumapk-outbox-v1");
+function apiStore(){
+  let server=[],sguns=[],profile={},sloans=[],sprices=null,cb=null,flushing=false,offlineAt=null,stuck=false;
+  let box=lsGet(OUTBOX_KEY)||{};box.sessions=box.sessions||{};box.guns=box.guns||{};box.loans=box.loans||{};
+  if(box.profile===undefined)box.profile=null;if(box.prices===undefined)box.prices=null;
+  const persist=()=>lsSet(OUTBOX_KEY,box);
+  const pending=()=>Object.keys(box.sessions).length+Object.keys(box.guns).length+Object.keys(box.loans).length+(box.profile?1:0)+(box.prices?1:0);
+  const merged=(base,over)=>{const m=new Map(base.map(x=>[x.id,x]));for(const[id,d]of Object.entries(over)){if(d===null)m.delete(id);else m.set(id,Object.assign({id},d))}return[...m.values()]};
+  function emit(){
+    if(!cb)return;
+    cb[2](merged(sguns,box.guns));cb[3]&&cb[3](merged(sloans,box.loans));cb[4]&&cb[4](box.prices||sprices||{});
+    cb[0](merged(server,box.sessions));cb[1](box.profile||profile);
+    const n=pending(),el=$("queueNote"),msgs=[];
+    if(offlineAt)msgs.push(`Offline – showing data from ${offlineAt}.`);
+    // Only mention queued changes once sending has actually failed (not during a normal save).
+    if(n&&(stuck||offlineAt))msgs.push(`${n} change${n>1?"s":""} waiting for the server – will be sent automatically.`);
+    el.hidden=!msgs.length;el.textContent=msgs.join(" ");
+  }
+  async function req(method,path,body){
+    const r=await fetch("api/"+path,{method,credentials:"same-origin",
+      headers:Object.assign({"X-Requested-With":"fetch"},body?{"Content-Type":"application/json"}:{}),
+      body:body?JSON.stringify(body):undefined});
+    if(r.status===401){location.href="login";throw{code:"auth"}}
+    if(r.status===503&&method==="GET")throw{code:"offline"};
+    if(!r.ok)throw{code:"http",status:r.status};
+    if(method==="GET"){
+      if(r.headers.get("X-Offline")){const d=new Date(r.headers.get("Date")||Date.now());offlineAt=d.toLocaleString("en-GB",{day:"numeric",month:"numeric",hour:"2-digit",minute:"2-digit"})}
+      else offlineAt=null;
+    }
+    return r.json();
+  }
+  async function load(){
+    try{const[s,p,gs,ln,pr]=await Promise.all([req("GET","sessions"),req("GET","profile"),req("GET","guns"),req("GET","loans").catch(()=>sloans),req("GET","ammo-prices").catch(()=>sprices)]);
+      server=s;profile=p;sguns=gs;sloans=ln||[];sprices=pr;emit()}
+    catch(e){if(e&&e.code==="auth")return;toast("Cannot reach the server – showing saved changes");emit()}
+  }
+  async function flush(){
+    if(flushing||!pending())return;flushing=true;let changed=false;
+    try{
+      for(const[id,d]of Object.entries(box.guns)){
+        try{
+          if(d===null)await req("DELETE","guns/"+encodeURIComponent(id));
+          else await req("PUT","guns/"+encodeURIComponent(id),d);
+          if(box.guns[id]===d){delete box.guns[id];persist()}
+          sguns=sguns.filter(g=>g.id!==id);if(d!==null)sguns.push(Object.assign({id},d));
+          changed=true;
+        }catch(e){
+          if(e&&e.code==="http"&&e.status>=400&&e.status<500){delete box.guns[id];persist();toast("The server rejected a change ("+e.status+")");changed=true}
+          else throw e;
+        }
+      }
+      for(const[id,d]of Object.entries(box.sessions)){
+        try{
+          if(d===null)await req("DELETE","sessions/"+encodeURIComponent(id));
+          else await req("PUT","sessions/"+encodeURIComponent(id),d);
+          if(box.sessions[id]===d){delete box.sessions[id];persist()}
+          if(d===null)server=server.filter(s=>s.id!==id);
+          else server=server.filter(s=>s.id!==id).concat([Object.assign({id},d)]);
+          changed=true;
+        }catch(e){
+          if(e&&e.code==="http"&&e.status>=400&&e.status<500){delete box.sessions[id];persist();toast("The server rejected a change ("+e.status+")");changed=true}
+          else throw e;
+        }
+      }
+      for(const[id,d]of Object.entries(box.loans)){
+        try{
+          if(d===null)await req("DELETE","loans/"+encodeURIComponent(id));
+          else await req("PUT","loans/"+encodeURIComponent(id),d);
+          if(box.loans[id]===d){delete box.loans[id];persist()}
+          sloans=sloans.filter(l=>l.id!==id);if(d!==null)sloans.push(Object.assign({id},d));
+          changed=true;
+        }catch(e){
+          if(e&&e.code==="http"&&e.status>=400&&e.status<500){delete box.loans[id];persist();toast("The server rejected a change ("+e.status+")");changed=true}
+          else throw e;
+        }
+      }
+      if(box.prices){const p=box.prices;await req("PUT","ammo-prices",p);sprices=p;if(box.prices===p){box.prices=null;persist()}changed=true}
+      if(box.profile){const p=box.profile;await req("PUT","profile",p);profile=p;if(box.profile===p){box.profile=null;persist()}changed=true}
+      stuck=false;
+    }catch(e){stuck=true;changed=true;/* offline: keep the outbox, retry later */}
+    finally{flushing=false;if(changed)emit();if(!stuck&&pending())setTimeout(flush,0)}   // send anything queued meanwhile
+  }
+  window.addEventListener("online",flush);
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){flush().then(load)}});
+  setInterval(()=>{if(pending())flush()},20000);
+  const queue=(fn)=>{fn();persist();emit();flush();return Promise.resolve()};
+  return{
+    sub(a,b,c,d,e){cb=[a,b,c,d,e];load().then(flush)},
+    saveLoan:(id,d)=>queue(()=>{box.loans[id]=d}),
+    delLoan:id=>queue(()=>{box.loans[id]=null}),
+    savePrices:d=>queue(()=>{box.prices=d}),
+    saveGun:(id,d)=>queue(()=>{box.guns[id]=d}),
+    delGun:id=>queue(()=>{box.guns[id]=null}),
+    saveSession:(id,d)=>queue(()=>{box.sessions[id]=d}),
+    delSession:id=>queue(()=>{box.sessions[id]=null}),
+    saveProfile:d=>queue(()=>{box.profile=d}),
+  };
+}
+
+const pad=n=>String(n).padStart(2,"0");
+const todayStr=()=>{const d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())};
+const parseD=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+const fiDate=s=>{const d=parseD(s);return d.getDate()+"/"+(d.getMonth()+1)+"/"+d.getFullYear()};
+const fmt=n=>String(n);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2200)}
+const gunsSorted=()=>S.guns.slice().sort((a,b)=>(!!a.archived-!!b.archived)||((a.order??99)-(b.order??99))||String(a.name).localeCompare(b.name));
+function closeSheets(){["lnSheet","prSheet"].forEach(id=>$(id).hidden=true);document.body.style.overflow=""}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
+
+/* ---------- lent guns: friends shooting your guns with your ammo ---------- */
+const eur=v=>(+v||0).toFixed(2)+" €";
+// "6.5 Creedmoor" = "6.5 CM", ".223 Remington" = ".223 Rem" when looking up a price
+const calKey=c=>String(c||"").toLowerCase().replace(/creedmoor/g,"cm").replace(/remington/g,"rem").replace(/winchester/g,"win")
+  .replace(/springfield/g,"spring").replace(/parabellum/g,"luger").replace(/[^a-z0-9]/g,"");
+function priceFor(cal){const k=calKey(cal);if(!k)return null;for(const[c,p]of Object.entries(S.prices||{}))if(calKey(c)===k)return+p;return null}
+const loanCost=l=>(+l.rounds||0)*(+l.price||0);
+const lineLabel=l=>l.gunId?(l.gun||"gun"):("ammo"+(l.cal?" "+l.cal:""));   // a friend's own gun: only your ammo
+function byWho(n){   // {who: {rounds, cost, guns:[{gun, rounds}]}} in line order
+  const m=new Map();(n.lines||[]).forEach(l=>{const w=l.who||"–";const e=m.get(w)||{rounds:0,cost:0,guns:[]};
+    e.rounds+=+l.rounds||0;e.cost+=loanCost(l);e.guns.push(l);m.set(w,e)});return m}
+const newLoanId=()=>"n-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function unpaidOf(n){const paid=new Set(n.paid||[]);let t=0;byWho(n).forEach((e,w)=>{if(!paid.has(w))t+=e.cost});return t}
+function renderLoans(){
+  const list=S.loans,shots=list.reduce((a,n)=>a+(n.lines||[]).reduce((b,l)=>b+(+l.rounds||0),0),0),unpaid=list.reduce((a,n)=>a+unpaidOf(n),0);
+  $("sTrips").textContent=fmt(list.length);$("sShots").textContent=fmt(shots);$("sUnpaid").textContent=unpaid>0.004?unpaid.toFixed(2):"0";
+  // Per friend: shots, cost, still unpaid – newest trip first
+  const fr=new Map();list.forEach(n=>{const paid=new Set(n.paid||[]);byWho(n).forEach((e,w)=>{const f=fr.get(w)||{shots:0,cost:0,unpaid:0,trips:0,last:n.date};
+    f.shots+=e.rounds;f.cost+=e.cost;f.trips++;if(!paid.has(w))f.unpaid+=e.cost;fr.set(w,f)})});
+  $("friends").innerHTML=fr.size?[...fr.entries()].sort((a,b)=>b[1].unpaid-a[1].unpaid||a[0].localeCompare(b[0])).map(([w,f])=>`<div class="whorow">
+      <span><b>${esc(w)}</b> · ${f.trips} trip${f.trips>1?"s":""} · ${fmt(f.shots)} shots</span>
+      <span class="num">${f.unpaid>0.004?`<b>${eur(f.unpaid)}</b><span class="paid no">unpaid</span>`:`${eur(f.cost)}<span class="paid">paid</span>`}</span></div>`).join(""):"";
+  $("friendsSec").hidden=!fr.size;
+  $("loans").innerHTML=list.length?list.map(n=>{const paid=new Set(n.paid||[]),tot=(n.lines||[]).reduce((a,l)=>a+loanCost(l),0);
+    return`<button type="button" class="loan" data-loan="${esc(n.id)}"><span class="lh"><span>${fiDate(n.date)}${n.event?" · "+esc(n.event):""}</span><span class="num">${eur(tot)}</span></span>`
+      +[...byWho(n).entries()].map(([w,e])=>`<span class="lp"><span><b>${esc(w)}</b> <small>${e.guns.map(g=>esc(lineLabel(g))+" "+fmt(+g.rounds||0)).join(" · ")}</small></span>
+        <span class="num">${eur(e.cost)}<span class="paid ${paid.has(w)?"":"no"}">${paid.has(w)?"paid":"unpaid"}</span></span></span>`).join("")+`</button>`}).join("")
+    :'<div class="empty">Lend a gun to a friend for a match: their shots go on the gun\'s round count and the ammo cost is worked out per person.</div>';
+}
+$("loans").addEventListener("click",e=>{const b=e.target.closest("[data-loan]");if(b)openLoan(b.dataset.loan)});
+$("addLoanBtn").addEventListener("click",()=>openLoan(null));
+
+let LN=null;     // the loan being edited: {id, date, event, note, lines:[], paid:Set}
+function gunOptsLn(sel){return`<option value="">Not my gun – ammo only</option>`+gunsSorted().filter(g=>!g.archived||g.id===sel).map(g=>`<option value="${esc(g.id)}" ${g.id===sel?"selected":""}>${esc(g.name)}${g.cal?" · "+esc(g.cal):""}</option>`).join("")}
+function openLoan(id){
+  const n=id?S.loans.find(x=>x.id===id):null;
+  LN={id:id||newLoanId(),isNew:!n,date:n?n.date:todayStr(),event:n?n.event||"":"",note:n?n.note||"":"",
+      lines:n?(n.lines||[]).map(l=>({...l})):[{who:"",gunId:"",gun:"",cal:"",rounds:0,price:""}],paid:new Set(n?n.paid||[]:[]),delArm:false};
+  $("lnTitle").textContent=n?"Lent guns":"Lend guns";$("lnDate").value=LN.date;$("lnEvent").value=LN.event;$("lnNote").value=LN.note;
+  $("lnDel").hidden=!n;$("lnDel").textContent="Delete";$("lnMsg").hidden=true;
+  const friends=new Set(),events=new Set();S.loans.forEach(x=>{(x.lines||[]).forEach(l=>l.who&&friends.add(l.who));x.event&&events.add(x.event)});
+  S.sessions.slice(0,60).forEach(s=>s.place&&events.add(s.place));
+  $("dlFriend").innerHTML=[...friends].map(v=>`<option value="${esc(v)}">`).join("");
+  $("dlPrCal").innerHTML=[...new Set(Object.keys(S.prices||{}).concat(S.guns.map(g=>g.cal).filter(Boolean)))].map(v=>`<option value="${esc(v)}">`).join("");$("dlEvent").innerHTML=[...events].map(v=>`<option value="${esc(v)}">`).join("");
+  renderLnLines();$("lnSheet").hidden=false;document.body.style.overflow="hidden";$("lnSheet").scrollTop=0;
+}
+function renderLnLines(){
+  $("lnLines").innerHTML=LN.lines.map((l,i)=>`<div class="lnline">
+    <label class="f">Friend<input type="text" list="dlFriend" data-ln="${i}" data-k="who" value="${esc(l.who)}" placeholder="name"></label>
+    <label class="f">Gun<select data-ln="${i}" data-k="gunId">${gunOptsLn(l.gunId)}</select></label>
+    <button type="button" class="x" data-lnx="${i}" aria-label="Remove line">✕</button>
+    <label class="f">Shots<input type="number" inputmode="numeric" min="0" step="1" data-ln="${i}" data-k="rounds" value="${l.rounds||""}" placeholder="0"></label>
+    <label class="f">€ / round${l.gunId&&l.cal?" ("+esc(l.cal)+")":""}<input type="text" inputmode="decimal" data-ln="${i}" data-k="price" value="${l.price===""||l.price==null?"":l.price}" placeholder="0.00"></label>
+    <span></span>
+    ${l.gunId?"":`<label class="f" style="grid-column:1/3">Calibre of the ammo (their own gun)<input type="text" list="dlPrCal" data-ln="${i}" data-k="cal" value="${esc(l.cal)}" placeholder="e.g. .223 Rem"></label><span></span>`}
+    <span class="sub">${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}</span></div>`).join("");
+  renderLnWho();
+}
+function renderLnWho(){
+  const m=byWho({lines:LN.lines.filter(l=>l.who||+l.rounds)}),tot=LN.lines.reduce((a,l)=>a+loanCost(l),0);
+  $("lnWho").innerHTML=m.size?`<span class="lbl">Ammo cost</span>`+[...m.entries()].map(([w,e])=>`<div class="whorow">
+      <span><b>${esc(w)}</b> · ${fmt(e.rounds)} shots</span><span class="num"><b>${eur(e.cost)}</b></span>
+      <span class="act" style="grid-column:1/-1"><label class="check" style="font-size:.88rem"><input type="checkbox" data-paid="${esc(w)}" ${LN.paid.has(w)?"checked":""}> Paid</label>
+        <button type="button" class="ghost" data-share="${esc(w)}" style="padding:6px 12px;font-size:.82rem">${navigator.share?"Share":"Copy"} cost</button></span></div>`).join("")
+    +(m.size>1?`<div class="whorow"><span>Total</span><span class="num"><b>${eur(tot)}</b></span></div>`:""):"";
+}
+$("lnLines").addEventListener("input",e=>{const t=e.target,i=t.dataset.ln;if(i==null)return;const l=LN.lines[+i],k=t.dataset.k;
+  if(k==="rounds")l.rounds=Math.max(0,parseInt(t.value)||0);
+  else if(k==="price")l.price=t.value.replace(",",".");
+  else if(k==="who")l.who=t.value.trim();
+  else if(k==="cal"){l.cal=t.value.trim();const p=priceFor(l.cal);
+    if(p!=null){l.price=p;const pi=t.closest(".lnline").querySelector('[data-k="price"]');if(pi)pi.value=p}}
+  if(k==="gunId"){const g=S.guns.find(x=>x.id===t.value)||{};l.gunId=t.value;l.gun=g.name||"";l.cal=t.value?g.cal||"":"";
+    const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
+  const sub=t.closest(".lnline").querySelector(".sub");sub.textContent=`${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}`;renderLnWho()});
+$("lnLines").addEventListener("click",e=>{const x=e.target.closest("[data-lnx]");if(!x)return;LN.lines.splice(+x.dataset.lnx,1);renderLnLines()});
+$("lnAdd").addEventListener("click",()=>{const last=LN.lines[LN.lines.length-1]||{};
+  LN.lines.push({who:last.who||"",gunId:"",gun:"",cal:"",rounds:0,price:""});renderLnLines()});
+$("lnWho").addEventListener("change",e=>{const c=e.target.closest("[data-paid]");if(!c)return;if(c.checked)LN.paid.add(c.dataset.paid);else LN.paid.delete(c.dataset.paid)});
+$("lnWho").addEventListener("click",async e=>{const b=e.target.closest("[data-share]");if(!b)return;
+  const w=b.dataset.share,en=byWho({lines:LN.lines}).get(w);if(!en)return;
+  const ev=$("lnEvent").value.trim(),d=$("lnDate").value;
+  const text=[`${ev||"Shooting"} ${d?fiDate(d):""} – ammo`].concat(en.guns.filter(g=>+g.rounds).map(g=>`${g.gunId?(g.gun||"Gun")+(g.cal?" ("+g.cal+")":""):lineLabel(g)}: ${g.rounds} × ${(+g.price||0).toFixed(2)} € = ${eur(loanCost(g))}`),[`Total ${eur(en.cost)}`]).join("\n");
+  try{if(navigator.share)await navigator.share({title:"Ammo cost",text});else{await navigator.clipboard.writeText(text);toast("Copied")}}catch(err){}
+});
+document.querySelectorAll("[data-lnclose]").forEach(b=>b.addEventListener("click",closeSheets));
+$("lnForm").addEventListener("submit",async e=>{e.preventDefault();
+  const lines=LN.lines.filter(l=>l.who||l.gunId||+l.rounds).map(l=>({who:l.who,gunId:l.gunId||null,gun:l.gun,cal:l.cal,rounds:+l.rounds||0,price:+l.price||0}));
+  if(!lines.length){$("lnMsg").textContent="Add at least one friend and what they shot.";$("lnMsg").hidden=false;return}
+  if(lines.some(l=>!l.who)){$("lnMsg").textContent="Every line needs the friend's name.";$("lnMsg").hidden=false;return}
+  const whos=new Set(lines.map(l=>l.who));
+  const doc={date:$("lnDate").value,event:$("lnEvent").value.trim(),note:$("lnNote").value,lines,paid:[...LN.paid].filter(w=>whos.has(w))};
+  await S.store.saveLoan(LN.id,doc);closeSheets();toast("Saved");
+});
+$("lnDel").addEventListener("click",async()=>{if(!LN.delArm){LN.delArm=true;$("lnDel").textContent="Tap again to delete";return}
+  await S.store.delLoan(LN.id);closeSheets();toast("Deleted")});
+
+/* ammo prices per calibre */
+function openPrices(){
+  const cals=new Map();Object.entries(S.prices||{}).forEach(([c,p])=>cals.set(c,p));
+  S.guns.filter(g=>g.cal&&!g.archived).forEach(g=>{if(priceFor(g.cal)==null&&![...cals.keys()].some(c=>calKey(c)===calKey(g.cal)))cals.set(g.cal,"")});
+  $("prRows").innerHTML=[...cals.entries()].map(([c,p])=>prRow(c,p)).join("");
+  $("prSheet").hidden=false;document.body.style.overflow="hidden";
+}
+const prRow=(c,p)=>`<div class="prrow"><input type="text" value="${esc(c)}" placeholder="Calibre" aria-label="Calibre"><input type="text" inputmode="decimal" value="${p===""||p==null?"":p}" placeholder="€ / round" aria-label="Price per round"></div>`;
+$("pricesBtn").addEventListener("click",openPrices);
+$("prAdd").addEventListener("click",()=>$("prRows").insertAdjacentHTML("beforeend",prRow("","")));
+$("prForm").addEventListener("submit",async e=>{e.preventDefault();
+  const out={};$("prRows").querySelectorAll(".prrow").forEach(r=>{const[c,p]=r.querySelectorAll("input");const v=parseFloat(p.value.replace(",","."));
+    if(c.value.trim()&&isFinite(v))out[c.value.trim()]=v});
+  await S.store.savePrices(out);closeSheets();toast("Prices saved")});
+
+
+/* ---------- boot ---------- */
+if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{scope:"./"}).catch(()=>{}));
+S.store=apiStore();
+S.store.sub(list=>{S.sessions=(list||[]).filter(s=>s.date).sort((a,b)=>b.date.localeCompare(a.date));renderLoans()},()=>{},g=>{S.guns=g||[]},
+  l=>{S.loans=(l||[]).filter(x=>x.date).sort((a,b)=>b.date.localeCompare(a.date))},p=>{S.prices=p||{}});
+})();
+</script>
+</body>
+</html>
