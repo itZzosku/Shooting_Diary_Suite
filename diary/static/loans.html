@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Lent guns</title>
+<title>Guns loaned</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#141714" media="(prefers-color-scheme: dark)">
@@ -87,7 +87,7 @@ h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform
 .month{font-family:var(--f-display);font-weight:600;font-size:1rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px;display:flex;justify-content:space-between}
 .month:first-child{margin-top:0}
 
-/* Lent guns */
+/* Guns loaned */
 .loan{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:8px;color:var(--fg)}
 .loan:hover{border-color:var(--muted)}
 .loan .lh{display:flex;justify-content:space-between;gap:10px;font-weight:600}
@@ -204,9 +204,9 @@ header.top{padding-top:6px!important}
 </head>
 <body>
 <div class="wrap">
-  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a><a href="lent" aria-current="page">Lent</a></nav>
+  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a><a href="loans" aria-current="page">Loans</a></nav>
   <header class="top">
-    <h1>Lent <span>guns</span></h1>
+    <h1>Guns <span>loaned</span></h1>
     <div class="hbtns">
       <button class="ghost" id="pricesBtn" type="button">Ammo prices</button>
       <form method="post" action="logout" style="display:contents"><button class="ghost" type="submit">Log out</button></form>
@@ -236,12 +236,12 @@ header.top{padding-top:6px!important}
   </section>
 </div>
 
-<button class="fab" id="addLoanBtn" type="button">+ Lend</button>
+<button class="fab" id="addLoanBtn" type="button">+ Loan</button>
 
 <datalist id="dlFriend"></datalist><datalist id="dlEvent"></datalist><datalist id="dlPrCal"></datalist>
 <div class="sheet" id="lnSheet" hidden role="dialog" aria-modal="true" aria-labelledby="lnTitle">
   <form class="sheet-in" id="lnForm" autocomplete="off">
-    <div class="sheet-bar"><h2 id="lnTitle">Lend</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
+    <div class="sheet-bar"><h2 id="lnTitle">Loan</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
     <p class="hint" style="margin:0">Friends shooting your guns and/or your ammo. Shots in your guns count toward each gun's round count (not toward your own shooting record or the licence export). For a friend's own gun, choose <b>Not my gun – ammo only</b> and the ammo's calibre: only the cost is counted.</p>
     <div class="grid2">
       <label class="f">Date<input type="date" id="lnDate" required></label>
@@ -260,7 +260,7 @@ header.top{padding-top:6px!important}
 <div class="sheet" id="prSheet" hidden role="dialog" aria-modal="true" aria-labelledby="prTitle">
   <form class="sheet-in" id="prForm" autocomplete="off">
     <div class="sheet-bar"><h2 id="prTitle">Ammo prices</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
-    <p class="hint" style="margin:0">Price per round in euros, by calibre. A new lending line takes the price of its gun's calibre; you can still change it on the line.</p>
+    <p class="hint" style="margin:0">Price per round in euros, by calibre. A new loan line takes the price of its gun's calibre; you can still change it on the line.</p>
     <div id="prRows" style="display:flex;flex-direction:column;gap:8px"></div>
     <button class="ghost" type="button" id="prAdd" style="align-self:flex-start">+ Calibre</button>
     <div class="actions"><button class="primary" type="submit">Save prices</button></div>
@@ -391,7 +391,7 @@ const gunsSorted=()=>S.guns.slice().sort((a,b)=>(!!a.archived-!!b.archived)||((a
 function closeSheets(){["lnSheet","prSheet"].forEach(id=>$(id).hidden=true);document.body.style.overflow=""}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
 
-/* ---------- lent guns: friends shooting your guns with your ammo ---------- */
+/* ---------- guns loaned: friends shooting your guns and/or ammo ---------- */
 const eur=v=>(+v||0).toFixed(2)+" €";
 // "6.5 Creedmoor" = "6.5 CM", ".223 Remington" = ".223 Rem" when looking up a price
 const calKey=c=>String(c||"").toLowerCase().replace(/creedmoor/g,"cm").replace(/remington/g,"rem").replace(/winchester/g,"win")
@@ -418,7 +418,7 @@ function renderLoans(){
     return`<button type="button" class="loan" data-loan="${esc(n.id)}"><span class="lh"><span>${fiDate(n.date)}${n.event?" · "+esc(n.event):""}</span><span class="num">${eur(tot)}</span></span>`
       +[...byWho(n).entries()].map(([w,e])=>`<span class="lp"><span><b>${esc(w)}</b> <small>${e.guns.map(g=>esc(lineLabel(g))+" "+fmt(+g.rounds||0)).join(" · ")}</small></span>
         <span class="num">${eur(e.cost)}<span class="paid ${paid.has(w)?"":"no"}">${paid.has(w)?"paid":"unpaid"}</span></span></span>`).join("")+`</button>`}).join("")
-    :'<div class="empty">Lend a gun to a friend for a match: their shots go on the gun\'s round count and the ammo cost is worked out per person.</div>';
+    :'<div class="empty">Loan a gun or ammo to a friend for a match: their shots go on the gun\'s round count and the ammo cost is worked out per person.</div>';
 }
 $("loans").addEventListener("click",e=>{const b=e.target.closest("[data-loan]");if(b)openLoan(b.dataset.loan)});
 $("addLoanBtn").addEventListener("click",()=>openLoan(null));
@@ -429,7 +429,7 @@ function openLoan(id){
   const n=id?S.loans.find(x=>x.id===id):null;
   LN={id:id||newLoanId(),isNew:!n,date:n?n.date:todayStr(),event:n?n.event||"":"",note:n?n.note||"":"",
       lines:n?(n.lines||[]).map(l=>({...l})):[{who:"",gunId:"",gun:"",cal:"",rounds:0,price:""}],paid:new Set(n?n.paid||[]:[]),delArm:false};
-  $("lnTitle").textContent=n?"Lent guns":"Lend guns";$("lnDate").value=LN.date;$("lnEvent").value=LN.event;$("lnNote").value=LN.note;
+  $("lnTitle").textContent=n?"Loan":"New loan";$("lnDate").value=LN.date;$("lnEvent").value=LN.event;$("lnNote").value=LN.note;
   $("lnDel").hidden=!n;$("lnDel").textContent="Delete";$("lnMsg").hidden=true;
   const friends=new Set(),events=new Set();S.loans.forEach(x=>{(x.lines||[]).forEach(l=>l.who&&friends.add(l.who));x.event&&events.add(x.event)});
   S.sessions.slice(0,60).forEach(s=>s.place&&events.add(s.place));

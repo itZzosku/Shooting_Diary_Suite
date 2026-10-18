@@ -307,10 +307,15 @@ def page():
     return static_page("diary.html")
 
 
-@bp.get("/lent")
+@bp.get("/loans")
 @login_required
-def page_lent():
-    return static_page("lent.html")
+def page_loans():
+    return static_page("loans.html")
+
+
+@bp.get("/lent")
+def old_lent_url():
+    return redirect(url_for("diary.page_loans"), code=301)
 
 
 @bp.get("/manifest.webmanifest")
@@ -536,7 +541,7 @@ def delete_gun(gid):
 from . import chrono  # noqa: E402,F401
 # Scope zeroes (dial positions per rifle, swap calculator, PDF zeroing card).
 from . import zero  # noqa: E402,F401
-# Guns lent to friends + ammo cost.
+# Guns loaned to friends + ammo cost.
 from . import loans  # noqa: E402,F401
 # Landing-page summary.
 from . import summary  # noqa: E402,F401

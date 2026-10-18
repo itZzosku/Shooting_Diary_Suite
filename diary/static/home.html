@@ -212,7 +212,7 @@ header.top{padding-top:6px!important}
 </head>
 <body>
 <div class="wrap">
-  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a><a href="lent">Lent</a></nav>
+  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a><a href="loans">Loans</a></nav>
   <header class="top">
     <div><h1>Shooting <span>diary</span></h1><div class="who" id="who"></div></div>
     <div class="hbtns">
@@ -244,9 +244,9 @@ header.top{padding-top:6px!important}
       <span class="what">Scope dial positions and swaps</span>
       <span class="now" id="nZero"></span>
     </a>
-    <a class="tile" href="lent">
+    <a class="tile" href="loans">
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><path d="M16 8h5M18.5 5.5 21 8l-2.5 2.5"/></svg></span>
-      <b>Lent guns</b><span class="go" aria-hidden="true">›</span>
+      <b>Guns loaned</b><span class="go" aria-hidden="true">›</span>
       <span class="what">Friends' shots with your guns and ammo, cost per friend</span>
       <span class="now" id="nLent"></span>
     </a>
@@ -311,7 +311,7 @@ async function load(){
     :`<span>No velocities yet.</span>`;
   const ln=j.lent||{};
   $("nLent").innerHTML=ln.trips?`<b>${ln.unpaid>0.004?ln.unpaid.toFixed(2)+" €":"0 €"}</b> <span>unpaid · ${ln.trips} trip${ln.trips>1?"s":""} · ${ln.shots} shots · last ${fiDate(ln.last)}</span>`
-    :`<span>Nothing lent yet.</span>`;
+    :`<span>Nothing loaned yet.</span>`;
   $("nZero").innerHTML=z.length?z.map(s=>`${esc(s.name)} <span>·</span> ${s.on?`<span>on</span> <b>${esc(s.on)}</b>`:`<span>${s.positions} positions</span>`}`).join("<br>")
     :`<span>No scopes yet.</span>`;
 }

@@ -1,4 +1,4 @@
-"""Guns lent to friends (e.g. for a match) with your ammo: shots per gun and what the ammo cost.
+"""Guns loaned to friends (e.g. for a match) and/or your ammo: shots per gun and what the ammo cost.
 
 A loan is one trip: date, event, and lines {who, gunId, gun, cal, rounds, price}. Its shots count toward the
 gun's round count but never toward your own shooting record (the licence PDF/CSV) – you didn't shoot them.

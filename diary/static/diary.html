@@ -187,7 +187,7 @@ header.top{padding-top:6px!important}
 </head>
 <body>
 <div class="wrap">
-  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log" aria-current="page">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a><a href="lent">Lent</a></nav>
+  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log" aria-current="page">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a><a href="loans">Loans</a></nav>
   <header class="top">
     <h1>Range <span>diary</span></h1>
     <div class="hbtns">
@@ -543,7 +543,7 @@ function renderGuns(){
   el.innerHTML=list.map(g=>{const t=tot[g.id]||{r:0,d:new Set(),last:""},all=(+g.startCount||0)+t.r;
     return `<div class="gunrow" data-id="${esc(g.id)}"><span class="grip" aria-label="Move" title="Drag to reorder">⠿</span><button type="button" class="gun ${g.archived?"archived":""}" data-gun="${esc(g.id)}">
       <b>${esc(g.name)}</b>
-      <span class="g-sub">${esc([tEn(g.type),g.cal].filter(Boolean).join(" · "))}${g.acquired?` · acquired ${fiDate(g.acquired)}`:""}${t.d.size?` · ${t.d.size} days · last ${fiDate(t.last)}`:""}${t.lent?` · incl. ${fmt(t.lent)} lent`:""}</span>
+      <span class="g-sub">${esc([tEn(g.type),g.cal].filter(Boolean).join(" · "))}${g.acquired?` · acquired ${fiDate(g.acquired)}`:""}${t.d.size?` · ${t.d.size} days · last ${fiDate(t.last)}`:""}${t.lent?` · incl. ${fmt(t.lent)} loaned`:""}</span>
       <span class="g-r"><span class="num">${fmt(all)}</span><small>shots</small></span></button></div>`}).join("");
 }
 /* Drag the ⠿ handle to reorder guns; the new order is saved as each gun's "order". */

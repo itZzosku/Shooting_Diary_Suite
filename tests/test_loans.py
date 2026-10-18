@@ -44,7 +44,8 @@ def test_loan_crud_cost_and_backup(client):
     # Unpaid: Ville 80 × 0.60 + 20 × 2.00 = 88.00 (Mikko paid)
     lent = client.get("/diary/api/home").get_json()["lent"]
     assert lent == {"trips": 1, "shots": 220, "unpaid": 88.0, "last": "2026-10-18"}
-    assert client.get("/diary/lent").status_code == 200
+    assert client.get("/diary/loans").status_code == 200
+    assert client.get("/diary/lent").headers["Location"].endswith("/diary/loans")
     # Not part of your own record: the visits list is untouched
     assert all(s.get("event") != "Club match" for s in client.get("/diary/api/sessions").get_json())
     data = client.get("/diary/api/account/export").get_json()

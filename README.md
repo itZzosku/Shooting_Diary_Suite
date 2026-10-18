@@ -6,7 +6,7 @@ Password-protected shooting diary. Code lives in `diary/`; `main.py` only calls 
 Everything else on the site stays public as before.
 
 Pages (one login, a switcher at the top of each): `/diary/` landing page with a summary of each section,
-`/diary/log` diary, `/diary/velocity` muzzle velocities, `/diary/zeroes` scope zeroes, `/diary/lent` lent guns. The old
+`/diary/log` diary, `/diary/velocity` muzzle velocities, `/diary/zeroes` scope zeroes, `/diary/loans` guns loaned. The old
 `/diary/chrono` and `/diary/zero` addresses redirect. Long-press the installed app icon for shortcuts.
 
 Data is stored outside git in `diary_data/`: `users.db` (accounts), one SQLite file per account (`diary.db` for
@@ -129,12 +129,12 @@ Every account is backed up: `diary-<user>-YYYY-MM-DD.json` + `.db`, newest 12 pe
 the one e-mail. Restore one account: `python -m diary import --user NAME diary_backups/diary-NAME-YYYY-MM-DD.json --replace`
 (or stop the app and copy the `.db` over `diary_data/diary.db`).
 
-## Lent guns (`/diary/lent`)
+## Guns loaned (`/diary/loans`)
 
-Its own page (*Lent* in the switcher, and a tile on the landing page). When friends shoot your guns and/or your
-ammo (e.g. at a match): *+ Lend*. One entry per trip: date,
+Its own page (*Loans* in the switcher, and a tile on the landing page). When friends shoot your guns and/or your
+ammo (e.g. at a match): *+ Loan*. One entry per trip: date,
 match / event, and a line per friend and gun with shots and the price per round. Their shots are added to each
-gun's round count (the gun list shows "incl. N lent") but never to your own shooting record or the licence
+gun's round count (the gun list shows "incl. N loaned") but never to your own shooting record or the licence
 PDF/CSV. A friend's own gun with your ammo: choose *Not my gun – ammo only* and the calibre – only the cost
 counts. The cost is worked out per friend; tick *Paid*, and *Share cost* sends them the breakdown. Unpaid
 totals show at the top of the page, per friend (across all trips) and on the landing page.
