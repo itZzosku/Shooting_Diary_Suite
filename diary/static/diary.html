@@ -87,6 +87,23 @@ h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform
 .month{font-family:var(--f-display);font-weight:600;font-size:1rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px;display:flex;justify-content:space-between}
 .month:first-child{margin-top:0}
 
+/* Lent guns */
+.loan{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:8px;color:var(--fg)}
+.loan:hover{border-color:var(--muted)}
+.loan .lh{display:flex;justify-content:space-between;gap:10px;font-weight:600}
+.loan .lh .num{font-weight:600}
+.loan .lp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;font-size:.88rem;margin-top:6px}
+.loan .lp span{min-width:0;overflow-wrap:anywhere}
+.loan .lp small{color:var(--muted)}
+.paid{font-size:.68rem;font-weight:600;border-radius:4px;padding:1px 6px;border:1px solid var(--muted);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-left:6px}
+.paid.no{border-color:var(--accent);color:var(--accent)}
+.lnline{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:8px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px;box-shadow:inset 4px 0 0 var(--accent)}
+.lnline .sub{grid-column:1/-1;color:var(--muted);font-size:.82rem;font-family:var(--f-mono)}
+.lnline .x{background:none;border:0;color:var(--muted);font-size:1.1rem;padding:8px 0}
+.whorow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;border-top:1px solid var(--line);padding:10px 0}
+.whorow b{font-family:var(--f-mono)}
+.whorow .act{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.prrow{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px}
 .entry{display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:8px}
 .entry:hover{border-color:var(--muted)}
 .day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-right:1px solid var(--line);padding-right:10px}
@@ -221,6 +238,14 @@ header.top{padding-top:6px!important}
   </section>
 
   <section>
+    <div class="sechead">
+      <button class="toggle" type="button" id="loansToggle" aria-expanded="false" aria-controls="loans"><span class="chev">▸</span><h2>Lent guns</h2><span class="cnt" id="loansCount"></span></button>
+      <span class="hbtns" id="loanBtns" hidden><button class="ghost" type="button" id="pricesBtn">Ammo prices</button><button class="ghost" type="button" id="addLoanBtn">+ Lend</button></span>
+    </div>
+    <div id="loans" hidden></div>
+  </section>
+
+  <section>
     <div class="loghead"><h2>Visits</h2><div class="yrs" id="yrs"></div></div>
     <div class="search"><input type="search" id="q" placeholder="Search: 6.10.2026, 6.10, 3.2024, range or organiser" aria-label="Search visits" autocomplete="off" enterkeyhint="search"><button type="button" id="qClear" aria-label="Clear search" hidden>✕</button></div>
     <div class="found" id="found" hidden></div>
@@ -302,6 +327,35 @@ header.top{padding-top:6px!important}
   </form>
 </div>
 
+<datalist id="dlFriend"></datalist><datalist id="dlEvent"></datalist>
+<div class="sheet" id="lnSheet" hidden role="dialog" aria-modal="true" aria-labelledby="lnTitle">
+  <form class="sheet-in" id="lnForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="lnTitle">Lent guns</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
+    <p class="hint" style="margin:0">Friends shooting your guns with your ammo. Their shots count toward each gun's round count, not toward your own shooting record or the licence export.</p>
+    <div class="grid2">
+      <label class="f">Date<input type="date" id="lnDate" required></label>
+      <label class="f">Match / event<input type="text" id="lnEvent" list="dlEvent" placeholder="e.g. Club match, Hyvinkää"></label>
+    </div>
+    <div class="field"><span class="lbl">Who shot what</span>
+      <div id="lnLines" style="display:flex;flex-direction:column;gap:10px"></div>
+      <button class="ghost" type="button" id="lnAdd" style="align-self:flex-start">+ Friend / gun</button>
+    </div>
+    <div id="lnWho"></div>
+    <label class="f">Note<input type="text" id="lnNote" maxlength="2000" placeholder="optional"></label>
+    <div class="msg" id="lnMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="lnDel" hidden>Delete</button></div>
+  </form>
+</div>
+<div class="sheet" id="prSheet" hidden role="dialog" aria-modal="true" aria-labelledby="prTitle">
+  <form class="sheet-in" id="prForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="prTitle">Ammo prices</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
+    <p class="hint" style="margin:0">Price per round in euros, by calibre. A new lending line takes the price of its gun's calibre; you can still change it on the line.</p>
+    <div id="prRows" style="display:flex;flex-direction:column;gap:8px"></div>
+    <button class="ghost" type="button" id="prAdd" style="align-self:flex-start">+ Calibre</button>
+    <div class="actions"><button class="primary" type="submit">Save prices</button></div>
+  </form>
+</div>
+
 <div class="sheet" id="xSheet" hidden role="dialog" aria-modal="true" aria-labelledby="xTitle">
   <form class="sheet-in" id="xForm">
     <div class="sheet-bar"><h2 id="xTitle">Export</h2><button class="ghost" type="button" id="xClose">Close</button></div>
@@ -362,7 +416,7 @@ function ukey(k){const nk=ACCOUNT?k+":"+ACCOUNT:k;
   return nk}
 const DRAFT_KEY=ukey("ampumapk-draft-v2"),YEAR_KEY="ampumapk-year";
 const $=id=>document.getElementById(id);
-const S={sessions:[],guns:[],profile:{},ready:false,editGun:null,gDelArm:false,store:null,editId:null,form:null,delArm:false,year:null};
+const S={sessions:[],guns:[],profile:{},loans:[],prices:{},ready:false,editGun:null,gDelArm:false,store:null,editId:null,form:null,delArm:false,year:null};
 
 /* ---------- storage ---------- */
 function lsGet(k){try{return JSON.parse(localStorage.getItem(k)||"null")}catch(e){return null}}
@@ -370,14 +424,16 @@ function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
 const OUTBOX_KEY=ukey("ampumapk-outbox-v1");
 function apiStore(){
-  let server=[],sguns=[],profile={},cb=null,flushing=false,offlineAt=null,stuck=false;
-  let box=lsGet(OUTBOX_KEY)||{};box.sessions=box.sessions||{};box.guns=box.guns||{};if(box.profile===undefined)box.profile=null;
+  let server=[],sguns=[],profile={},sloans=[],sprices=null,cb=null,flushing=false,offlineAt=null,stuck=false;
+  let box=lsGet(OUTBOX_KEY)||{};box.sessions=box.sessions||{};box.guns=box.guns||{};box.loans=box.loans||{};
+  if(box.profile===undefined)box.profile=null;if(box.prices===undefined)box.prices=null;
   const persist=()=>lsSet(OUTBOX_KEY,box);
-  const pending=()=>Object.keys(box.sessions).length+Object.keys(box.guns).length+(box.profile?1:0);
+  const pending=()=>Object.keys(box.sessions).length+Object.keys(box.guns).length+Object.keys(box.loans).length+(box.profile?1:0)+(box.prices?1:0);
   const merged=(base,over)=>{const m=new Map(base.map(x=>[x.id,x]));for(const[id,d]of Object.entries(over)){if(d===null)m.delete(id);else m.set(id,Object.assign({id},d))}return[...m.values()]};
   function emit(){
     if(!cb)return;
-    cb[2](merged(sguns,box.guns));cb[0](merged(server,box.sessions));cb[1](box.profile||profile);
+    cb[2](merged(sguns,box.guns));cb[3]&&cb[3](merged(sloans,box.loans));cb[4]&&cb[4](box.prices||sprices||{});
+    cb[0](merged(server,box.sessions));cb[1](box.profile||profile);
     const n=pending(),el=$("queueNote"),msgs=[];
     if(offlineAt)msgs.push(`Offline – showing data from ${offlineAt}.`);
     // Only mention queued changes once sending has actually failed (not during a normal save).
@@ -398,7 +454,8 @@ function apiStore(){
     return r.json();
   }
   async function load(){
-    try{const[s,p,gs]=await Promise.all([req("GET","sessions"),req("GET","profile"),req("GET","guns")]);server=s;profile=p;sguns=gs;emit()}
+    try{const[s,p,gs,ln,pr]=await Promise.all([req("GET","sessions"),req("GET","profile"),req("GET","guns"),req("GET","loans").catch(()=>sloans),req("GET","ammo-prices").catch(()=>sprices)]);
+      server=s;profile=p;sguns=gs;sloans=ln||[];sprices=pr;emit()}
     catch(e){if(e&&e.code==="auth")return;toast("Cannot reach the server – showing saved changes");emit()}
   }
   async function flush(){
@@ -429,6 +486,19 @@ function apiStore(){
           else throw e;
         }
       }
+      for(const[id,d]of Object.entries(box.loans)){
+        try{
+          if(d===null)await req("DELETE","loans/"+encodeURIComponent(id));
+          else await req("PUT","loans/"+encodeURIComponent(id),d);
+          if(box.loans[id]===d){delete box.loans[id];persist()}
+          sloans=sloans.filter(l=>l.id!==id);if(d!==null)sloans.push(Object.assign({id},d));
+          changed=true;
+        }catch(e){
+          if(e&&e.code==="http"&&e.status>=400&&e.status<500){delete box.loans[id];persist();toast("The server rejected a change ("+e.status+")");changed=true}
+          else throw e;
+        }
+      }
+      if(box.prices){const p=box.prices;await req("PUT","ammo-prices",p);sprices=p;if(box.prices===p){box.prices=null;persist()}changed=true}
       if(box.profile){const p=box.profile;await req("PUT","profile",p);profile=p;if(box.profile===p){box.profile=null;persist()}changed=true}
       stuck=false;
     }catch(e){stuck=true;changed=true;/* offline: keep the outbox, retry later */}
@@ -439,7 +509,10 @@ function apiStore(){
   setInterval(()=>{if(pending())flush()},20000);
   const queue=(fn)=>{fn();persist();emit();flush();return Promise.resolve()};
   return{
-    sub(a,b,c){cb=[a,b,c];load().then(flush)},
+    sub(a,b,c,d,e){cb=[a,b,c,d,e];load().then(flush)},
+    saveLoan:(id,d)=>queue(()=>{box.loans[id]=d}),
+    delLoan:id=>queue(()=>{box.loans[id]=null}),
+    savePrices:d=>queue(()=>{box.prices=d}),
     saveGun:(id,d)=>queue(()=>{box.guns[id]=d}),
     delGun:id=>queue(()=>{box.guns[id]=null}),
     saveSession:(id,d)=>queue(()=>{box.sessions[id]=d}),
@@ -484,7 +557,9 @@ function exportLines(s){
 }
 function typeCounts(list){const tc={};list.forEach(s=>exportLines(s).forEach(l=>{if(l.type)tc[l.type]=(tc[l.type]||0)+1}));return tc}
 function gunTotals(){
-  const t={};S.sessions.forEach(s=>(s.lines||[]).forEach(l=>{if(!l.gunId)return;const g=t[l.gunId]=t[l.gunId]||{r:0,d:new Set(),last:""};g.r+=+l.rounds||0;g.d.add(s.date);if(s.date>g.last)g.last=s.date}));
+  const t={};S.sessions.forEach(s=>(s.lines||[]).forEach(l=>{if(!l.gunId)return;const g=t[l.gunId]=t[l.gunId]||{r:0,d:new Set(),last:"",lent:0};g.r+=+l.rounds||0;g.d.add(s.date);if(s.date>g.last)g.last=s.date}));
+  // Shots friends fired with your guns: part of the gun's round count, not of your own shooting record
+  S.loans.forEach(n=>(n.lines||[]).forEach(l=>{if(!l.gunId)return;const g=t[l.gunId]=t[l.gunId]||{r:0,d:new Set(),last:"",lent:0};g.r+=+l.rounds||0;g.lent+=+l.rounds||0}));
   return t;
 }
 const gunsSorted=()=>S.guns.slice().sort((a,b)=>(!!a.archived-!!b.archived)||((a.order??99)-(b.order??99))||String(a.name).localeCompare(b.name));
@@ -503,7 +578,7 @@ function render(){
   const tc=typeCounts(S.sessions);
   $("types").innerHTML=TYPES.filter(t=>tc[t]).map(t=>`<span>${tEn(t)} <b>${tc[t]}</b></span>`).join("");
   $("pdfBtn").hidden=!S.sessions.length;
-  renderYears();renderLog();renderGuns();fillLists();
+  renderYears();renderLog();renderGuns();renderLoans();fillLists();
 }
 const GUNS_KEY="ampumapk-guns-open";
 function setGunsOpen(open){
@@ -519,7 +594,7 @@ function renderGuns(){
   el.innerHTML=list.map(g=>{const t=tot[g.id]||{r:0,d:new Set(),last:""},all=(+g.startCount||0)+t.r;
     return `<div class="gunrow" data-id="${esc(g.id)}"><span class="grip" aria-label="Move" title="Drag to reorder">⠿</span><button type="button" class="gun ${g.archived?"archived":""}" data-gun="${esc(g.id)}">
       <b>${esc(g.name)}</b>
-      <span class="g-sub">${esc([tEn(g.type),g.cal].filter(Boolean).join(" · "))}${g.acquired?` · acquired ${fiDate(g.acquired)}`:""}${t.d.size?` · ${t.d.size} days · last ${fiDate(t.last)}`:""}</span>
+      <span class="g-sub">${esc([tEn(g.type),g.cal].filter(Boolean).join(" · "))}${g.acquired?` · acquired ${fiDate(g.acquired)}`:""}${t.d.size?` · ${t.d.size} days · last ${fiDate(t.last)}`:""}${t.lent?` · incl. ${fmt(t.lent)} lent`:""}</span>
       <span class="g-r"><span class="num">${fmt(all)}</span><small>shots</small></span></button></div>`}).join("");
 }
 /* Drag the ⠿ handle to reorder guns; the new order is saved as each gun's "order". */
@@ -614,7 +689,7 @@ function openForm(id){
   renderChips();renderLines();
   $("sheet").hidden=false;document.body.style.overflow="hidden";
 }
-function closeSheets(){$("gSheet").hidden=true;$("sheet").hidden=true;$("pSheet").hidden=true;$("xSheet").hidden=true;document.body.style.overflow="";S.editId=null}
+function closeSheets(){["gSheet","sheet","pSheet","xSheet","lnSheet","prSheet"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null}
 function presets(){
   const c=new Map();
   S.sessions.slice(0,120).forEach(s=>(s.lines||[]).forEach(l=>{if(!l.type)return;const k=[l.type,l.cal,l.mode].join("|");c.set(k,(c.get(k)||0)+1)}));
@@ -861,6 +936,110 @@ $("xForm").addEventListener("submit",async e=>{e.preventDefault();
   finally{btn.disabled=false;btn.textContent=label}
 });
 
+/* ---------- lent guns: friends shooting your guns with your ammo ---------- */
+const eur=v=>(+v||0).toFixed(2)+" €";
+// "6.5 Creedmoor" = "6.5 CM", ".223 Remington" = ".223 Rem" when looking up a price
+const calKey=c=>String(c||"").toLowerCase().replace(/creedmoor/g,"cm").replace(/remington/g,"rem").replace(/winchester/g,"win")
+  .replace(/springfield/g,"spring").replace(/parabellum/g,"luger").replace(/[^a-z0-9]/g,"");
+function priceFor(cal){const k=calKey(cal);if(!k)return null;for(const[c,p]of Object.entries(S.prices||{}))if(calKey(c)===k)return+p;return null}
+const loanCost=l=>(+l.rounds||0)*(+l.price||0);
+function byWho(n){   // {who: {rounds, cost, guns:[{gun, rounds}]}} in line order
+  const m=new Map();(n.lines||[]).forEach(l=>{const w=l.who||"–";const e=m.get(w)||{rounds:0,cost:0,guns:[]};
+    e.rounds+=+l.rounds||0;e.cost+=loanCost(l);e.guns.push(l);m.set(w,e)});return m}
+const newLoanId=()=>"n-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const LOANS_KEY="ampumapk-loans-open";
+function setLoansOpen(open){$("loansToggle").setAttribute("aria-expanded",open);$("loans").hidden=!open;$("loanBtns").hidden=!open;lsSet(LOANS_KEY,open)}
+$("loansToggle").addEventListener("click",()=>setLoansOpen($("loans").hidden));
+setLoansOpen(lsGet(LOANS_KEY)===true);
+function unpaidOf(n){const paid=new Set(n.paid||[]);let t=0;byWho(n).forEach((e,w)=>{if(!paid.has(w))t+=e.cost});return t}
+function renderLoans(){
+  const list=S.loans,shots=list.reduce((a,n)=>a+(n.lines||[]).reduce((b,l)=>b+(+l.rounds||0),0),0),unpaid=list.reduce((a,n)=>a+unpaidOf(n),0);
+  $("loansCount").textContent=list.length?`${list.length} trip${list.length>1?"s":""} · ${fmt(shots)} shots`+(unpaid>0.004?` · ${eur(unpaid)} unpaid`:""):"";
+  $("loans").innerHTML=list.length?list.map(n=>{const paid=new Set(n.paid||[]),tot=(n.lines||[]).reduce((a,l)=>a+loanCost(l),0);
+    return`<button type="button" class="loan" data-loan="${esc(n.id)}"><span class="lh"><span>${fiDate(n.date)}${n.event?" · "+esc(n.event):""}</span><span class="num">${eur(tot)}</span></span>`
+      +[...byWho(n).entries()].map(([w,e])=>`<span class="lp"><span><b>${esc(w)}</b> <small>${e.guns.map(g=>esc(g.gun||"gun")+" "+fmt(+g.rounds||0)).join(" · ")}</small></span>
+        <span class="num">${eur(e.cost)}<span class="paid ${paid.has(w)?"":"no"}">${paid.has(w)?"paid":"unpaid"}</span></span></span>`).join("")+`</button>`}).join("")
+    :'<div class="empty">Lend a gun to a friend for a match: their shots go on the gun\'s round count and the ammo cost is worked out per person.</div>';
+}
+$("loans").addEventListener("click",e=>{const b=e.target.closest("[data-loan]");if(b)openLoan(b.dataset.loan)});
+$("addLoanBtn").addEventListener("click",()=>openLoan(null));
+
+let LN=null;     // the loan being edited: {id, date, event, note, lines:[], paid:Set}
+function gunOptsLn(sel){return`<option value="">— gun —</option>`+gunsSorted().filter(g=>!g.archived||g.id===sel).map(g=>`<option value="${esc(g.id)}" ${g.id===sel?"selected":""}>${esc(g.name)}${g.cal?" · "+esc(g.cal):""}</option>`).join("")}
+function openLoan(id){
+  const n=id?S.loans.find(x=>x.id===id):null;
+  LN={id:id||newLoanId(),isNew:!n,date:n?n.date:todayStr(),event:n?n.event||"":"",note:n?n.note||"":"",
+      lines:n?(n.lines||[]).map(l=>({...l})):[{who:"",gunId:"",gun:"",cal:"",rounds:0,price:""}],paid:new Set(n?n.paid||[]:[]),delArm:false};
+  $("lnTitle").textContent=n?"Lent guns":"Lend guns";$("lnDate").value=LN.date;$("lnEvent").value=LN.event;$("lnNote").value=LN.note;
+  $("lnDel").hidden=!n;$("lnDel").textContent="Delete";$("lnMsg").hidden=true;
+  const friends=new Set(),events=new Set();S.loans.forEach(x=>{(x.lines||[]).forEach(l=>l.who&&friends.add(l.who));x.event&&events.add(x.event)});
+  S.sessions.slice(0,60).forEach(s=>s.place&&events.add(s.place));
+  $("dlFriend").innerHTML=[...friends].map(v=>`<option value="${esc(v)}">`).join("");$("dlEvent").innerHTML=[...events].map(v=>`<option value="${esc(v)}">`).join("");
+  renderLnLines();$("lnSheet").hidden=false;document.body.style.overflow="hidden";$("lnSheet").scrollTop=0;
+}
+function renderLnLines(){
+  $("lnLines").innerHTML=LN.lines.map((l,i)=>`<div class="lnline">
+    <label class="f">Friend<input type="text" list="dlFriend" data-ln="${i}" data-k="who" value="${esc(l.who)}" placeholder="name"></label>
+    <label class="f">Gun<select data-ln="${i}" data-k="gunId">${gunOptsLn(l.gunId)}</select></label>
+    <button type="button" class="x" data-lnx="${i}" aria-label="Remove line">✕</button>
+    <label class="f">Shots<input type="number" inputmode="numeric" min="0" step="1" data-ln="${i}" data-k="rounds" value="${l.rounds||""}" placeholder="0"></label>
+    <label class="f">€ / round${l.cal?" ("+esc(l.cal)+")":""}<input type="text" inputmode="decimal" data-ln="${i}" data-k="price" value="${l.price===""||l.price==null?"":l.price}" placeholder="0.00"></label>
+    <span></span>
+    <span class="sub">${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}</span></div>`).join("");
+  renderLnWho();
+}
+function renderLnWho(){
+  const m=byWho({lines:LN.lines.filter(l=>l.who||+l.rounds)}),tot=LN.lines.reduce((a,l)=>a+loanCost(l),0);
+  $("lnWho").innerHTML=m.size?`<span class="lbl">Ammo cost</span>`+[...m.entries()].map(([w,e])=>`<div class="whorow">
+      <span><b>${esc(w)}</b> · ${fmt(e.rounds)} shots</span><span class="num"><b>${eur(e.cost)}</b></span>
+      <span class="act" style="grid-column:1/-1"><label class="check" style="font-size:.88rem"><input type="checkbox" data-paid="${esc(w)}" ${LN.paid.has(w)?"checked":""}> Paid</label>
+        <button type="button" class="ghost" data-share="${esc(w)}" style="padding:6px 12px;font-size:.82rem">${navigator.share?"Share":"Copy"} cost</button></span></div>`).join("")
+    +(m.size>1?`<div class="whorow"><span>Total</span><span class="num"><b>${eur(tot)}</b></span></div>`:""):"";
+}
+$("lnLines").addEventListener("input",e=>{const t=e.target,i=t.dataset.ln;if(i==null)return;const l=LN.lines[+i],k=t.dataset.k;
+  if(k==="rounds")l.rounds=Math.max(0,parseInt(t.value)||0);
+  else if(k==="price")l.price=t.value.replace(",",".");
+  else if(k==="who")l.who=t.value.trim();
+  if(k==="gunId"){const g=S.guns.find(x=>x.id===t.value)||{};l.gunId=t.value;l.gun=g.name||"";l.cal=g.cal||"";
+    const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
+  const sub=t.closest(".lnline").querySelector(".sub");sub.textContent=`${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}`;renderLnWho()});
+$("lnLines").addEventListener("click",e=>{const x=e.target.closest("[data-lnx]");if(!x)return;LN.lines.splice(+x.dataset.lnx,1);renderLnLines()});
+$("lnAdd").addEventListener("click",()=>{const last=LN.lines[LN.lines.length-1]||{};
+  LN.lines.push({who:last.who||"",gunId:"",gun:"",cal:"",rounds:0,price:""});renderLnLines()});
+$("lnWho").addEventListener("change",e=>{const c=e.target.closest("[data-paid]");if(!c)return;if(c.checked)LN.paid.add(c.dataset.paid);else LN.paid.delete(c.dataset.paid)});
+$("lnWho").addEventListener("click",async e=>{const b=e.target.closest("[data-share]");if(!b)return;
+  const w=b.dataset.share,en=byWho({lines:LN.lines}).get(w);if(!en)return;
+  const ev=$("lnEvent").value.trim(),d=$("lnDate").value;
+  const text=[`${ev||"Shooting"} ${d?fiDate(d):""} – ammo`].concat(en.guns.filter(g=>+g.rounds).map(g=>`${g.gun||"Gun"}${g.cal?" ("+g.cal+")":""}: ${g.rounds} × ${(+g.price||0).toFixed(2)} € = ${eur(loanCost(g))}`),[`Total ${eur(en.cost)}`]).join("\n");
+  try{if(navigator.share)await navigator.share({title:"Ammo cost",text});else{await navigator.clipboard.writeText(text);toast("Copied")}}catch(err){}
+});
+document.querySelectorAll("[data-lnclose]").forEach(b=>b.addEventListener("click",closeSheets));
+$("lnForm").addEventListener("submit",async e=>{e.preventDefault();
+  const lines=LN.lines.filter(l=>l.who||l.gunId||+l.rounds).map(l=>({who:l.who,gunId:l.gunId||null,gun:l.gun,cal:l.cal,rounds:+l.rounds||0,price:+l.price||0}));
+  if(!lines.length){$("lnMsg").textContent="Add at least one friend and gun.";$("lnMsg").hidden=false;return}
+  if(lines.some(l=>!l.who)){$("lnMsg").textContent="Every line needs the friend's name.";$("lnMsg").hidden=false;return}
+  const whos=new Set(lines.map(l=>l.who));
+  const doc={date:$("lnDate").value,event:$("lnEvent").value.trim(),note:$("lnNote").value,lines,paid:[...LN.paid].filter(w=>whos.has(w))};
+  await S.store.saveLoan(LN.id,doc);closeSheets();setLoansOpen(true);toast("Saved");
+});
+$("lnDel").addEventListener("click",async()=>{if(!LN.delArm){LN.delArm=true;$("lnDel").textContent="Tap again to delete";return}
+  await S.store.delLoan(LN.id);closeSheets();toast("Deleted")});
+
+/* ammo prices per calibre */
+function openPrices(){
+  const cals=new Map();Object.entries(S.prices||{}).forEach(([c,p])=>cals.set(c,p));
+  S.guns.filter(g=>g.cal&&!g.archived).forEach(g=>{if(priceFor(g.cal)==null&&![...cals.keys()].some(c=>calKey(c)===calKey(g.cal)))cals.set(g.cal,"")});
+  $("prRows").innerHTML=[...cals.entries()].map(([c,p])=>prRow(c,p)).join("");
+  $("prSheet").hidden=false;document.body.style.overflow="hidden";
+}
+const prRow=(c,p)=>`<div class="prrow"><input type="text" value="${esc(c)}" placeholder="Calibre" aria-label="Calibre"><input type="text" inputmode="decimal" value="${p===""||p==null?"":p}" placeholder="€ / round" aria-label="Price per round"></div>`;
+$("pricesBtn").addEventListener("click",openPrices);
+$("prAdd").addEventListener("click",()=>$("prRows").insertAdjacentHTML("beforeend",prRow("","")));
+$("prForm").addEventListener("submit",async e=>{e.preventDefault();
+  const out={};$("prRows").querySelectorAll(".prrow").forEach(r=>{const[c,p]=r.querySelectorAll("input");const v=parseFloat(p.value.replace(",","."));
+    if(c.value.trim()&&isFinite(v))out[c.value.trim()]=v});
+  await S.store.savePrices(out);closeSheets();toast("Prices saved")});
+
 /* ---------- service worker (installing the app is offered on the landing page) ---------- */
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{scope:"./"}).catch(()=>{}));
@@ -870,7 +1049,8 @@ if("serviceWorker" in navigator){
 async function boot(){
   S.year=lsGet(YEAR_KEY);
   S.store=apiStore();
-  S.store.sub(list=>{S.sessions=sortSessions(list.filter(s=>s.date));S.ready=true;render()},p=>{S.profile=p||{};render()},g=>{S.guns=g||[]});
+  S.store.sub(list=>{S.sessions=sortSessions(list.filter(s=>s.date));S.ready=true;render()},p=>{S.profile=p||{};render()},g=>{S.guns=g||[]},
+    l=>{S.loans=(l||[]).filter(x=>x.date).sort((a,b)=>b.date.localeCompare(a.date))},p=>{S.prices=p||{}});
 }
 boot();
 })();

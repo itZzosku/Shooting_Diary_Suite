@@ -58,7 +58,10 @@ def api_home():
     name = (json.loads(kv_get("profile", conn) or "{}") or {}).get("name") or ""
     from . import current_user
     me = current_user()
-    return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), diary=diary_summary(conn), velocity=vel, zeroes=zero_summary(conn))
+    from .loans import unpaid_total
+    d = diary_summary(conn)
+    d["unpaid"] = unpaid_total(conn)
+    return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), diary=d, velocity=vel, zeroes=zero_summary(conn))
 
 
 def export_data(conn):
@@ -68,7 +71,9 @@ def export_data(conn):
                 for r in conn.execute("SELECT id, data FROM sessions ORDER BY date, id")]
     guns = [dict(json.loads(r["data"]), id=r["id"]) for r in conn.execute("SELECT id, data FROM guns ORDER BY id")]
     out = {"profile": json.loads(kv_get("profile", conn) or "{}"), "guns": guns, "sessions": sessions}
+    from . import loans
     out.update(chrono.export_rows(conn))
+    out.update(loans.export_rows(conn))
     out.update(zero.export_rows(conn))
     return out
 

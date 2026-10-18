@@ -127,11 +127,15 @@ def import_json(path, replace):
         kv_set("profile", json.dumps(data["profile"], ensure_ascii=False), conn)
     c = chrono.import_rows(conn, data, replace)
     z = zero.import_rows(conn, data, replace)
+    from . import loans
+    ln = loans.import_rows(conn, data, replace)
     conn.commit()
     conn.close()
     extra = f", {c['chrono_strings']} strings / {c['chrono_shots']} velocities" if c["chrono_shots"] else ""
     if z["scope_zeros"]:
         extra += f", {z['scopes']} scopes / {z['scope_zeros']} zeroes"
+    if ln:
+        extra += f", {ln} loans"
     print(f"Imported {n} visits and {g} guns{extra} → {DATA_DIR}")
 
 

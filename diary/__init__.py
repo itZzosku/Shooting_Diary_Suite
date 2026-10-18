@@ -135,6 +135,8 @@ def init_db(path=None):
     )
     from .chrono import init_chrono
     init_chrono(conn)
+    from .loans import init_loans
+    init_loans(conn)
     from .zero import init_zero
     init_zero(conn)
     conn.commit()
@@ -528,5 +530,7 @@ def delete_gun(gid):
 from . import chrono  # noqa: E402,F401
 # Scope zeroes (dial positions per rifle, swap calculator, PDF zeroing card).
 from . import zero  # noqa: E402,F401
+# Guns lent to friends + ammo cost.
+from . import loans  # noqa: E402,F401
 # Landing-page summary.
 from . import summary  # noqa: E402,F401

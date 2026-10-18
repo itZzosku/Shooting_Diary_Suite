@@ -105,14 +105,8 @@ def get_data():
         abort(500, description="Internal Server Error while querying InfluxDB")
 
 
-# Per-round prices in EUR. Set these to your website's current prices.
-AMMO_PRICES = OrderedDict([
-    (".223 Rem",  0.60),
-    ("9 mm",      0.30),
-    ("12 gauge",  0.40),
-    ("7.62x54R",  1.00),
-    ("6.5 CM",    2.00),
-])
+# Per-round prices in EUR (one list: the diary's "lent guns" cost uses the same defaults)
+from diary.loans import DEFAULT_AMMO_PRICES as AMMO_PRICES  # noqa: E402
 
 
 # Ammo cost calculator: set price per round x rounds used -> total (client-side)

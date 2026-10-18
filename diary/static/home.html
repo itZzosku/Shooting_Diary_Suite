@@ -298,7 +298,8 @@ async function load(){
   $("accBtn").hidden=!j.is_admin;
   const d=j.diary,v=j.velocity,z=j.zeroes||[];
   $("nDiary").innerHTML=`<b>${d.visits}</b> <span>visits in ${d.year} ·</span> <b>${nf(d.rounds)}</b> <span>shots</span>`
-    +(d.last?`<br><span>Last:</span> ${fiDate(d.last.date)}${d.last.place?" · "+esc(d.last.place):""}`:"");
+    +(d.last?`<br><span>Last:</span> ${fiDate(d.last.date)}${d.last.place?" · "+esc(d.last.place):""}`:"")
+    +(d.unpaid>0.004?`<br><span>Lent guns:</span> <b>${d.unpaid.toFixed(2)} €</b> <span>unpaid ammo</span>`:"");
   $("nVel").innerHTML=v.last?`<b>${v.last.avg!=null?v.last.avg.toFixed(1):"–"}</b> <span>m/s ⌀ · n ${v.last.n}${v.last.sd!=null?" · SD "+v.last.sd.toFixed(2):""} · ${fiDate(v.last.date)}</span><br>${esc([v.last.load,v.last.gun].filter(Boolean).join(" · "))||"<span>No load</span>"}`
     :`<span>No velocities yet.</span>`;
   $("nZero").innerHTML=z.length?z.map(s=>`${esc(s.name)} <span>·</span> ${s.on?`<span>on</span> <b>${esc(s.on)}</b>`:`<span>${s.positions} positions</span>`}`).join("<br>")
