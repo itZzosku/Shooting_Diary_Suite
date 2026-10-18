@@ -138,7 +138,7 @@ the one e-mail. Restore one account: `python -m diary import --user NAME diary_b
 
 ## Guns loaned (`/diary/loans`)
 
-Its own page (*Loans* in the switcher, and a tile on the landing page). When friends shoot your guns and/or your
+Its own page, opened from its tile on the landing page (it isn't in the page switcher). When friends shoot your guns and/or your
 ammo (e.g. at a match): *+ Loan*. One entry per trip: date,
 match / event, and a line per friend and gun with shots and the price per round. Their shots are added to each
 gun's round count (the gun list shows "incl. N loaned") but never to your own shooting record or the licence
