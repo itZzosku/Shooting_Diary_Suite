@@ -58,6 +58,7 @@ a{color:var(--accent);font-weight:600}
   <label>Password<input type="password" name="password" autocomplete="new-password" minlength="{{ min_len }}" required></label>
   <label>Password again<input type="password" name="password2" autocomplete="new-password" minlength="{{ min_len }}" required></label>
   <p class="note">At least {{ min_len }} characters. Username: letters, digits, - and _.</p>
+  <p class="note">What gets stored and who can see it: <a href="{{ url_for('diary.privacy') }}">Privacy</a>.</p>
   <button type="submit">Send request</button>
   <p class="note"><a href="{{ url_for('diary.login') }}">Back to log in</a></p>
 </form>
@@ -71,6 +72,7 @@ a{color:var(--accent);font-weight:600}
   <button type="submit" {% if disabled %}disabled{% endif %}>Log in</button>
   <p class="note">Got an account from the admin? Leave the password empty the first time and choose one.</p>
   {% if not disabled %}<p class="note">No account? <a href="{{ url_for('diary.signup') }}">Ask for one</a></p>{% endif %}
+  <p class="note"><a href="{{ url_for('diary.privacy') }}">Privacy</a> – what is stored and who can see it</p>
 </form>
 {% endif %}
 </body>

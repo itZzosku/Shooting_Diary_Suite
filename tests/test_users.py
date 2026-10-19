@@ -247,6 +247,7 @@ def test_sign_up_request_needs_admin_approval(two):
     diary._signups.clear()
     anon = app.test_client()
     assert b"Ask for an account" in anon.get("/diary/signup").data
+    assert anon.get("/diary/privacy").status_code == 200 and b"/diary/privacy" in anon.get("/diary/login").data
     assert b"don&#39;t match" in anon.post("/diary/signup", data={"username": "rangebuddy", "password": "buddy-pass-123",
                                                                 "password2": "other-pass-123"}).data
     r = anon.post("/diary/signup", data={"username": "RangeBuddy", "password": "buddy-pass-123", "password2": "buddy-pass-123"})

@@ -45,6 +45,7 @@ Open `https://<your-domain>/` (it goes to `/diary/`). The login lasts 360 days p
 |---|---|---|
 | `DIARY_DATA_DIR` | `./diary_data` | Where the database and secrets live |
 | `DIARY_COOKIE_SECURE` | `1` | Login cookie only over HTTPS. Set `0` to log in via `http://<LAN-IP>:5000` |
+| `DIARY_CONTACT` | – | Contact shown on the public privacy page (`/diary/privacy`), e.g. an email address |
 | `DIARY_BEHIND_PROXY` | `1` | Trust one `X-Forwarded-For` hop (Nginx Proxy Manager) |
 | `DIARY_LOGIN_DAYS` | `90` | How long a login stays valid |
 | `FLASK_SECRET_KEY` | auto | Cookie signing key; generated into `diary_data/secret_key` if unset |

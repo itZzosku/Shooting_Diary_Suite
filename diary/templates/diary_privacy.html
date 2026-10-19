@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Privacy · Shooting Diary</title>
+<link rel="manifest" href="{{ url_for('diary.home') }}manifest.webmanifest">
+<meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141714" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Shooting Diary">
+<link rel="apple-touch-icon" href="{{ url_for('diary.home') }}static/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('diary.home') }}static/icons/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+:root{--bg:#eef0ec;--surface:#fff;--line:#c9cec4;--fg:#1c211c;--muted:#5b6359;--accent:#e2590f;--accent-ink:#fff;--danger:#b3261e;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#141714;--surface:#1d211d;--line:#363d36;--fg:#e8ebe6;--muted:#9aa398;--accent:#ff7a33;--accent-ink:#1a0d05;--danger:#ff8a80;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg)}
+body{font:16px/1.55 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;
+  padding:24px max(16px,env(safe-area-inset-left,0px)) 24px max(16px,env(safe-area-inset-right,0px))}
+form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:16px}
+h1{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:2.2rem;line-height:1;margin:0 0 8px;text-transform:uppercase;border-bottom:2px solid var(--fg);padding-bottom:12px}
+h1 span{color:var(--accent)}
+label{display:flex;flex-direction:column;gap:6px;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+input{font:inherit;font-size:1rem;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;text-transform:none;letter-spacing:0}
+input:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:14px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.err{color:var(--danger);font-size:.9rem;margin:0}
+.note{color:var(--muted);font-size:.85rem;margin:0}
+.note b{color:var(--fg)}
+a{color:var(--accent);font-weight:600}
+main{max-width:640px;margin:0 auto}
+h2{font-size:1.02rem;margin:22px 0 6px}
+p,li{color:var(--fg);margin:6px 0}
+ul{padding-left:20px;margin:6px 0}
+.muted{color:var(--muted);font-size:.88rem}
+a{color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy</h1>
+  <p class="muted">Shooting Diary is a small, private tool run by one person for a few shooting friends. This page says what it stores about you and who can see it.</p>
+
+  <h2>What is stored</h2>
+  <ul>
+    <li><b>Your account:</b> username, your password as a one-way hash (it can't be read back), when the account was made and when you last logged in.</li>
+    <li><b>What you enter:</b> your name and licence numbers (SRA, IPSC, hunter number) if you fill them in, your guns, range visits, velocity strings and loads, weather you add to them, scope zeroes and notes, and guns loaned with your friends' names and what they owe.</li>
+    <li><b>Cookies:</b> one login cookie (keeps you logged in) and one that holds your username so the app keeps each account's offline data apart on a shared phone. No analytics, no advertising, no tracking.</li>
+    <li><b>On your phone:</b> changes made without a connection wait in the browser's storage until they are sent, plus a few settings such as the last filter you used.</li>
+    <li><b>Server logs:</b> the web server may keep ordinary access logs (IP address, time, page) for running and securing the site.</li>
+  </ul>
+
+  <h2>Who can see it</h2>
+  <ul>
+    <li>Only you see your data in the app. Every account has its own separate database; other users can't see or change it.</li>
+    <li>The site's admin runs the server and can technically read the data files and backups. They are not looked at or used for anything else, except to fix a problem or when you ask.</li>
+    <li>Nothing is sold, shared or handed over to anyone, unless the law requires it.</li>
+    <li>To load fonts and the PDF tool, your browser fetches files from Google Fonts and cdnjs (Cloudflare). They see your IP address, as with any website; none of your diary data is sent to them.</li>
+  </ul>
+
+  <h2>Where and how long</h2>
+  <ul>
+    <li>The data is on the admin's own server, with regular backups.</li>
+    <li>It is kept while you have an account. When an account is deleted, its data is removed from the app; a final copy and older backups stay on the server for a while in case of a mistake and are then cleared.</li>
+  </ul>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li><b>Download everything</b> any time: landing page → <i>My data</i> (one JSON file).</li>
+    <li><b>Correct or delete</b> entries yourself in the app; leave the licence fields empty if you don't want them stored.</li>
+    <li><b>Delete your account</b> and its data: ask the admin.</li>
+  </ul>
+  {% if contact %}<p>Questions or requests: {{ contact }}</p>{% else %}<p>Questions or requests: ask the admin who set up your account.</p>{% endif %}
+  <p class="muted">Under the EU data protection rules (GDPR) you can ask to see, correct or delete your data, and complain to the data protection authority (in Finland: tietosuoja.fi).</p>
+  <p><a href="{{ url_for('diary.login') }}">Back to log in</a></p>
+</main>
+</body>
+</html>

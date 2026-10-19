@@ -246,6 +246,12 @@ def login():
     return render_template("diary_login.html", error=error, disabled=False, username=username)
 
 
+@bp.get("/privacy")
+def privacy():
+    """Public: what is stored and who can see it. DIARY_CONTACT (optional) is shown as the contact."""
+    return render_template("diary_privacy.html", contact=os.getenv("DIARY_CONTACT", "").strip())
+
+
 _signups = {}          # ip -> [count, first_time]
 MAX_SIGNUPS, SIGNUP_WINDOW = 3, 60 * 60
 
