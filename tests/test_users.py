@@ -273,3 +273,28 @@ def test_sign_up_request_needs_admin_approval(two):
     assert b"Too many requests" in anon.post("/diary/signup", data={"username": "spam1", "password": "x" * 12, "password2": "x" * 12}).data
     assert users.by_name("spam1") is None
     users.delete("rangebuddy")
+
+
+def test_deleted_accounts_are_purged_after_30_days(tmp_path):
+    keep = os.path.join(diary.DATA_DIR, "deleted")
+    os.makedirs(keep, exist_ok=True)
+    old, new = os.path.join(keep, "gone-old.json"), os.path.join(keep, "gone-new.json")
+    for p in (old, new):
+        open(p, "w").write("{}")
+    os.utime(old, (0, 0))
+    assert users.purge_deleted() == [old] and os.path.exists(new)
+    os.remove(new)
+    # Backups: an account that no longer exists loses its old backups, live accounts keep theirs
+    from diary import __main__ as cli
+    users.ensure("osku", "osku-password-1", admin=True, db_file="diary.db")
+    d = tmp_path / "b"
+    d.mkdir()
+    ghost, mine = d / "diary-ghost-2026-01-04.json", d / "diary-osku-2026-01-04.json"
+    for p in (ghost, mine):
+        p.write_text("{}")
+        os.utime(p, (0, 0))
+    try:
+        cli.backup(str(d), 12)
+    finally:
+        diary.use_db(None)                      # backup() points the module at each account's file
+    assert not ghost.exists() and mine.exists()

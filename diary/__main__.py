@@ -31,6 +31,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import sqlite3
 import sys
 import smtplib
@@ -177,6 +178,16 @@ def backup(directory, keep):
                 os.remove(p)
         print(f"Backup {name}: {base}.json + .db (keeping the newest {keep})")
         done.append((name, base + ".json"))
+    # Deleted accounts: their final copy and their backups go after DELETED_DAYS (as the privacy page says)
+    live = {u["username"] for u in users.all_users()} | {"diary"}
+    cutoff = time.time() - users.DELETED_DAYS * 86400
+    for p in glob.glob(os.path.join(directory, "diary-*-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*")):
+        m = re.match(r"diary-(.+)-\d{4}-\d{2}-\d{2}\.(json|db)$", os.path.basename(p))
+        if m and m.group(1) not in live and os.path.getmtime(p) < cutoff:
+            os.remove(p)
+            print(f"Removed old backup of a deleted account: {os.path.basename(p)}")
+    for p in users.purge_deleted():
+        print(f"Removed final copy of a deleted account: {os.path.basename(p)}")
     return done
 
 

@@ -66,6 +66,11 @@ created switched off; the admin sees *Accounts · 1 new* on the landing page and
 Until then, logging in says the account is waiting for approval. Limits: 3 requests per address per hour,
 10 open requests at a time.
 
+**Privacy page** (`/diary/privacy`, public, linked from the login page): what is stored and who can see it.
+Keep it true: fonts and the PDF library are served from `diary/static/` (no requests to other sites), a deleted
+account's final copy in `diary_data/deleted/` and its backups are removed after 30 days (on the next delete or
+weekly backup), and `DIARY_CONTACT` sets the contact line.
+
 Same from the command line:
 
 ```bash

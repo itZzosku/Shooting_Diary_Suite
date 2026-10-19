@@ -14,9 +14,7 @@
 <meta name="apple-mobile-web-app-title" content="Shooting Diary">
 <link rel="apple-touch-icon" href="{{ url_for('diary.home') }}static/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('diary.home') }}static/icons/favicon-32.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('diary.home') }}static/fonts/fonts.css">
 <style>
 :root{--bg:#eef0ec;--surface:#fff;--line:#c9cec4;--fg:#1c211c;--muted:#5b6359;--accent:#e2590f;--accent-ink:#fff;--danger:#b3261e;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--bg:#141714;--surface:#1d211d;--line:#363d36;--fg:#e8ebe6;--muted:#9aa398;--accent:#ff7a33;--accent-ink:#1a0d05;--danger:#ff8a80;color-scheme:dark}}
@@ -63,13 +61,13 @@ a{color:var(--accent);font-weight:600}
     <li>Only you see your data in the app. Every account has its own separate database; other users can't see or change it.</li>
     <li>The site's admin runs the server and can technically read the data files and backups. They are not looked at or used for anything else, except to fix a problem or when you ask.</li>
     <li>Nothing is sold, shared or handed over to anyone, unless the law requires it.</li>
-    <li>To load fonts and the PDF tool, your browser fetches files from Google Fonts and cdnjs (Cloudflare). They see your IP address, as with any website; none of your diary data is sent to them.</li>
+    <li>Everything the site uses (fonts, the PDF tool) comes from this server – your browser doesn't contact any other company while you use it.</li>
   </ul>
 
   <h2>Where and how long</h2>
   <ul>
-    <li>The data is on the admin's own server, with regular backups.</li>
-    <li>It is kept while you have an account. When an account is deleted, its data is removed from the app; a final copy and older backups stay on the server for a while in case of a mistake and are then cleared.</li>
+    <li>The data is on the admin's own server. It is backed up weekly; the server keeps the last 12 weekly copies (about three months), and a copy of each weekly backup is also emailed to the admin's own mailbox.</li>
+    <li>It is kept while you have an account. When an account is deleted, its data is removed from the app at once; a final copy and its backups on the server are removed after 30 days. Copies in older backups disappear as the backups roll over.</li>
   </ul>
 
   <h2>Your choices</h2>

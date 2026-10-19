@@ -14,9 +14,7 @@
 <meta name="apple-mobile-web-app-title" content="Shooting Diary">
 <link rel="apple-touch-icon" href="static/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="static/icons/favicon-32.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="static/fonts/fonts.css">
 <style>
 /* Layout: single-column range log; licence strip + totals up top, entries by month, entry sheet over the log. */
 :root{
@@ -855,8 +853,8 @@ $("xForm").addEventListener("submit",async e=>{e.preventDefault();
   if(X.fmt==="csv"){exportCsv(getRange(L),L);closeSheets();return}
   const btn=$("pdfGo"),label=btn.textContent;btn.disabled=true;btn.textContent="Creating PDF…";
   try{
-    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
-    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+    await loadScript("static/vendor/jspdf.umd.min.js");
+    await loadScript("static/vendor/jspdf.plugin.autotable.min.js");
     const R=getRange(L);
     const list=sortSessions(S.sessions.filter(R.filter));   // newest first
     const p=S.profile||{};

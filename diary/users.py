@@ -101,6 +101,20 @@ def _setup_deadline(days):
 
 
 MAX_PENDING = 10       # open sign-up requests at a time (the login page is public)
+DELETED_DAYS = 30      # a deleted account's final copy (DATA_DIR/deleted/) and its backups are kept this long
+
+
+def purge_deleted(days=DELETED_DAYS):
+    """Remove final copies of deleted accounts older than `days`. Returns the removed paths."""
+    keep = os.path.join(_data_dir(), "deleted")
+    cutoff, gone = time.time() - days * 86400, []
+    if os.path.isdir(keep):
+        for f in os.listdir(keep):
+            p = os.path.join(keep, f)
+            if os.path.isfile(p) and os.path.getmtime(p) < cutoff:
+                os.remove(p)
+                gone.append(p)
+    return gone
 
 
 def request_account(username, password):
@@ -279,4 +293,5 @@ def delete(username):
     for p in (path, path + "-wal", path + "-shm"):
         if os.path.exists(p):
             os.remove(p)
+    purge_deleted()
     return keep

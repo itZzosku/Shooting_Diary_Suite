@@ -14,9 +14,7 @@
 <meta name="apple-mobile-web-app-title" content="Shooting Diary">
 <link rel="apple-touch-icon" href="{{ url_for('diary.home') }}static/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('diary.home') }}static/icons/favicon-32.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('diary.home') }}static/fonts/fonts.css">
 <style>
 :root{--bg:#eef0ec;--surface:#fff;--line:#c9cec4;--fg:#1c211c;--muted:#5b6359;--accent:#e2590f;--accent-ink:#fff;--danger:#b3261e;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--bg:#141714;--surface:#1d211d;--line:#363d36;--fg:#e8ebe6;--muted:#9aa398;--accent:#ff7a33;--accent-ink:#1a0d05;--danger:#ff8a80;color-scheme:dark}}
