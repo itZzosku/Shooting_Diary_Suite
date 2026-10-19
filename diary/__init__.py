@@ -237,10 +237,49 @@ def login():
                 with _fails_lock:
                     _fails.pop(ip, None)
                 return _logged_in(u)
-            _note_fail(ip)
-            time.sleep(1)
-            error = "Wrong username or password."
+            if users.verify_pending(username, request.form.get("password", "")):
+                error = "Your account is waiting for an admin to approve it."
+            else:
+                _note_fail(ip)
+                time.sleep(1)
+                error = "Wrong username or password."
     return render_template("diary_login.html", error=error, disabled=False, username=username)
+
+
+_signups = {}          # ip -> [count, first_time]
+MAX_SIGNUPS, SIGNUP_WINDOW = 3, 60 * 60
+
+
+@bp.route("/signup", methods=["GET", "POST"])
+def signup():
+    """Ask for an account: username + password now, usable once an admin approves it (Accounts on the home page)."""
+    from . import users
+    if not users.all_users(include_disabled=False):
+        return redirect(url_for("diary.login"))
+    error, username = None, ""
+    if request.method == "POST":
+        ip = request.remote_addr or "?"
+        username = request.form.get("username", "").strip().lower()[:32]
+        pw, pw2 = request.form.get("password", ""), request.form.get("password2", "")
+        with _fails_lock:
+            count, first = _signups.get(ip, (0, 0))
+            if time.time() - first >= SIGNUP_WINDOW:
+                count, first = 0, time.time()
+            busy = count >= MAX_SIGNUPS
+            if not busy:
+                _signups[ip] = [count + 1, first]
+        if busy:
+            error = "Too many requests from here. Try again in an hour."
+        elif pw != pw2:
+            error = "The passwords don't match."
+        else:
+            try:
+                users.request_account(username, pw)
+                return render_template("diary_login.html", disabled=False, username=username,
+                                       sent=True, error=None)
+            except ValueError as e:
+                error = str(e)
+    return render_template("diary_login.html", signup=True, username=username, min_len=users.MIN_PASSWORD, error=error)
 
 
 def _logged_in(u):
@@ -408,7 +447,7 @@ def _account_row(u):
     from . import users
     return {"username": u["username"], "is_admin": bool(u["is_admin"]), "disabled": bool(u["disabled"]),
             "last_login": u["last_login"], "created": u["created"],
-            "unclaimed": not u["pw_hash"], "setup_open": users.needs_setup(u),
+            "unclaimed": not u["pw_hash"], "setup_open": users.needs_setup(u), "pending": bool(u.get("pending")),
             "setup_until": u.get("setup_until")}
 
 
@@ -437,7 +476,8 @@ def admin_add_user():
 @bp.post("/api/admin/users/<name>/<action>")
 @login_required
 def admin_user_action(name, action):
-    """clear-password (forgotten password → choose a new one at next login), disable, enable, delete."""
+    """clear-password (forgotten password → choose a new one at next login), disable, enable, delete,
+    approve (a sign-up request; reject = delete)."""
     from . import users
     me = _admin()
     _json_body()
@@ -448,6 +488,11 @@ def admin_user_action(name, action):
         return jsonify(error="Not your own account – use Password for that."), 400
     if action == "clear-password":
         users.clear_password(u["username"])
+    elif action == "approve":
+        try:
+            users.approve(u["username"])
+        except ValueError as e:
+            return jsonify(error=str(e)), 400
     elif action in ("disable", "enable"):
         users.set_disabled(u["username"], action == "disable")
     elif action == "delete":

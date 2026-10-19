@@ -58,7 +58,14 @@ before anything else. Later they change it on the landing page (*Password*).
 
 Admins can do the same from the app: landing page → **Accounts** – add an account (then *Share login
 details* sends the address, username and "leave the password empty" to the buddy), *Reset password*,
-*Disable* / *Enable*. Not on your own account (use *Password* for that). Same from the command line:
+*Disable* / *Enable*. Not on your own account (use *Password* for that).
+
+Anyone can also **ask for an account** on the login page (username + their own password). The account is
+created switched off; the admin sees *Accounts · 1 new* on the landing page and taps **Approve** or **Reject**.
+Until then, logging in says the account is waiting for approval. Limits: 3 requests per address per hour,
+10 open requests at a time.
+
+Same from the command line:
 
 ```bash
 python -m diary user-add mikko             # new account, no password yet – tell them to log in soon

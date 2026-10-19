@@ -237,3 +237,38 @@ def test_my_data_and_delete_account(two):
     jsons = sorted(f for f in os.listdir(kept) if f.startswith("mikko-") and f.endswith(".json"))
     assert jsons and "Mikko Rifle" in open(os.path.join(kept, jsons[-1]), encoding="utf-8").read()
     assert o.get("/diary/api/guns").status_code == 200
+
+
+def test_sign_up_request_needs_admin_approval(two):
+    app, o, m = two
+    for n in ("rangebuddy", "spam1", "spam2"):
+        if users.by_name(n):
+            users.delete(n)
+    diary._signups.clear()
+    anon = app.test_client()
+    assert b"Ask for an account" in anon.get("/diary/signup").data
+    assert b"don&#39;t match" in anon.post("/diary/signup", data={"username": "rangebuddy", "password": "buddy-pass-123",
+                                                                "password2": "other-pass-123"}).data
+    r = anon.post("/diary/signup", data={"username": "RangeBuddy", "password": "buddy-pass-123", "password2": "buddy-pass-123"})
+    assert b"Request sent" in r.data
+    u = users.by_name("rangebuddy")
+    assert u["pending"] and u["disabled"] and not u["is_admin"]
+    # Can't log in yet, and is told why (not "wrong password"); a wrong password stays "wrong"
+    assert b"waiting for an admin" in anon.post("/diary/login", data={"username": "rangebuddy", "password": "buddy-pass-123"}).data
+    assert b"Wrong username" in anon.post("/diary/login", data={"username": "rangebuddy", "password": "nope-nope-nope"}).data
+    # Taken name, short password
+    assert b"already exists" in anon.post("/diary/signup", data={"username": "mikko", "password": "x" * 12, "password2": "x" * 12}).data
+    # Admin sees it and approves; a non-admin can't
+    assert o.get("/diary/api/home").get_json()["pending"] == 1
+    row = [x for x in o.get("/diary/api/admin/users").get_json() if x["username"] == "rangebuddy"][0]
+    assert row["pending"] is True
+    assert m.post("/diary/api/admin/users/rangebuddy/approve", json={}).status_code == 403
+    assert o.post("/diary/api/admin/users/rangebuddy/approve", json={}).status_code == 200
+    assert o.post("/diary/api/admin/users/mikko/approve", json={}).status_code == 400     # not a request
+    b = _login(app, "rangebuddy", "buddy-pass-123")
+    assert b.get("/diary/api/guns").get_json() == []                                       # own, empty diary
+    assert o.get("/diary/api/home").get_json()["pending"] == 0
+    # Rate limit per address: 3 tries an hour (one used above for the mismatch, one ok, one taken name)
+    assert b"Too many requests" in anon.post("/diary/signup", data={"username": "spam1", "password": "x" * 12, "password2": "x" * 12}).data
+    assert users.by_name("spam1") is None
+    users.delete("rangebuddy")

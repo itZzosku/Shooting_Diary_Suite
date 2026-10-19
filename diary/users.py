@@ -5,8 +5,10 @@ open that user's data — isolation doesn't depend on every query remembering a 
   DATA_DIR/diary.db          the first (admin) account's data — the single-user database from before
   DATA_DIR/users/<name>.db   every other account
 
-Accounts are created on the server: python -m diary user-add NAME. A new account has no password: the person
-logs in with an empty password once (within SETUP_DAYS) and must choose their own before anything else.
+Accounts are created on the server (python -m diary user-add NAME) or by an admin in the app: no password yet, the
+person logs in with an empty password once (within SETUP_DAYS) and must choose their own before anything else.
+Anyone can also ask for an account on the login page: it is created with their password but stays switched off
+(pending) until an admin approves it.
 """
 import os
 import re
@@ -47,6 +49,8 @@ def uconnect():
     conn.executescript(SCHEMA)
     if "setup_until" not in {r[1] for r in conn.execute("PRAGMA table_info(users)")}:
         conn.execute("ALTER TABLE users ADD COLUMN setup_until TEXT")   # empty-password first login allowed until
+    if "pending" not in {r[1] for r in conn.execute("PRAGMA table_info(users)")}:
+        conn.execute("ALTER TABLE users ADD COLUMN pending INTEGER NOT NULL DEFAULT 0")   # sign-up waiting for an admin
     return conn
 
 
@@ -94,6 +98,35 @@ def check_password(pw):
 
 def _setup_deadline(days):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + days * 86400))
+
+
+MAX_PENDING = 10       # open sign-up requests at a time (the login page is public)
+
+
+def request_account(username, password):
+    """Sign-up from the login page: the account exists with its password but is off until an admin approves."""
+    check_password(password)
+    if len([u for u in all_users() if u.get("pending")]) >= MAX_PENDING:
+        raise ValueError("Too many open requests – ask the admin to add you instead.")
+    if not all_users():
+        raise ValueError("No accounts yet.")
+    u = create(username, password)
+    with uconnect() as c:
+        c.execute("UPDATE users SET disabled=1, pending=1 WHERE id=?", (u["id"],))
+    return by_name(u["username"])
+
+
+def approve(username):
+    with uconnect() as c:
+        n = c.execute("UPDATE users SET disabled=0, pending=0 WHERE username=? AND pending=1", (str(username).lower(),)).rowcount
+    if not n:
+        raise ValueError(f"No request from {username}.")
+
+
+def verify_pending(username, password):
+    """Right password for an account still waiting for approval → the row (to say so instead of 'wrong password')."""
+    u = by_name(username)
+    return u if u and u.get("pending") and u["pw_hash"] and check_password_hash(u["pw_hash"], password or "") else None
 
 
 def create(username, password=None, admin=False, db_file=None, setup_days=SETUP_DAYS):

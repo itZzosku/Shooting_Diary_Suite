@@ -62,7 +62,9 @@ def api_home():
     ln = loan_rows(conn)
     lent = {"trips": len(ln), "shots": sum(int(x.get("rounds") or 0) for l in ln for x in l.get("lines", [])),
             "unpaid": unpaid_total(conn), "last": max((l["date"] for l in ln), default=None)}
-    return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), diary=diary_summary(conn), lent=lent, velocity=vel, zeroes=zero_summary(conn))
+    from . import users
+    pending = sum(1 for u in users.all_users() if u.get("pending")) if me["is_admin"] else 0
+    return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), pending=pending, diary=diary_summary(conn), lent=lent, velocity=vel, zeroes=zero_summary(conn))
 
 
 def export_data(conn):

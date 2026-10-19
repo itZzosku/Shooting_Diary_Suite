@@ -271,7 +271,7 @@ header.top{padding-top:6px!important}
     </form>
     <div class="card" id="accNew" hidden></div>
     <div id="accList"></div>
-    <p class="hint" style="margin:0">A new account has no password: the person logs in with the username and an empty password within 7 days and chooses their own. <b>Reset password</b> does the same for someone who forgot theirs. <b>Delete</b> removes the account and its data; a final copy stays on the server in <code>diary_data/deleted/</code>. Each account sees only its own data.</p>
+    <p class="hint" style="margin:0">People can also ask for an account on the login page; their request shows here until you <b>Approve</b> or <b>Reject</b> it. A new account added here has no password: the person logs in with the username and an empty password within 7 days and chooses their own. <b>Reset password</b> does the same for someone who forgot theirs. <b>Delete</b> removes the account and its data; a final copy stays on the server in <code>diary_data/deleted/</code>. Each account sees only its own data.</p>
   </div>
 </div>
 <div class="sheet" id="dlSheet" hidden role="dialog" aria-modal="true" aria-labelledby="dlTitle">
@@ -310,7 +310,7 @@ async function load(){
   if(!r.ok)return;
   $("who").textContent=[j.name,j.username?"signed in as "+j.username:""].filter(Boolean).join(" · ");
   $("pwUser").value=j.username||"";
-  $("accBtn").hidden=!j.is_admin;
+  $("accBtn").hidden=!j.is_admin;$("accBtn").textContent=j.pending?`Accounts · ${j.pending} new`:"Accounts";
   const d=j.diary,v=j.velocity,z=j.zeroes||[];
   $("nDiary").innerHTML=`<b>${d.visits}</b> <span>visits in ${d.year} ·</span> <b>${nf(d.rounds)}</b> <span>shots</span>`
     +(d.last?`<br><span>Last:</span> ${fiDate(d.last.date)}${d.last.place?" · "+esc(d.last.place):""}`:"");
@@ -362,7 +362,11 @@ async function accApi(method,path,body){
 async function accLoad(){
   let list;try{list=await accApi("GET","users")}catch(e){$("accList").innerHTML=`<p class="msg">${esc(e.message==="Failed to fetch"?"No connection.":e.message)}</p>`;return}
   const me=$("pwUser").value;
-  $("accList").innerHTML=list.map(u=>{
+  $("accList").innerHTML=list.slice().sort((a,b)=>(b.pending?1:0)-(a.pending?1:0)).map(u=>{
+    if(u.pending)return`<div class="urow"><span><b>${esc(u.username)}</b><span class="badge warn">asks for an account</span></span>
+      <span class="bt"><button class="primary" type="button" data-act="approve" data-u="${esc(u.username)}">Approve</button>
+        <button class="ghost" type="button" data-act="delete" data-u="${esc(u.username)}" style="color:var(--danger);border-color:var(--danger)">Reject</button></span>
+      <span class="st">${esc("requested "+fiDT(u.created))}</span></div>`;
     const st=u.disabled?"disabled":u.setup_open?`no password yet – first login by ${fiDT(u.setup_until)}`:u.unclaimed?"no password – first-login time ran out, reset it":u.last_login?"last login "+fiDT(u.last_login):"never logged in";
     const mine=u.username===me;
     return`<div class="urow"><span><b>${esc(u.username)}</b>${u.is_admin?'<span class="badge">admin</span>':""}${u.disabled?'<span class="badge warn">disabled</span>':""}${mine?'<span class="badge">you</span>':""}</span>
@@ -396,12 +400,12 @@ $("accForm").addEventListener("submit",async e=>{e.preventDefault();
 });
 $("accList").addEventListener("click",async e=>{
   const b=e.target.closest("[data-act]");if(!b)return;
-  if(!b.dataset.armed){b.dataset.armed=1;b.dataset.label=b.textContent;b.textContent=b.dataset.act==="delete"?"Tap again – deletes their data":"Tap again";
+  if(!b.dataset.armed){b.dataset.armed=1;b.dataset.label=b.textContent;b.textContent=b.dataset.act==="delete"?(b.textContent==="Reject"?"Tap again – reject":"Tap again – deletes their data"):"Tap again";
     setTimeout(()=>{if(b.isConnected&&b.dataset.armed){delete b.dataset.armed;b.textContent=b.dataset.label}},4000);return}
   try{await accApi("POST",`users/${encodeURIComponent(b.dataset.u)}/${b.dataset.act}`,{})}catch(err){toast(err.message);return}
   if(b.dataset.act==="clear-password")showNew(b.dataset.u,true);
-  else toast({disable:"Disabled – logged out everywhere",enable:"Enabled",delete:"Deleted – a final copy is kept on the server"}[b.dataset.act]);
-  accLoad();
+  else toast({disable:"Disabled – logged out everywhere",enable:"Enabled",approve:"Approved – they can log in now",delete:b.dataset.label==="Reject"?"Rejected":"Deleted – a final copy is kept on the server"}[b.dataset.act]);
+  accLoad();load();
 });
 let installEvt=null;
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;$("installBtn").hidden=false});

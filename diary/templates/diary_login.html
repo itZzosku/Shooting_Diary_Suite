@@ -35,6 +35,7 @@ button:disabled{opacity:.5;cursor:default}
 .err{color:var(--danger);font-size:.9rem;margin:0}
 .note{color:var(--muted);font-size:.85rem;margin:0}
 .note b{color:var(--fg)}
+a{color:var(--accent);font-weight:600}
 </style>
 </head>
 <body>
@@ -48,14 +49,28 @@ button:disabled{opacity:.5;cursor:default}
   <label>New password again<input type="password" name="password2" autocomplete="new-password" minlength="{{ min_len }}" required></label>
   <button type="submit">Save and log in</button>
 </form>
-{% else %}
-<form method="post" autocomplete="on">
+{% elif signup %}
+<form method="post" action="{{ url_for('diary.signup') }}" autocomplete="on">
   <h1>Shooting <span>diary</span></h1>
+  <p class="note">Ask for an account. You can log in once the admin approves it.</p>
+  {% if error %}<p class="err" role="alert">{{ error }}</p>{% endif %}
+  <label>Username<input type="text" name="username" value="{{ username or '' }}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" pattern="[a-zA-Z0-9][a-zA-Z0-9_\-]{1,31}" title="2–32 letters, digits, - or _" maxlength="32" required autofocus></label>
+  <label>Password<input type="password" name="password" autocomplete="new-password" minlength="{{ min_len }}" required></label>
+  <label>Password again<input type="password" name="password2" autocomplete="new-password" minlength="{{ min_len }}" required></label>
+  <p class="note">At least {{ min_len }} characters. Username: letters, digits, - and _.</p>
+  <button type="submit">Send request</button>
+  <p class="note"><a href="{{ url_for('diary.login') }}">Back to log in</a></p>
+</form>
+{% else %}
+<form method="post" action="{{ url_for('diary.login') }}" autocomplete="on">
+  <h1>Shooting <span>diary</span></h1>
+  {% if sent %}<p class="note" role="status"><b>Request sent.</b> You can log in with that password once the admin approves it.</p>{% endif %}
   {% if error %}<p class="err" role="alert">{{ error }}</p>{% endif %}
   <label>Username<input type="text" name="username" value="{{ username or '' }}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required {% if not username %}autofocus{% endif %} {% if disabled %}disabled{% endif %}></label>
   <label>Password<input type="password" name="password" autocomplete="current-password" {% if username %}autofocus{% endif %} {% if disabled %}disabled{% endif %}></label>
   <button type="submit" {% if disabled %}disabled{% endif %}>Log in</button>
-  <p class="note">New account? Leave the password empty the first time and choose one.</p>
+  <p class="note">Got an account from the admin? Leave the password empty the first time and choose one.</p>
+  {% if not disabled %}<p class="note">No account? <a href="{{ url_for('diary.signup') }}">Ask for one</a></p>{% endif %}
 </form>
 {% endif %}
 </body>
