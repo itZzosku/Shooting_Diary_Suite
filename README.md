@@ -1,135 +1,95 @@
 # Shooting Diary Suite
 
 A self-hosted shooting diary for a few people: range visits and the licence record, muzzle velocities
-(Garmin Xero), scope zeroes and guns loaned to friends. Flask + SQLite, installable on the phone.
+(Garmin Xero), scope zeroes, guns loaned to friends and a click calculator. Flask + SQLite, served by Waitress,
+installable on the phone. Each person has their own account and their own database file.
 
-The bare domain (`/`) redirects to the diary (`/diary/`). Markdown notes dropped into `notes/` are served at
-`/notes/<name>`.
+The site is the diary: the bare domain (`/`) redirects to `/diary/`. Everything under `/diary/` needs a login
+except the login, sign-up and privacy pages. (Markdown files dropped into a `notes/` folder are served at
+`/notes/<name>` – a leftover from the old site, unused now.)
 
-## Shooting diary (`/diary/`)
+## Pages
 
-Password-protected shooting diary. Code lives in `diary/`; `main.py` only calls `diary.init_app(app)`.
-Everything else on the site stays public as before.
+| Address | What |
+|---|---|
+| `/diary/` | Landing page: a tile per section with a one-line summary; Password, My data, Accounts (admins), Install app |
+| `/diary/log` | **Diary** – range visits, guns and their round counts, licence export (PDF/CSV) |
+| `/diary/velocity` | **Velocity** – Garmin Xero strings, loads, trends, charge ladders |
+| `/diary/zeroes` | **Zeroes** – scope dial positions, swaps, zeroing card (PDF) |
+| `/diary/loans` | **Guns loaned** – friends' shots with your guns/ammo and what they owe (tile only) |
+| `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
+| `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |
 
-Pages (one login, a switcher at the top of each): `/diary/` landing page with a summary of each section,
-`/diary/log` diary, `/diary/velocity` muzzle velocities, `/diary/zeroes` scope zeroes, `/diary/loans` guns loaned. The old
-`/diary/chrono` and `/diary/zero` addresses redirect. Long-press the installed app icon for shortcuts.
+Diary, Velocity and Zeroes have a switcher at the top (Home · Diary · Velocity · Zeroes); Guns loaned and the
+click calculator are opened from their tiles. The old `/diary/chrono`, `/diary/zero` and `/diary/lent`
+addresses redirect. Long-press the installed app icon for shortcuts.
+
+Code lives in `diary/`; `main.py` only calls `diary.init_app(app)` and redirects `/`.
 
 Data is stored outside git in `diary_data/`: `users.db` (accounts), one SQLite file per account (`diary.db` for
-the first one, `users/<name>.db` for the rest) and the cookie key.
-`diary_data/` and `diary_seed*.json` are in `.gitignore` – this repo is public, never commit them.
+the first one, `users/<name>.db` for the rest), `deleted/` (final copies of deleted accounts, 30 days) and the
+cookie key. `diary_data/`, `diary_backups/`, `.env`, `diary_seed*.json` and `*.xls(x)` are in `.gitignore` –
+this repo is public, never commit them. Tests use synthetic data only.
 
-### Phone app
+## Running it
 
-The diary is an installable web app (manifest + service worker in `diary/static/`). Open `/diary/` over HTTPS:
-Android Chrome → menu → **Install app** (or the page's *Install app* button); iPhone Safari → Share →
-**Add to Home Screen**. It then opens full-screen, starts without a connection using the last synced data,
-and queues saves until the server is reachable again. Logging out clears the cached data.
-After changing `diary/static/sw.js`, bump `VERSION` in it so phones drop the old cache.
-
-### First-time setup on the server
+### First-time setup
 
 ```bash
-pip install -r requirements.txt             # no new packages needed
-python -m diary user-add NAME --admin --password   # first account; prompts twice, min. 10 chars
-python -m diary import diary_seed.json      # one-time import of existing entries
-rm diary_seed.json                          # contains licence numbers
-python main.py
+python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
+./venv/bin/python -m diary user-add NAME --admin --password   # first account; asks twice, min. 10 chars
+./venv/bin/python main.py                                      # Waitress on <LAN-IP>:5000
 ```
 
-Open `https://<your-domain>/` (it goes to `/diary/`). The login lasts 360 days per device.
+`main.py` serves the app with **Waitress** (a production WSGI server – not Flask's development server) on the
+machine's LAN address, port 5000. Put it behind a reverse proxy that does HTTPS (here Nginx Proxy Manager on
+another machine) and point the domain at it; the login cookie is HTTPS-only by default.
+
+Run it as a systemd service (`shooting-diary.service`, `Restart=always`, enabled at boot). Allow port 5000 only
+from the proxy, e.g. with ufw on the diary server:
+
+```bash
+ufw default allow incoming
+ufw allow from <proxy-IP> to any port 5000 proto tcp
+ufw deny 5000/tcp
+ufw enable
+```
 
 ### Settings (`.env`, all optional)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DIARY_DATA_DIR` | `./diary_data` | Where the database and secrets live |
-| `DIARY_COOKIE_SECURE` | `1` | Login cookie only over HTTPS. Set `0` to log in via `http://<LAN-IP>:5000` |
-| `DIARY_CONTACT` | – | Contact shown on the public privacy page (`/diary/privacy`), e.g. an email address |
-| `DIARY_BEHIND_PROXY` | `1` | Trust one `X-Forwarded-For` hop (Nginx Proxy Manager) |
-| `DIARY_LOGIN_DAYS` | `90` | How long a login stays valid |
+| `DIARY_DATA_DIR` | `./diary_data` | Where the databases and secrets live |
+| `DIARY_CONTACT` | – | Contact shown on the privacy page, e.g. an email address |
+| `DIARY_COOKIE_SECURE` | `1` | Login cookie only over HTTPS. `0` allows logging in via `http://<LAN-IP>:5000` |
+| `DIARY_BEHIND_PROXY` | `1` | Trust one `X-Forwarded-For` hop (the proxy) for the client IP |
+| `DIARY_LOGIN_DAYS` | `90` | How long a login stays valid on a device |
+| `DIARY_ADMIN_USER` | `osku` | Name given to a pre-accounts single-user diary when it's converted |
 | `FLASK_SECRET_KEY` | auto | Cookie signing key; generated into `diary_data/secret_key` if unset |
-
-### Accounts
-
-Every person has their own account and their own database file – one user's pages, API calls, offline
-queue and backups never touch another's data. Accounts are created on the server without a password: the
-person logs in with their username and an **empty password** (within 7 days) and must choose their own
-before anything else. Later they change it on the landing page (*Password*).
-
-Admins can do the same from the app: landing page → **Accounts** – add an account (then *Share login
-details* sends the address, username and "leave the password empty" to the buddy), *Reset password*,
-*Disable* / *Enable*. Not on your own account (use *Password* for that).
-
-Anyone can also **ask for an account** on the login page (username + their own password). The account is
-created switched off; the admin sees *Accounts · 1 new* on the landing page and taps **Approve** or **Reject**.
-Until then, logging in says the account is waiting for approval. Limits: 3 requests per address per hour,
-10 open requests at a time.
-
-**Privacy page** (`/diary/privacy`, public, linked from the login page): what is stored and who can see it.
-Keep it true: fonts and the PDF library are served from `diary/static/` (no requests to other sites), a deleted
-account's final copy in `diary_data/deleted/` and its backups are removed after 30 days (on the next delete or
-weekly backup), and `DIARY_CONTACT` sets the contact line.
-
-Same from the command line:
-
-```bash
-python -m diary user-add mikko             # new account, no password yet – tell them to log in soon
-python -m diary user-add NAME --password   # …or set the password now (asks twice, min. 10 chars)
-python -m diary user-add NAME --admin      # an admin account (admins are just flagged for now)
-python -m diary user-list                  # accounts, data files, last login, unclaimed accounts
-python -m diary user-passwd mikko          # new password – logs that user out on every device
-python -m diary user-passwd mikko --clear  # forgot it: no password again, they choose a new one at next login
-python -m diary user-disable mikko         # blocks login and ends their sessions (data kept); user-enable
-python -m diary user-rename old new        # login name only; the data file stays
-```
-
-A diary from before accounts becomes the admin account **osku** (or `DIARY_ADMIN_USER`) on first start, with
-the same password and data (`diary.db`).
-
-### Admin commands
-
-Data commands work on one account: add `--user NAME` (default: the first admin account).
-
-```bash
-python -m diary export backup.json --user mikko    # full JSON backup of one account
-python -m diary import file.json [--replace] --user mikko
-```
-
-Tie old rows to a gun afterwards (only rows without a gun; dates inclusive; try `--dry-run` first):
-
-```bash
-python -m diary assign-gun --list-guns
-python -m diary assign-gun g-wwsd --cal ".223 Rem" --from 2024-04-17 --to 2026-07-10 --dry-run
-```
-
-Import files may contain `profile`, `guns` and `sessions`; each part is optional and upserted by id.
-Guns are for your own round counts only – PDF/CSV exports drop gun names and merge rows of the same
-type, calibre, toimintatapa and lisätietoja within a visit.
-
-Back up `diary_data/diary.db` (or a `python -m diary export` dump) with the rest of the server.
+| `DIARY_SMTP_*`, `DIARY_BACKUP_TO` | – | Backup e-mail, see below |
 
 ### Updating the server
 
 ```bash
-./venv/bin/python -m pip install pytest          # once: lets the update run the tests before restarting
-./scripts/update.sh --check            # what would come in
-./scripts/update.sh                    # pull + check + restart
+./venv/bin/python -m pip install pytest   # once: lets the update run the tests before restarting
+./scripts/update.sh --check               # what would come in
+./scripts/update.sh                       # pull + check + restart
 ```
 
-`update.sh` refuses to run over local edits, snapshots every database (accounts and each account's data) to
-`diary_backups/pre-update/` (newest 5 kept), pulls `main`, installs `requirements.txt` if it changed, compiles, starts the app once in a
-throwaway folder and runs the tests. If anything fails it rolls back to the previous commit and leaves
-the running site alone; otherwise it restarts and checks the site answers. Restart command:
-`RESTART_CMD="…"` or a systemd unit `SERVICE` (default `shooting-diary.service`, falling back to the old `flask-telemetry.service`); `./scripts/update.sh --restart`
-only restarts.
+`update.sh` refuses to run over local edits, snapshots every database to `diary_backups/pre-update/` (newest
+5 kept), pulls `main`, installs `requirements.txt` if it changed, compiles, starts the app once in a throwaway
+folder and runs the tests. If anything fails it rolls back to the previous commit and leaves the running site
+alone; otherwise it restarts and checks the site answers. Restart: `RESTART_CMD="…"`, or the systemd unit
+`SERVICE` (default `shooting-diary.service`, falling back to the old `flask-telemetry.service`).
+`./scripts/update.sh --restart` only restarts.
 
-### Weekly backup by email
+### Weekly backup
 
-`scripts/diary_backup.sh` runs `python -m diary backup diary_backups --keep 12 --mail`: a dated JSON +
-SQLite copy on the server (newest 12 kept) and the JSON emailed to your Gmail.
+`scripts/diary_backup.sh` runs `python -m diary backup diary_backups --keep 12 --mail`: for **every account**
+a dated `diary-<user>-YYYY-MM-DD.json` + `.db` on the server (newest 12 per account), and all the JSONs in one
+e-mail. Backups of deleted accounts and their final copy in `diary_data/deleted/` are removed after 30 days.
 
-Add to the server's `.env` (never commit it):
+Add to the server's `.env`:
 
 ```
 DIARY_SMTP_USER=you@gmail.com            # must be the Gmail address the app password belongs to
@@ -139,119 +99,175 @@ DIARY_SMTP_PASSWORD=abcdefghijklmnop     # Gmail app password, myaccount.google.
 
 ```bash
 ./scripts/diary_backup.sh   # test once – check your inbox
-crontab -e                  # add: 17 3 * * 0  /root/Shooting_Diary_Suite/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
+crontab -e                  # 17 3 * * 0  /root/Shooting_Diary_Suite/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
 ```
 
-Backups contain your licence numbers – they only go to your own mailbox.
+Backups contain everyone's data, licence numbers included – the privacy page says they go to the admin's
+mailbox. Restore one account: `python -m diary import --user NAME diary_backups/diary-NAME-YYYY-MM-DD.json --replace`
+(or stop the app and copy the `.db` over that account's file in `diary_data/`).
 
-Every account is backed up: `diary-<user>-YYYY-MM-DD.json` + `.db`, newest 12 per account, and all JSONs go in
-the one e-mail. Restore one account: `python -m diary import --user NAME diary_backups/diary-NAME-YYYY-MM-DD.json --replace`
-(or stop the app and copy the `.db` over `diary_data/diary.db`).
+### Tests
 
-## Guns loaned (`/diary/loans`)
+`python -m pytest tests` (synthetic data). GitHub Actions runs them on every push (`.github/workflows/tests.yml`).
 
-Its own page, opened from its tile on the landing page (it isn't in the page switcher). When friends shoot your guns and/or your
-ammo (e.g. at a match): *+ Loan*. One entry per trip: date,
-match / event, and a line per friend and gun with shots and the price per round. Their shots are added to each
-gun's round count (the gun list shows "incl. N loaned") but never to your own shooting record or the licence
-PDF/CSV. A friend's own gun with your ammo: choose *Not my gun – ammo only* and the calibre – only the cost
-counts. The cost is worked out per friend; tick *Paid*, and *Share cost* sends them the breakdown. Unpaid
-totals show at the top of the page, per friend (across all trips) and on the landing page.
+## Accounts
 
-*Ammo prices* holds the price per round by calibre (a new line takes its gun's calibre price, editable per
-line). Starting prices are in `diary/loans.py` (`DEFAULT_AMMO_PRICES`); each account edits its own. Loans and
-prices are part of export / import / backup and *My data*.
+Every account has its own database file – one user's pages, API calls, offline queue and backups never touch
+another's data. Three ways in:
 
-## Click calculator (`/diary/calculator`)
+- **Admin adds it in the app**: landing page → **Accounts** → username → *Add account*, then *Share login
+  details* sends the address, username and "leave the password empty". The person logs in with an **empty
+  password** within 7 days and must choose their own (min. 10 characters) before anything else.
+- **The person asks** on the login page (*No account? Ask for one*): username + their own password. The account
+  is created switched off; the admin sees *Accounts · 1 new* and taps **Approve** or **Reject**. Until then,
+  logging in says it's waiting for approval. Limits: 3 requests per address per hour, 10 open at a time.
+- **Command line** (below).
 
-The Scope Adjustment Calculator app as a page, opened from its tile on the landing page: distance (m / yd / ft)
-and where the group hit (high/low, left/right in mm / cm / in) → the correction to dial in clicks, plus MRAD and
-MOA, for your scopes' own click values or ¼, ½, 1 MOA, 0.1 / 0.05 MRAD, 0.1 mil. The last inputs are remembered;
-works offline.
+In *Accounts* an admin can also *Reset password* (back to "choose one at next login"), *Disable* / *Enable* and
+*Delete* (the data goes; a final copy is kept in `diary_data/deleted/` for 30 days) – never on their own
+account. Everyone changes their own password with *Password* and downloads all their data with *My data*
+(one JSON file). Five wrong passwords from one address lock logins for 15 minutes.
 
-## Language
+```bash
+python -m diary user-add mikko             # new account, no password yet – tell them to log in soon
+python -m diary user-add NAME --password   # …or set the password now
+python -m diary user-add NAME --admin      # admin: can manage accounts in the app
+python -m diary user-list                  # accounts, data files, last login, unclaimed accounts
+python -m diary user-passwd mikko          # new password – logs that user out on every device
+python -m diary user-passwd mikko --clear  # forgot it: they choose a new one at next login
+python -m diary user-disable mikko         # blocks login and ends their sessions (data kept); user-enable
+python -m diary user-rename old new        # login name only; the data file stays
+python -m diary user-delete mikko          # account + data (final copy kept 30 days)
+```
 
-The pages, the command line and the backup e-mail are in English. Firearm types and firing modes are stored
-in the Finnish legal wording (Ampuma-aselaki: *Kivääri*, *2 - lippaallinen kertatuli* …) and shown in English;
-*Export* writes a PDF or a CSV in Finnish (the shooting-activity record for a licence application) or in
-English, for the last 2 years, a year, custom dates (from – to) or the whole diary; the last choice is remembered.
+A diary from before accounts becomes the admin account **osku** (or `DIARY_ADMIN_USER`) on first start, with
+the same password and data (`diary.db`).
+
+### Privacy
+
+`/diary/privacy` (public, linked from the login and sign-up pages) says what is stored and who can see it.
+Keep it true when changing things: fonts and the PDF library are served from `diary/static/` (no requests to
+other sites, no analytics), backups and deletion work as described above, and `DIARY_CONTACT` sets the contact
+line.
+
+## Phone app
+
+The diary is an installable web app (manifest + service worker in `diary/static/`). Open `/diary/` over HTTPS:
+Android Chrome → menu → **Install app** (or *Install app* on the landing page); iPhone Safari → Share → **Add
+to Home Screen**. It opens full-screen, starts without a connection using the last synced data, and queues
+saves until the server is reachable again. Logging out clears the cached data. After changing anything in
+`diary/static/`, bump `VERSION` in `sw.js` so phones drop the old cache.
+
+## Diary (`/diary/log`)
+
+- **Visits**: *+ New visit* – only the date is required; place, organiser, start/end time are optional. A row per
+  gun (or *Other row*) with type, calibre, firing mode, shots and notes. Save is at the top and the bottom of the
+  sheet; a field the browser refuses is named in a message.
+- **Guns**: name, type, calibre, firing mode, shots before the diary, acquired date. The list shows each gun's
+  round count, including shots of friends it was loaned to.
+- **Firing mode** is a fixed list (1 single shot, 2 magazine-fed single shot, 3 semi-automatic, 4 automatic),
+  stored in the Finnish legal wording so the licence export matches.
+- **Export**: PDF or CSV, in Finnish (the shooting-activity record for a licence application) or English, for
+  the last 2 years, a year, custom dates (from – to) or the whole diary. Exports drop gun names and merge rows of
+  the same type, calibre, firing mode and notes within a visit.
+- **My details**: name and licence numbers for the export (optional; the row is hidden while empty).
+
+Data commands work on one account: add `--user NAME` (default: the first admin account).
+
+```bash
+python -m diary export backup.json --user mikko    # full JSON backup of one account
+python -m diary import file.json [--replace] --user mikko
+python -m diary assign-gun --list-guns             # tie old rows (without a gun) to a gun; dates inclusive
+python -m diary assign-gun g-wwsd --cal ".223 Rem" --from 2024-04-17 --to 2026-07-10 --dry-run
+```
+
+Import files may contain `profile`, `guns`, `sessions` and the other sections of an export; each part is
+optional and upserted by id.
 
 ## Muzzle velocity (`/diary/velocity`)
 
-Muzzle-velocity data inside the diary (same login): Garmin Xero C1 ShotView exports, your own velocity
-workbooks and Kestrel DROP weather logs. Open it from the diary header (*Velocity*).
+Garmin Xero C1 ShotView exports, your own velocity workbooks and Kestrel DROP weather logs.
 
 - **Share from ShotView** (Android, installed app): ShotView → session → Share → *Shooting Diary* opens the
-  import preview with the file. After updating, remove and re-add the app to the home screen once so Android
-  learns the share target. Install it with **Chrome** (menu → *Install app*): Vivaldi and other browsers only make
-  a home-screen shortcut, which Android never lists as a share target. Not available on iPhone.
+  import preview with the file. Install the app with **Chrome**: other browsers only make a home-screen
+  shortcut, which Android never lists as a share target. After updating, remove and re-add the app once so
+  Android learns the share target. Not available on iPhone.
 - **Import** (*+ Import velocities*): pick files or a whole folder. ShotView `.xls`/`.xlsx`, velocity workbooks
-  (`<gun>, <bullet>, <brass>, <charge> gr.xlsx`, one `DDMMYYYY` sheet per day) and Kestrel CSVs are
-  recognised by content. Folder names give the powder (`N555`, `N133`, `N150` …) and the gun, in either
-  order. Nothing is saved until you press *Save selected* in the preview.
+  (`<gun>, <bullet>, <brass>, <charge> gr.xlsx`, one `DDMMYYYY` sheet per day) and Kestrel CSVs are recognised
+  by content. Folder names give the powder (`N555`, `N133`, `N150` …) and the gun, in either order. Nothing is
+  saved until *Save selected* in the preview.
 - Shots are fingerprinted (date + time + speed): re-importing is harmless, and a raw ShotView session that
   overlaps a stored day only fills missing weather — fliers you removed in a workbook stay removed.
-- **Statistics** are computed from included shots: average, sample SD (÷ n−1), Garmin's SD (÷ n), ES,
-  95 % CI, KE. Days pool all strings of the same gun + load; the same load in two guns is tracked separately.
-- Views: per-day list, trend of a load (average + CI, SD per day), charge ladders (per gun; all guns at once, or just the ladder of the picked load), shot dot-plot with
-  exclude/include per shot, manual weather per string.
-- **Loads**: like guns, each load is a set of fields — handload: bullet maker, bullet,
-  weight, brass, powder, charge, primer, COAL; factory: maker, product, bullet weight. The name is generated,
-  e.g. `6.5 CM · Lapua Scenar 139 gr · N555 44.0 gr · Lapua brass` or `.22 LR · SK Long Range Match 40 gr`.
-  The calibre is part of the load: the same 123 gr FMJ in .308 Win and 7.62x53R are two loads. Saving a load
-  whose name matches another offers to merge them. Loads saved before this were converted on first start.
+- **Statistics** from included shots: average, sample SD (÷ n−1), Garmin's SD (÷ n), ES, 95 % CI, average
+  energy (J). Days pool all strings of the same gun + load; the same load in two guns is tracked separately.
+- **Page**: gun buttons, then **charge ladders** (a button per gun + bullet/powder/brass; the chart opens on a
+  tap), the **load** list grouped by calibre, then the strings, newest first. Picking a load shows its trend
+  (average + CI, SD per day), velocity vs temperature with the sensitivity in m/s per °C, and its ladder.
+  Each string: shot dot-plot with exclude/include per shot and manual weather.
+- **Loads**: handload – bullet maker, bullet, weight, brass, powder, charge, primer, COAL; factory – maker,
+  product, bullet weight. The name is generated in the order bullet · powder · brass, e.g.
+  `6.5 CM · Lapua Scenar 139 gr · N555 44.0 gr · Lapua brass`. The calibre is part of the load. Saving a load
+  whose name matches another offers to merge them.
 
 ```bash
-pip install -r requirements.txt                    # adds xlrd + openpyxl
 python -m diary chrono-alias "KP-15" g-wwsd        # folder/file name → diary gun (no args lists them)
-python -m diary chrono-import Ballistiikkataulukot/Velocity "Ballistiikkataulukot/Garmin Xero C1" \
-                              "Ballistiikkataulukot/Kestrel Drop D3" --dry-run
-python -m diary chrono-import …same paths…         # commit; RH/pressure that look swapped are fixed,
-                                                   # --keep-swaps to leave them, --fix-dates for year typos
+python -m diary chrono-import <folders…> --dry-run  # then without --dry-run; --keep-swaps, --fix-dates
 python -m diary chrono-stats --gun g-t3x           # per-day table
 ```
 
-Velocity tables (`loads`, `chrono_strings`, `chrono_shots`) live in `diary.db` and are part of
-`export`/`import`/`backup`. `*.xls`/`*.xlsx` are git-ignored — never commit your logs. Tests use synthetic data:
-`python -m pytest tests`.
-
 ## Scope zeroes (`/diary/zeroes`)
 
-One scope moved between rifles: a dial position (elevation + up, windage left/right) per rifle and load, in
-the scope's own frame where the reference position is 0 / 0. Open it from the diary or velocity header
-(*Zeroes*). The database is the only copy; there is no Markdown file to keep in sync.
+Scopes moved between rifles: a dial position (elevation + up, windage left/right) per rifle and load. The
+database is the only copy.
 
+- **Several scopes**: *+ Scope* adds one; each has its own positions, zero stop, reference and history. The
+  chips show where each scope is. Mounting a scope on a rifle takes any other scope off that rifle (logged).
+  Old scopes can be archived.
 - **Swap**: *Scope is on* → *Move to* shows what to dial (e.g. `DOWN 2.7` / `0.1 RIGHT`, in clicks too), the
   target's turret readings and its distance above the zero stop. *Mounted on …* records the swap, then asks
   for the check shot: *On zero ✓* logs it, *Off – adjust…* opens the correction.
-- **Cap readings**: with the turret turn sizes set in *Scope info* (e.g. 10 MRAD), the swap also says where
-  the caps stop if they read 0 / 0 now — elevation numbered one way (DOWN 2.9 → `7.1`, one turn below 0), windage
-  both ways to the half-turn mark (`1 L … 4 L, 5, 4 R … 1 R`) with a warning when a move passes that mark.
-- **Adjust zero**: tap UP/DOWN and LEFT/RIGHT by clicks for what you corrected at the range; the position
-  moves by that much and the change is logged with date and note. *Undo* reverts the newest change of a
-  position. Exact values can also be typed under *Details* (logged as “set”).
-- **0 / 0 reference**: by default 0 / 0 is the turret's own zero — values are what the dials read, and no
-  rifle has to sit at 0 / 0. *Scope info → 0 / 0 reference* can instead pick a position: everything is
-  relabelled so it reads 0 / 0 (swaps don't change). If that position is later re-zeroed off 0 / 0, the
-  reference goes back to the turret zero by itself.
-- **Several scopes**: *+ Scope* adds another; each has its own positions, zero stop, reference and history.
-  The chips show where each scope is. Mounting a scope on a rifle takes any other scope off that rifle (logged),
-  and a position whose rifle carries a different scope says so. Old scopes can be archived.
-- **Offline**: with no connection at the range, adjustments, check shots, mounts, position edits and notes are
-  kept on the phone, shown straight away (marked *not sent yet*) and sent in order when the connection is back
-  (or with *Send now*). Each carries an id, so a change that is resent is applied once. Undo, reference changes
+- **Cap readings**: with the turret turn sizes in *Scope info* (e.g. 10 MRAD), the swap also says where the
+  caps stop — elevation one way (DOWN 2.9 → `7.1`), windage both ways to the half-turn mark
+  (`1 L … 4 L, 5, 4 R … 1 R`) with a warning when a move passes that mark.
+- **Adjust**: UP/DOWN and LEFT/RIGHT by clicks for what you corrected at the range; logged with date and note.
+  *Undo* reverts the newest change of a position. Exact values can be typed under *Details* (logged as "set").
+- **0 / 0 reference**: by default 0 / 0 is the turret's own zero (values are dial readings). *Make this the
+  0 / 0 reference* (or *Scope info*) relabels everything so a position reads 0 / 0 — e.g. after slipping the
+  caps on a new zero: *Adjust* first, slip the caps, then make it the reference. If that position is later
+  moved off 0 / 0, the reference goes back to the turret zero by itself.
+- **Offline**: adjustments, check shots, mounts, position edits and notes made without a connection are kept on
+  the phone (marked *not sent yet*) and sent in order later; each is applied once. Undo, reference changes
   and deletes need a connection.
-- **Notes**: free Markdown (`## headings`, bullets, `- [ ]` to-dos that can be ticked on the page).
-- **Zeroing card (PDF)**: one A4 page for the range bag — dial positions with distance above the zero stop and
-  last check shot, every swap in both directions with click counts, rifles and mounts, notes, recent changes.
+- **Notes** (collapsible): Markdown with `## headings`, bullets and `- [ ]` to-dos. **History** shows the last
+  3 changes (*Show all*).
+- **Zeroing card (PDF)**: one A4 page for the range bag — positions with distance above the zero stop and last
+  check shot, every swap both ways with clicks, rifles and mounts, notes, recent changes.
 
-An old Markdown zeroing note (the `notes/javelin-zeroing-note.md` layout) is brought in once on the server:
+An old Markdown zeroing note can be brought in once: `python -m diary zero-import NOTE.md --dry-run` (then
+without `--dry-run`; `--replace` overwrites). Rifle names are matched to diary guns like velocity folders.
 
-```bash
-python -m diary zero-import notes/javelin-zeroing-note.md --dry-run   # parse + check the note's swap tables
-python -m diary zero-import notes/javelin-zeroing-note.md             # --replace to overwrite (history too)
-```
+## Guns loaned (`/diary/loans`)
 
-Rifle names are matched to diary guns the same way as velocity folders (aliases, then the model, e.g. `T3X`).
-Zeroes (`scopes`, `scope_zeros`, `scope_log`) are part of `export`/`import`/`backup`; so are the velocity
-folder→gun aliases and the powder list (`chrono_settings`), so the emailed JSON alone restores everything.
+When friends shoot your guns and/or your ammo (e.g. at a match): *+ Loan*, one entry per trip – date, event
+and a line per friend and gun with shots and price per round. Their shots count toward each gun's round count
+("incl. N loaned") but never toward your own shooting record or the licence export. A friend's own gun with
+your ammo: *Not my gun – ammo only* and the calibre. Cost per friend, *Paid* ticks, *Share cost* sends the
+breakdown; unpaid totals on the page and the landing tile. *Ammo prices* holds the price per round by calibre
+(starting values in `diary/loans.py`, `DEFAULT_AMMO_PRICES`; each account edits its own).
+
+## Click calculator (`/diary/calculator`)
+
+The Scope Adjustment Calculator app as a page: distance (m / yd / ft) and where the group hit (high/low,
+left/right in mm / cm / in) → the correction in clicks, plus MRAD and MOA, for your scopes' own click values or
+¼, ½, 1 MOA, 0.1 / 0.05 MRAD, 0.1 mil. *Reset* clears the offsets. Inputs are remembered; works offline.
+
+## Language
+
+Pages, command line and backup e-mail are in English. Firearm types and firing modes are stored in the Finnish
+legal wording (Ampuma-aselaki: *Kivääri*, *2 - lippaallinen kertatuli* …) and shown in English; the export can
+be Finnish or English.
+
+## Third-party files
+
+`diary/static/fonts/` – Barlow Condensed, IBM Plex Sans, IBM Plex Mono (SIL Open Font License 1.1, licences
+alongside). `diary/static/vendor/` – jsPDF 2.5.1 and jsPDF-AutoTable 3.8.2 (MIT, licences alongside).
