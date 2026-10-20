@@ -66,7 +66,7 @@ def init_app(app):
     app.register_blueprint(bp, url_prefix="/diary")
 
 
-PERMANENT_LIFETIME = timedelta(days=int(os.getenv("DIARY_LOGIN_DAYS", "90")))
+PERMANENT_LIFETIME = timedelta(days=int(os.getenv("DIARY_LOGIN_DAYS", "365")))
 
 
 def _cookie_secure():

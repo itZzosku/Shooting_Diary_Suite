@@ -63,7 +63,7 @@ ufw enable
 | `DIARY_CONTACT` | – | Contact shown on the privacy page, e.g. an email address |
 | `DIARY_COOKIE_SECURE` | `1` | Login cookie only over HTTPS. `0` allows logging in via `http://<LAN-IP>:5000` |
 | `DIARY_BEHIND_PROXY` | `1` | Trust one `X-Forwarded-For` hop (the proxy) for the client IP |
-| `DIARY_LOGIN_DAYS` | `90` | How long a login stays valid on a device |
+| `DIARY_LOGIN_DAYS` | `365` | Days a login stays valid on a device without being used (renewed on every visit) |
 | `DIARY_ADMIN_USER` | `osku` | Name given to a pre-accounts single-user diary when it's converted |
 | `FLASK_SECRET_KEY` | auto | Cookie signing key; generated into `diary_data/secret_key` if unset |
 | `DIARY_SMTP_*`, `DIARY_BACKUP_TO` | – | Backup e-mail, see below |
