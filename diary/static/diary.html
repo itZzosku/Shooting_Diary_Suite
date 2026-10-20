@@ -115,6 +115,8 @@ h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform
   padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
 .sheet-in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
 .sheet-bar{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);padding-block:12px;z-index:1;border-bottom:1px solid var(--line)}
+.sheet-bar .bar-btns{display:flex;gap:8px;align-items:center}
+.sheet-bar .primary.sm{padding:9px 18px;font-size:.92rem;flex:0 0 auto}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;min-width:0}
 .field{display:flex;flex-direction:column;gap:6px}
 input[type=text],input[type=date],input[type=time],input[type=number],select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:1rem;color:var(--fg);font-weight:400;text-transform:none;letter-spacing:0;min-width:0}
@@ -237,12 +239,12 @@ header.top{padding-top:6px!important}
 
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <form class="sheet-in" id="form" autocomplete="off">
-    <div class="sheet-bar"><h2 id="sheetTitle">New visit</h2><button class="ghost" type="button" id="closeBtn">Close</button></div>
+    <div class="sheet-bar"><h2 id="sheetTitle">New visit</h2><div class="bar-btns"><button class="primary sm" type="submit">Save</button><button class="ghost" type="button" id="closeBtn">Close</button></div></div>
 
     <div class="grid3">
       <label class="f">Date<input type="date" id="fDate" required></label>
-      <label class="f">Started<input type="time" id="fStart" step="900"></label>
-      <label class="f">Ended<input type="time" id="fEnd" step="900"></label>
+      <label class="f">Started<input type="time" id="fStart"></label>
+      <label class="f">Ended<input type="time" id="fEnd"></label>
     </div>
 
     <div class="field">
@@ -494,6 +496,12 @@ const toTime=s=>s?s.replace(".",":"):"";
 const fromTime=s=>s?s.replace(":","."):"";
 const modeNo=m=>(m||"").split(" ")[0];
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2200)}
+
+// A field the browser won't accept blocks the form silently on some phones (Firefox on Android shows no
+// bubble): name it in a toast and bring it into view.
+document.addEventListener("invalid",e=>{const el=e.target;if(Date.now()-(toast._inv||0)<400)return;toast._inv=Date.now();
+  const lab=el.closest("label"),name=lab&&lab.firstChild&&lab.firstChild.nodeType===3?lab.firstChild.textContent.trim():"A field";
+  toast(`${name}: ${el.validationMessage||"check this field"}`);try{el.scrollIntoView({block:"center"});el.focus({preventScroll:true})}catch(_){}},true);
 function sortSessions(a){return a.sort((x,y)=>y.date.localeCompare(x.date)||String(y.klo||"").localeCompare(String(x.klo||"")))}
 function recent(field,n){const out=[];for(const s of S.sessions){const v=s[field];if(v&&!out.includes(v))out.push(v);if(out.length>=n)break}return out}
 function distinct(get){const c=new Map();S.sessions.forEach(s=>get(s).forEach(v=>{if(v)c.set(v,(c.get(v)||0)+1)}));return[...c.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0])}
@@ -724,7 +732,7 @@ $("form").addEventListener("click",e=>{
   else if(b.dataset.step){const box=b.closest(".line"),i=+box.dataset.i,l=f.lines[i];l.rounds=Math.max(0,(+l.rounds||0)+(+b.dataset.step));box.querySelector('input[data-k="rounds"]').value=l.rounds;updTotal();saveDraft()}
 });
 $("form").addEventListener("submit",async e=>{
-  e.preventDefault();const f=S.form;const msg=m=>{$("fMsg").textContent=m;$("fMsg").hidden=false};
+  e.preventDefault();const f=S.form;const msg=m=>{$("fMsg").textContent=m;$("fMsg").hidden=false;toast(m)};   // toast too: the top Save is far from the message
   if(!f.date)return msg("Enter a date.");
   if(!f.place.trim())return msg("Enter a place.");
   const lines=f.lines.map(l=>{const o={mode:mFi(l.mode),type:l.type||"",cal:(l.cal||"").trim(),rounds:+l.rounds||0,info:(l.info||"").trim()};
@@ -734,10 +742,10 @@ $("form").addEventListener("submit",async e=>{
   const now=new Date().toISOString();
   const old=S.editId&&S.sessions.find(x=>x.id===S.editId);
   const doc={date:f.date,klo,place:f.place.trim(),org:f.org.trim(),lines,createdAt:old&&old.createdAt||now,updatedAt:now};
-  $("saveBtn").disabled=true;
+  const sb=document.querySelectorAll('#form [type=submit]');sb.forEach(b=>b.disabled=true);
   try{await S.store.saveSession(S.editId||newId(),doc);if(!S.editId)lsDel(DRAFT_KEY);S.year=f.date.slice(0,4);closeSheets();toast("Saved")}
   catch(err){msg(err&&err.code==="invalid_argument"?"You are not allowed to save to this diary.":"Saving failed ("+(err&&err.code||"error")+"). The draft is kept, try again.")}
-  finally{$("saveBtn").disabled=false}
+  finally{sb.forEach(b=>b.disabled=false)}
 });
 $("delBtn").addEventListener("click",async()=>{
   if(!S.delArm){S.delArm=true;$("delBtn").textContent="Confirm delete";return}

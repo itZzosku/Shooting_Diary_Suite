@@ -324,6 +324,12 @@ load();
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load()});
 
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2600)}
+
+// A field the browser won't accept blocks the form silently on some phones (Firefox on Android shows no
+// bubble): name it in a toast and bring it into view.
+document.addEventListener("invalid",e=>{const el=e.target;if(Date.now()-(toast._inv||0)<400)return;toast._inv=Date.now();
+  const lab=el.closest("label"),name=lab&&lab.firstChild&&lab.firstChild.nodeType===3?lab.firstChild.textContent.trim():"A field";
+  toast(`${name}: ${el.validationMessage||"check this field"}`);try{el.scrollIntoView({block:"center"});el.focus({preventScroll:true})}catch(_){}},true);
 const pwClose=()=>{$("pwSheet").hidden=true;document.body.style.overflow="";$("pwForm").reset()};
 $("pwBtn").addEventListener("click",()=>{$("pwMsg").hidden=true;$("pwSheet").hidden=false;document.body.style.overflow="hidden";$("pwCur").focus()});
 $("pwClose").addEventListener("click",pwClose);

@@ -132,6 +132,8 @@ h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform
   padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
 .sheet-in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
 .sheet-bar{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);padding-block:12px;z-index:1;border-bottom:1px solid var(--line)}
+.sheet-bar .bar-btns{display:flex;gap:8px;align-items:center}
+.sheet-bar .primary.sm{padding:9px 18px;font-size:.92rem;flex:0 0 auto}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;min-width:0}
 .field{display:flex;flex-direction:column;gap:6px}
 input[type=text],input[type=date],input[type=time],input[type=number],select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:1rem;color:var(--fg);font-weight:400;text-transform:none;letter-spacing:0;min-width:0}
@@ -241,7 +243,7 @@ header.top{padding-top:6px!important}
 <datalist id="dlFriend"></datalist><datalist id="dlEvent"></datalist><datalist id="dlPrCal"></datalist>
 <div class="sheet" id="lnSheet" hidden role="dialog" aria-modal="true" aria-labelledby="lnTitle">
   <form class="sheet-in" id="lnForm" autocomplete="off">
-    <div class="sheet-bar"><h2 id="lnTitle">Loan</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
+    <div class="sheet-bar"><h2 id="lnTitle">Loan</h2><div class="bar-btns"><button class="primary sm" type="submit">Save</button><button class="ghost" type="button" data-lnclose>Close</button></div></div>
     <p class="hint" style="margin:0">Friends shooting your guns and/or your ammo. Shots in your guns count toward each gun's round count (not toward your own shooting record or the licence export). For a friend's own gun, choose <b>Not my gun – ammo only</b> and the ammo's calibre: only the cost is counted.</p>
     <div class="grid2">
       <label class="f">Date<input type="date" id="lnDate" required></label>
@@ -387,6 +389,12 @@ const fiDate=s=>{const d=parseD(s);return d.getDate()+"/"+(d.getMonth()+1)+"/"+d
 const fmt=n=>String(n);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2200)}
+
+// A field the browser won't accept blocks the form silently on some phones (Firefox on Android shows no
+// bubble): name it in a toast and bring it into view.
+document.addEventListener("invalid",e=>{const el=e.target;if(Date.now()-(toast._inv||0)<400)return;toast._inv=Date.now();
+  const lab=el.closest("label"),name=lab&&lab.firstChild&&lab.firstChild.nodeType===3?lab.firstChild.textContent.trim():"A field";
+  toast(`${name}: ${el.validationMessage||"check this field"}`);try{el.scrollIntoView({block:"center"});el.focus({preventScroll:true})}catch(_){}},true);
 const gunsSorted=()=>S.guns.slice().sort((a,b)=>(!!a.archived-!!b.archived)||((a.order??99)-(b.order??99))||String(a.name).localeCompare(b.name));
 function closeSheets(){["lnSheet","prSheet"].forEach(id=>$(id).hidden=true);document.body.style.overflow=""}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
@@ -490,12 +498,17 @@ $("lnWho").addEventListener("click",async e=>{const b=e.target.closest("[data-sh
 });
 document.querySelectorAll("[data-lnclose]").forEach(b=>b.addEventListener("click",closeSheets));
 $("lnForm").addEventListener("submit",async e=>{e.preventDefault();
+  const msg=m=>{$("lnMsg").textContent=m;$("lnMsg").hidden=false;toast(m)};   // toast too: the top Save is far from the message
   const lines=LN.lines.filter(l=>l.who||l.gunId||+l.rounds).map(l=>({who:l.who,gunId:l.gunId||null,gun:l.gun,cal:(l.cal||"").trim(),rounds:+l.rounds||0,price:+l.price||0}));
-  if(!lines.length){$("lnMsg").textContent="Add at least one friend and what they shot.";$("lnMsg").hidden=false;return}
-  if(lines.some(l=>!l.who)){$("lnMsg").textContent="Every line needs the friend's name.";$("lnMsg").hidden=false;return}
+  if(!$("lnDate").value)return msg("Enter a date.");
+  if(!lines.length)return msg("Add at least one friend and what they shot.");
+  if(lines.some(l=>!l.who))return msg("Every line needs the friend's name.");
   const whos=new Set(lines.map(l=>l.who));
   const doc={date:$("lnDate").value,event:$("lnEvent").value.trim(),note:$("lnNote").value,lines,paid:[...LN.paid].filter(w=>whos.has(w))};
-  await S.store.saveLoan(LN.id,doc);closeSheets();toast("Saved");
+  const sb=document.querySelectorAll("#lnForm [type=submit]");sb.forEach(x=>x.disabled=true);
+  try{await S.store.saveLoan(LN.id,doc);closeSheets();toast("Saved")}
+  catch(err){msg("Saving failed ("+(err&&(err.code||err.message)||"error")+"). Try again.")}
+  finally{sb.forEach(x=>x.disabled=false)}
 });
 $("lnDel").addEventListener("click",async()=>{if(!LN.delArm){LN.delArm=true;$("lnDel").textContent="Tap again to delete";return}
   await S.store.delLoan(LN.id);closeSheets();toast("Deleted")});

@@ -420,6 +420,12 @@ function lsGet(){try{return JSON.parse(localStorage.getItem(LS)||"{}")}catch(e){
 function lsSet(v){try{localStorage.setItem(LS,JSON.stringify(v))}catch(e){}}
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2600)}
 
+// A field the browser won't accept blocks the form silently on some phones (Firefox on Android shows no
+// bubble): name it in a toast and bring it into view.
+document.addEventListener("invalid",e=>{const el=e.target;if(Date.now()-(toast._inv||0)<400)return;toast._inv=Date.now();
+  const lab=el.closest("label"),name=lab&&lab.firstChild&&lab.firstChild.nodeType===3?lab.firstChild.textContent.trim():"A field";
+  toast(`${name}: ${el.validationMessage||"check this field"}`);try{el.scrollIntoView({block:"center"});el.focus({preventScroll:true})}catch(_){}},true);
+
 const S={guns:[],loads:[],days:[],gun:"",load:"",preview:null};
 const gunName=id=>(S.guns.find(g=>g.id===id)||{}).name||"No gun";
 const loadOf=id=>S.loads.find(l=>l.id===id);

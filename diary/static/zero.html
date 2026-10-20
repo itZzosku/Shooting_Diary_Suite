@@ -401,6 +401,12 @@ const LS="zero-scope";
 function lsGet(){try{return localStorage.getItem(LS)||""}catch(e){return""}}
 function lsSet(v){try{localStorage.setItem(LS,v)}catch(e){}}
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2600)}
+
+// A field the browser won't accept blocks the form silently on some phones (Firefox on Android shows no
+// bubble): name it in a toast and bring it into view.
+document.addEventListener("invalid",e=>{const el=e.target;if(Date.now()-(toast._inv||0)<400)return;toast._inv=Date.now();
+  const lab=el.closest("label"),name=lab&&lab.firstChild&&lab.firstChild.nodeType===3?lab.firstChild.textContent.trim():"A field";
+  toast(`${name}: ${el.validationMessage||"check this field"}`);try{el.scrollIntoView({block:"center"});el.focus({preventScroll:true})}catch(_){}},true);
 const ERR={offline:"Offline – not saved.",not_latest:"Only the newest change of a position can be undone.",no_change:"Dial a correction first.",
   rifle_required:"Give the rifle a name.",name_required:"Give the scope a name.",bad_elev:"Elevation looks wrong.",bad_wind:"Windage looks wrong.",
   bad_click:"Click value looks wrong.",bad_zero_stop:"Zero stop looks wrong.",bad_elev_turn:"Elevation turn looks wrong.",bad_wind_turn:"Windage turn looks wrong.",bad_date:"Date looks wrong.",empty:"The note is empty."};
