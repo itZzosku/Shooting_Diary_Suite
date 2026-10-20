@@ -248,7 +248,7 @@ header.top{padding-top:6px!important}
     </div>
 
     <div class="field">
-      <label class="f">Place<input type="text" id="fPlace" list="dlPlace" placeholder="Shooting range" required></label>
+      <label class="f">Place<input type="text" id="fPlace" list="dlPlace" placeholder="Shooting range, optional"></label>
       <div class="chips" id="placeChips"></div>
     </div>
     <div class="field">
@@ -734,11 +734,10 @@ $("form").addEventListener("click",e=>{
 $("form").addEventListener("submit",async e=>{
   e.preventDefault();const f=S.form;const msg=m=>{$("fMsg").textContent=m;$("fMsg").hidden=false;toast(m)};   // toast too: the top Save is far from the message
   if(!f.date)return msg("Enter a date.");
-  if(!f.place.trim())return msg("Enter a place.");
   const lines=f.lines.map(l=>{const o={mode:mFi(l.mode),type:l.type||"",cal:(l.cal||"").trim(),rounds:+l.rounds||0,info:(l.info||"").trim()};
     const g=l.gunId&&S.guns.find(x=>x.id===l.gunId);if(g){o.gunId=g.id;o.gun=g.name}else if(l.gunId){o.gunId=l.gunId;o.gun=l.gun||""}return o}).filter(l=>l.type||l.cal||l.rounds||l.info);
   if(!lines.length)return msg("Add at least one row.");
-  const klo=f.start?(fromTime(f.start)+(f.end?"-"+fromTime(f.end):"")):"";
+  const klo=f.start||f.end?fromTime(f.start)+(f.end?"-"+fromTime(f.end):""):"";     // end alone → "-18.08"
   const now=new Date().toISOString();
   const old=S.editId&&S.sessions.find(x=>x.id===S.editId);
   const doc={date:f.date,klo,place:f.place.trim(),org:f.org.trim(),lines,createdAt:old&&old.createdAt||now,updatedAt:now};
