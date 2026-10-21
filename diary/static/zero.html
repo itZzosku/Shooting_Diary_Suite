@@ -336,7 +336,10 @@ header.top{padding-top:6px!important}
     <div id="zAdjust" class="sec">
       <div class="namebox"><small>Dial position now</small><b id="zNow"></b></div>
       <h2 style="font-size:1.05rem">Adjust zero</h2>
-      <p class="hint" style="margin:0">Dial what you corrected at the range; the position moves by that much.</p>
+      <div class="chips" id="aFrom" role="radiogroup" aria-label="Clicks counted from">
+        <button type="button" class="chip" data-from="now" aria-pressed="true">From dial position now</button>
+        <button type="button" class="chip" data-from="ref" aria-pressed="false">From 0 / 0</button></div>
+      <p class="hint" style="margin:0" id="aHint">Dial what you corrected at the range; the position moves by that much.</p>
       <div class="field"><span class="lbl">Elevation</span>
         <div class="dial"><button type="button" data-de="-1">DOWN</button><div class="val"><b id="aE">0</b><small id="aEc">0 clicks</small></div><button type="button" data-de="1">UP</button></div></div>
       <div class="field"><span class="lbl">Windage</span>
@@ -738,7 +741,7 @@ function confirmTap(btn,label,fn){      // two taps instead of a browser dialog
 function openZero(zid,keepAdj){
   const s=scope(),z=zid?zOf(zid):null;
   S.zid=zid||null;
-  if(!keepAdj){S.adj={e:0,w:0};$("aDate").value=today();$("aNote").value=""}
+  if(!keepAdj){S.adj={e:0,w:0,t:false};$("aDate").value=today();$("aNote").value=""}
   $("zTitle").textContent=z?z.name:"New position";
   $("zAdjust").hidden=!z;$("zHist").hidden=!z;$("zMore").hidden=!z;
   $("zFormH").textContent=z?"Details":"New position";
@@ -764,24 +767,39 @@ function openZero(zid,keepAdj){
   if(!$("zSheet").hidden&&keepAdj)return;
   openSheet("zSheet");
 }
+/* Adjust: clicks counted from the dial position now (a correction), or from 0 / 0 (where the new zero is –
+   the app works out the move). Either way it's saved as an adjustment, so history and Undo stay the same. */
+S.adjFrom=(()=>{try{return localStorage.getItem("zero-adj-from")==="ref"?"ref":"now"}catch(e){return"now"}})();
+function adjDelta(z){   // the move in units, whichever way the clicks are counted
+  const e=S.adj.e*click(),w=S.adj.w*click();
+  return S.adjFrom==="ref"?(S.adj.t?[rnd(e-z.elev),rnd(w-z.wind)]:[0,0]):[e,w];
+}
 function showAdj(){
   const z=zOf(S.zid);if(!z)return;
-  const de=S.adj.e*click(),dw=S.adj.w*click();
-  $("aE").textContent=elevMove(de);$("aEc").textContent=clk(de);
-  $("aW").textContent=windDial(dw);$("aWc").textContent=clk(dw);
-  const ch=S.adj.e||S.adj.w;
-  $("aNew").innerHTML=ch?`<span>New position:</span> ${elevDial(rnd(z.elev+de))} / ${windDial(rnd(z.wind+dw))} <span>(was ${elevDial(z.elev)} / ${windDial(z.wind)})</span>`:"";
+  const ref=S.adjFrom==="ref",[de,dw]=adjDelta(z);
+  $("aFrom").querySelectorAll("[data-from]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.from===S.adjFrom));
+  const s=scope(),rz=(s.zeros||[]).find(x=>x.id===s.ref_zero_id);
+  $("aHint").textContent=ref?`Dial where the new zero is, counted from 0 / 0 (${rz?rz.name:"turret zero"}); the app works out the move from ${elevDial(z.elev)} / ${windDial(z.wind)}.`
+    :"Dial what you corrected at the range; the position moves by that much.";
+  if(ref){const te=S.adj.e*click(),tw=S.adj.w*click();
+    $("aE").textContent=elevDial(te);$("aEc").textContent=S.adj.t?(isZ(de)?"no change from now":clk(de)+(de>0?" up":" down")+" from now"):"from 0 / 0";
+    $("aW").textContent=windDial(tw);$("aWc").textContent=S.adj.t?(isZ(dw)?"no change from now":clk(dw)+(dw>0?" right":" left")+" from now"):"from 0 / 0"}
+  else{$("aE").textContent=elevMove(de);$("aEc").textContent=clk(de);$("aW").textContent=windDial(dw);$("aWc").textContent=clk(dw)}
+  const ch=!isZ(de)||!isZ(dw);
+  $("aNew").innerHTML=ch?`<span>New position:</span> ${elevDial(rnd(z.elev+de))} / ${windDial(rnd(z.wind+dw))} <span>(was ${elevDial(z.elev)} / ${windDial(z.wind)}${ref?` · move ${elevMove(de)} / ${windDial(dw)}`:""})</span>`:"";
   $("aSave").disabled=!ch;
 }
-document.querySelectorAll("[data-de]").forEach(b=>b.addEventListener("click",()=>{S.adj.e+=+b.dataset.de;showAdj()}));
-document.querySelectorAll("[data-dw]").forEach(b=>b.addEventListener("click",()=>{S.adj.w+=+b.dataset.dw;showAdj()}));
-$("aReset").addEventListener("click",()=>{S.adj={e:0,w:0};showAdj()});
+$("aFrom").addEventListener("click",e=>{const b=e.target.closest("[data-from]");if(!b||b.dataset.from===S.adjFrom)return;
+  S.adjFrom=b.dataset.from;try{localStorage.setItem("zero-adj-from",S.adjFrom)}catch(_){}S.adj={e:0,w:0,t:false};showAdj()});
+document.querySelectorAll("[data-de]").forEach(b=>b.addEventListener("click",()=>{S.adj.e+=+b.dataset.de;S.adj.t=true;showAdj()}));
+document.querySelectorAll("[data-dw]").forEach(b=>b.addEventListener("click",()=>{S.adj.w+=+b.dataset.dw;S.adj.t=true;showAdj()}));
+$("aReset").addEventListener("click",()=>{S.adj={e:0,w:0,t:false};showAdj()});
 $("aSave").addEventListener("click",async()=>{
   const z=zOf(S.zid);if(!z)return;
-  const de=+(S.adj.e*click()).toFixed(4),dw=+(S.adj.w*click()).toFixed(4),date=$("aDate").value||today(),note=$("aNote").value;
+  const [de0,dw0]=adjDelta(z),de=+de0.toFixed(4),dw=+dw0.toFixed(4),date=$("aDate").value||today(),note=$("aNote").value;
   let w;try{w=await write("POST",`zero/zeros/${encodeURIComponent(z.id)}/adjust`,{d_elev:de,d_wind:dw,date,note},{k:"adjust",sid:S.sid,zid:z.id,de,dw,date,note})}
   catch(e){toast(errText(e));return}
-  S.adj={e:0,w:0};$("aNote").value="";
+  S.adj={e:0,w:0,t:false};$("aNote").value="";
   if(!w.sent){toast(OFFLINE_SAVED);openZero(z.id,true);return}
   toast("Zero adjusted");await loadAll(true);
 });

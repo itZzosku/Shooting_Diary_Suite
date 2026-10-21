@@ -241,7 +241,8 @@ database is the only copy.
   caps stop — elevation one way (DOWN 2.9 → `7.1`), windage both ways to the half-turn mark
   (`1 L … 4 L, 5, 4 R … 1 R`) with a warning when a move passes that mark.
 - **Adjust**: UP/DOWN and LEFT/RIGHT by clicks for what you corrected at the range; logged with date and note.
-  *Undo* reverts the newest change of a position. Exact values can be typed under *Details* (logged as "set").
+  *From 0 / 0* instead counts the clicks from the reference (where the new zero is, e.g. 3 down / 3 left) and
+  works out the move from the current position. *Undo* reverts the newest change of a position. Exact values can be typed under *Details* (logged as "set").
 - **0 / 0 reference**: by default 0 / 0 is the turret's own zero (values are dial readings). *Make this the
   0 / 0 reference* (or *Scope info*) relabels everything so a position reads 0 / 0 — e.g. after slipping the
   caps on a new zero: *Adjust* first, slip the caps, then make it the reference. If that position is later
