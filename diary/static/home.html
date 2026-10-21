@@ -227,6 +227,7 @@ header.top{padding-top:6px!important}
     </div>
   </header>
   <div class="banner" id="offNote" hidden>Offline – showing the last summary fetched.</div>
+  <div class="banner" id="demoNote" hidden><b>Demo account</b> – sample data, shared with other visitors. Try anything, but don't type anything personal: it all resets every night. Want your own? Log out and tap <i>Ask for one</i>.</div>
 
   <nav class="tiles" aria-label="Sections">
     <a class="tile" href="log">
@@ -312,7 +313,7 @@ async function load(){
   if(!r.ok)return;
   $("who").textContent=[j.name,j.username?"signed in as "+j.username:""].filter(Boolean).join(" · ");
   $("pwUser").value=j.username||"";
-  $("accBtn").hidden=!j.is_admin;$("accBtn").textContent=j.pending?`Accounts · ${j.pending} new`:"Accounts";
+  $("accBtn").hidden=!j.is_admin;$("demoNote").hidden=!j.demo;$("pwBtn").hidden=!!j.demo;$("accBtn").textContent=j.pending?`Accounts · ${j.pending} new`:"Accounts";
   const d=j.diary,v=j.velocity,z=j.zeroes||[];
   $("nDiary").innerHTML=`<b>${d.visits}</b> <span>visits in ${d.year} ·</span> <b>${nf(d.rounds)}</b> <span>shots</span>`
     +(d.last?`<br><span>Last:</span> ${fiDate(d.last.date)}${d.last.place?" · "+esc(d.last.place):""}`:"");

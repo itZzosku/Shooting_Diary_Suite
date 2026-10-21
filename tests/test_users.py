@@ -329,3 +329,36 @@ def test_service_worker_precache_files_exist():
         assert os.path.isfile(os.path.join(here, p)), p
     fonts = {f for f in os.listdir(os.path.join(here, "fonts")) if f.endswith(".woff2")}
     assert fonts <= {p.split("/")[-1] for p in paths}          # every font is precached
+
+
+def test_demo_account(two):
+    app, o, m = two
+    from diary import demo
+    anon = app.test_client()
+    assert anon.get("/diary/demo").status_code == 404                 # no demo until demo-reset
+    assert b"Try the demo" not in anon.get("/diary/login").data
+    try:
+        print(demo.reset())
+        u = users.by_name("demo")
+        assert u["demo"] and not u["is_admin"]
+        r = anon.get("/diary/demo")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/diary/")
+        h = anon.get("/diary/api/home").get_json()
+        assert h["demo"] is True and h["diary"]["visits"] >= 1
+        assert len(anon.get("/diary/api/chrono/strings").get_json()) >= 10
+        assert len(anon.get("/diary/api/zero").get_json()[0]["zeros"]) == 3
+        assert anon.put("/diary/api/account/password", json={"current": "x", "new": "y" * 12}).status_code == 403
+        assert anon.get("/diary/api/admin/users").status_code == 403
+        assert b"Try the demo" in app.test_client().get("/diary/login").data
+        # A visitor's change is gone after the next reset, and the reset logs visitors out
+        anon.put("/diary/api/guns/g-new", json={"name": "Visitor gun"})
+        demo.reset()
+        assert anon.get("/diary/api/guns").status_code == 401
+        anon.get("/diary/demo")
+        assert "Visitor gun" not in [g["name"] for g in anon.get("/diary/api/guns").get_json()]
+        # Other accounts are untouched
+        assert "Osku Rifle" in [g["name"] for g in o.get("/diary/api/guns").get_json()]
+    finally:
+        diary.use_db(None)
+        if users.by_name("demo"):
+            users.delete("demo")

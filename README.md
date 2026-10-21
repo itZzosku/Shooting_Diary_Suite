@@ -145,6 +145,20 @@ python -m diary user-delete mikko          # account + data (final copy kept 30 
 A diary from before accounts becomes the admin account **osku** (or `DIARY_ADMIN_USER`) on first start, with
 the same password and data (`diary.db`).
 
+### Demo account
+
+A shared showcase with invented sample data (four guns, ~34 visits, velocity strings with a charge ladder,
+a scope with three positions, two loans). Anyone can open it without a password:
+**`https://<your-domain>/diary/demo`**, or *Try the demo* on the login page (shown once the demo exists).
+
+```bash
+python -m diary demo-reset    # create it / put the sample data back; also logs demo visitors out
+crontab -e                    # nightly: 30 4 * * *  cd /root/Shooting_Diary_Suite && ./venv/bin/python -m diary demo-reset
+```
+
+The demo account can't change its password (it's random and never shown) or see other accounts. Visitors
+share it, so the home page tells them not to type anything personal. To remove it: `python -m diary user-delete demo`.
+
 ### Privacy
 
 `/diary/privacy` (public, linked from the login and sign-up pages) says what is stored and who can see it.

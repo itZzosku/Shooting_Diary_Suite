@@ -73,6 +73,7 @@ a{color:var(--accent);font-weight:600}
   <button type="submit" {% if disabled %}disabled{% endif %}>Log in</button>
   <p class="note">Got an account from the admin? Leave the password empty the first time and choose one.</p>
   {% if not disabled %}<p class="note">No account? <a href="{{ url_for('diary.signup') }}">Ask for one</a></p>{% endif %}
+  {% if demo %}<p class="note">Just looking? <a href="{{ url_for('diary.demo_login') }}">Try the demo</a> – sample data, resets every night</p>{% endif %}
   <p class="note"><a href="{{ url_for('diary.privacy') }}">Privacy</a> – what is stored and who can see it</p>
 </form>
 {% endif %}

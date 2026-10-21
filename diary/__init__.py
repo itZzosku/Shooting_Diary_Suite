@@ -262,7 +262,18 @@ def login():
                 _note_fail(ip)
                 time.sleep(1)
                 error = "Wrong username or password."
-    return render_template("diary_login.html", error=error, disabled=False, username=username)
+    from .demo import demo_user
+    return render_template("diary_login.html", error=error, disabled=False, username=username, demo=bool(demo_user()))
+
+
+@bp.get("/demo")
+def demo_login():
+    """The shared demo account, no password: a link to give people to try the app (python -m diary demo-reset)."""
+    from .demo import demo_user
+    u = demo_user()
+    if not u:
+        abort(404)
+    return _logged_in(u)
 
 
 @bp.get("/privacy")
@@ -548,6 +559,8 @@ def put_password():
     from . import users
     body = _json_body()
     u = current_user()
+    if u.get("demo"):
+        return jsonify(error="demo"), 403
     if not users.verify(u["username"], str(body.get("current", ""))):
         time.sleep(1)
         return jsonify(error="wrong_password"), 403

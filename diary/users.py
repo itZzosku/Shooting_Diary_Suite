@@ -51,6 +51,8 @@ def uconnect():
         conn.execute("ALTER TABLE users ADD COLUMN setup_until TEXT")   # empty-password first login allowed until
     if "pending" not in {r[1] for r in conn.execute("PRAGMA table_info(users)")}:
         conn.execute("ALTER TABLE users ADD COLUMN pending INTEGER NOT NULL DEFAULT 0")   # sign-up waiting for an admin
+    if "demo" not in {r[1] for r in conn.execute("PRAGMA table_info(users)")}:
+        conn.execute("ALTER TABLE users ADD COLUMN demo INTEGER NOT NULL DEFAULT 0")      # the shared showcase (demo.py)
     return conn
 
 

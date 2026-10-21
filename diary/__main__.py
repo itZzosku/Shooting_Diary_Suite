@@ -470,6 +470,7 @@ def main():
     ua.add_argument("--password", action="store_true", help="set the password now instead of on first login")
     sub.add_parser("user-list")
     sub.add_parser("user-delete").add_argument("name")
+    sub.add_parser("demo-reset", help="(re)create the shared demo account /diary/demo with sample data")
     for cmd in ("user-passwd", "user-disable", "user-enable"):
         sub.add_parser(cmd).add_argument("name")
     sub.choices["user-passwd"].add_argument("--clear", action="store_true",
@@ -522,6 +523,9 @@ def main():
         if not name:
             sys.exit("No accounts yet. Create one: python -m diary user-add NAME --admin")
         return user_passwd(name, getattr(a, "clear", False))
+    if a.cmd == "demo-reset":
+        from .demo import reset
+        return print(reset())
     if a.cmd == "user-delete":
         try:
             if input(f"Delete {a.name} and all their data? A final copy is kept. Type the username: ").strip() != a.name:
