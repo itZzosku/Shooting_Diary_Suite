@@ -165,7 +165,7 @@ saves until the server is reachable again. Logging out clears the cached data. A
   sheet; a field the browser refuses is named in a message.
 - **Signature (optional)**: someone (e.g. the range officer) can sign a visit – a name and a signature drawn
   with a finger at the bottom of the sheet. It's stored with the visit (a small PNG), the list marks the visit
-  *signed*, and the export gets a *Kuittaus* / *Signed by* column (name + signature in the PDF, name in the CSV)
+  *signed*, and the export gets a *Kuittaus* / *Signed by* column (name, signature and a small "allekirjoitettu 21.10.2026 21.02 EEST" timestamp in the PDF; name and time in the CSV)
   when any visit in the range is signed.
 - **Guns**: name, type, calibre, firing mode, shots before the diary, acquired date. The list shows each gun's
   round count, including shots of friends it was loaned to.

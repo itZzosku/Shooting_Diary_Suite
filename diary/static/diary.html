@@ -872,10 +872,15 @@ $("pForm").addEventListener("submit",async e=>{e.preventDefault();
 const XL={
   fi:{title:"Ampumapäiväkirja",name:"Nimi:",sra:"SRA Lisenssi:",ipsc:"IPSC Lisenssi:",hunter:"Metsästäjänumero:",days:"Harrastuskerrat:",
       types:"Asetyypit:",total:"Yhteenlasketut laukaukset:",page:"Sivu",y2:" – 2 vuotta",file:"ampumapaivakirja",all:"kaikki",y2slug:"2v",
-      cols:["Päivämäärä","klo","Paikka","Järjestäjä","Toimintatapa","Tyyppi","Kaliiperi","Laukaukset","Lisätietoja"],sigcol:"Kuittaus",type:t=>t,mode:m=>m},
+      cols:["Päivämäärä","klo","Paikka","Järjestäjä","Toimintatapa","Tyyppi","Kaliiperi","Laukaukset","Lisätietoja"],sigcol:"Kuittaus",signed:"allekirjoitettu",type:t=>t,mode:m=>m},
   en:{title:"Shooting diary",name:"Name:",sra:"SRA licence:",ipsc:"IPSC licence:",hunter:"Hunter number:",days:"Shooting days:",
       types:"Firearm types:",total:"Total shots:",page:"Page",y2:" – 2 years",file:"shooting-diary",all:"all",y2slug:"2y",
-      cols:["Date","Time","Place","Organiser","Firing mode","Type","Calibre","Shots","Notes"],sigcol:"Signed by",type:tEn,mode:mEn}};
+      cols:["Date","Time","Place","Organiser","Firing mode","Type","Calibre","Shots","Notes"],sigcol:"Signed by",signed:"signed",type:tEn,mode:mEn}};
+// When a visit was signed, in this device's time zone: "21.10.2026 21.02 EEST" (fi) / "21/10/2026 21:02 EEST" (en)
+function signedAt(at,lang){const d=new Date(at);if(!at||isNaN(d))return"";
+  let tz="";try{tz=(new Intl.DateTimeFormat("en-GB",{timeZoneName:"short"}).formatToParts(d).find(x=>x.type==="timeZoneName")||{}).value||""}catch(_){}
+  const t=pad(d.getHours())+(lang==="fi"?".":":")+pad(d.getMinutes()),day=lang==="fi"?`${d.getDate()}.${d.getMonth()+1}.${d.getFullYear()}`:fiDate(d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()));
+  return`${day} ${t}${tz?" "+tz:""}`}
 const XPREF="ampumapk-export";
 const X=Object.assign({fmt:"pdf",lang:"fi"},lsGet(XPREF)||{});
 function xRender(){
@@ -895,7 +900,7 @@ function exportCsv(R,L){
     [L.types].concat(TYPES.filter(t=>tc[t]).map(t=>L.type(t)+": "+tc[t])),[]];
   const signed=list.some(s=>s.sign);rows.push(signed?L.cols.concat([L.sigcol]):L.cols);   // signer's name only when someone signed
   list.forEach(s=>{const ls=exportLines(s);(ls.length?ls:[{}]).forEach((l,i)=>rows.push([fiDate(s.date),s.klo,s.place,s.org,L.mode(l.mode),L.type(l.type),l.cal,l.rounds||"",l.info]
-    .concat(signed?[i===0&&s.sign?(s.sign.name||(s.sign.img?"✓":"")):""]:[])))});
+    .concat(signed?[i===0&&s.sign?[s.sign.name||(s.sign.img?"✓":""),s.sign.img&&s.sign.at?`(${L.signed} ${signedAt(s.sign.at,X.lang)})`:""].filter(Boolean).join(" "):""]:[])))});
   const csv="\ufeff"+rows.map(r=>r.map(q).join(";")).join("\r\n");
   saveFile(L.file+"-"+R.slug+".csv",csv,"text/csv;charset=utf-8");
 }
@@ -971,14 +976,18 @@ $("xForm").addEventListener("submit",async e=>{e.preventDefault();
     const body=[];list.forEach(s=>{const ls=exportLines(s),n=Math.max(1,ls.length);(ls.length?ls:[{}]).forEach((l,i)=>{
       const row=[fiDate(s.date),s.klo||"",s.place||"",s.org||"",L.mode(l.mode||""),L.type(l.type||""),l.cal||"",l.rounds?String(l.rounds):"",l.info||""];
       if(signed&&i===0)row.push({content:s.sign?s.sign.name||"":"",rowSpan:n,img:s.sign&&s.sign.img||null,
-        styles:s.sign&&s.sign.img?{minCellHeight:34,valign:"top"}:{}});
+        when:s.sign&&s.sign.img&&s.sign.at?L.signed+" "+signedAt(s.sign.at,X.lang):"",
+        styles:s.sign&&s.sign.img?{minCellHeight:42,valign:"top"}:{}});
       body.push(row)})});
     doc.autoTable({startY,margin:{left:M,right:M,bottom:40},theme:"grid",rowPageBreak:"avoid",
       head:[signed?L.cols.concat([L.sigcol]):L.cols],body,
       didDrawCell:d=>{const im=d.section==="body"&&d.cell.raw&&d.cell.raw.img;if(!im)return;
-        try{const pr=doc.getImageProperties(im),top=d.cell.raw.content?9:2,bw=d.cell.width-4,bh=d.cell.height-top-2;
-          const k=Math.min(bw/pr.width,bh/pr.height),w=pr.width*k,h=pr.height*k;
-          doc.addImage(im,"PNG",d.cell.x+2+(bw-w)/2,d.cell.y+top+(bh-h)/2,w,h)}catch(_){}},
+        try{const when=d.cell.raw.when,pr=doc.getImageProperties(im),top=d.cell.raw.content?9:2,bot=when?8:2;
+          const bw=d.cell.width-4,bh=d.cell.height-top-bot,k=Math.min(bw/pr.width,bh/pr.height),w=pr.width*k,h=pr.height*k;
+          doc.addImage(im,"PNG",d.cell.x+2+(bw-w)/2,d.cell.y+top+(bh-h)/2,w,h);
+          if(when){doc.setFont("helvetica","normal");let fs=4.8;doc.setFontSize(fs);                  // small timestamp under it, on one line
+            while(fs>3.4&&doc.getTextWidth(when)>d.cell.width-4){fs-=.2;doc.setFontSize(fs)}
+            doc.setTextColor(120);doc.text(when,d.cell.x+2,d.cell.y+d.cell.height-2.5);doc.setTextColor(20)}}catch(_){}},
       styles:{font:"helvetica",fontSize:6.5,cellPadding:2,lineColor:[180,180,180],lineWidth:.4,textColor:20,overflow:"linebreak"},
       headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
       columnStyles:{0:{cellWidth:44},1:{cellWidth:46},7:{halign:"right",cellWidth:40},9:{cellWidth:72}},
