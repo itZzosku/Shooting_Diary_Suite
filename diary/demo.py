@@ -5,10 +5,14 @@ app's own API, so it always matches what the app accepts. Run it nightly from cr
 anything in between. The account can't change its password, and the password itself is random and never
 shown (a reset also logs every demo visitor out).
 """
+import base64
 import datetime as dt
+import math
 import os
 import random
 import secrets
+import struct
+import zlib
 
 DEMO_USER = "demo"
 H = {"X-Requested-With": "fetch"}
@@ -53,6 +57,53 @@ def reset(today=None):
     return build(client, today or dt.date.today())
 
 
+def _png(w, h, alpha):
+    """Black RGBA PNG from an alpha map (bytearray w*h) – no imaging library needed on the server."""
+    raw = b"".join(b"\x00" + b"".join(b"\x11\x11\x11" + bytes((alpha[y * w + x],)) for x in range(w)) for y in range(h))
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+def signature(seed, w=420, h=120):
+    """An invented scribble that looks like a handwritten signature, as a PNG data URL."""
+    r = random.Random(seed)
+    a = bytearray(w * h)
+    pen = 2.0
+
+    def dot(cx, cy):
+        for y in range(max(0, int(cy - pen - 1)), min(h, int(cy + pen + 2))):
+            for x in range(max(0, int(cx - pen - 1)), min(w, int(cx + pen + 2))):
+                cover = max(0.0, min(1.0, pen + 0.5 - math.hypot(x - cx, y - cy)))
+                if cover:
+                    a[y * w + x] = max(a[y * w + x], int(cover * 255))
+
+    def stroke(pts):
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            n = max(1, int(math.hypot(x1 - x0, y1 - y0) / 0.7))
+            for i in range(n + 1):
+                dot(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n)
+
+    # Name: loops along a slanted baseline (x runs back on itself where the loop amplitude beats the slope)
+    loops, f, amp, x_end = r.randint(5, 9), r.uniform(0.8, 1.3), r.uniform(14, 24), r.uniform(0.62, 0.8) * w
+    pts = []
+    for i in range(500):
+        t = i / 499
+        ph = t * loops * 2 * math.pi
+        x = 30 + t * (x_end - 30) + amp * 0.55 * math.sin(ph * f + 1.2)
+        y = h * 0.52 - amp * math.cos(ph) * (1.25 - 0.6 * t) - 10 * t + 5 * math.sin(ph * 0.37)
+        pts.append((x, y))
+    stroke(pts)
+    # Capital-like first stroke and a flourish underneath
+    stroke([(42 + 18 * math.sin(i / 20 * math.pi), h * 0.18 + i * (h * 0.55 / 20)) for i in range(21)])
+    sx, ex = r.uniform(0.15, 0.3) * w, r.uniform(0.82, 0.95) * w
+    stroke([(sx + (ex - sx) * i / 60, h * 0.83 - 9 * math.sin(i / 60 * math.pi) + 3 * math.sin(i / 7)) for i in range(61)])
+    return "data:image/png;base64," + base64.b64encode(_png(w, h, a)).decode()
+
+
+SIGNERS = ["Jari Esimerkki", "Laura Testinen", "Mikko Malli"]
+
+
 def _ok(r):
     if r.status_code >= 400:
         raise SystemExit(f"Demo data refused: {r.status_code} {r.get_data(as_text=True)[:200]}")
@@ -80,6 +131,7 @@ def build(c, today):
     places = [("Demo Range North", "Demo Shooting Club"), ("Demo Range South", "Demo Reservists"),
               ("Demo Indoor Range", "Demo Shooting Club")]
     n_visits = 0
+    sigs = {name: signature(name) for name in SIGNERS}
     for k in range(34):
         ago = 600 - k * 17 - rnd.randint(0, 8)
         if ago < 2:
@@ -92,8 +144,12 @@ def build(c, today):
                   "mode": gmap[g]["mode"], "rounds": rnd.choice([20, 30, 40, 50, 60, 100] if g in ("g-cz", "g-g17") else [10, 15, 20, 25, 30]),
                   "info": rnd.choice(["", "", "SRA", "PRS training"]) if g in ("g-t3x", "g-ar") else ""} for g in picks]
         h = rnd.choice([9, 10, 13, 17, 18])
-        put(f"sessions/s-demo-{k:02d}", {"date": day(ago), "klo": f"{h}.00-{h + 2}.00", "place": place, "org": org,
-                                         "lines": lines, "createdAt": day(ago) + "T12:00:00Z", "updatedAt": day(ago) + "T12:00:00Z"})
+        doc = {"date": day(ago), "klo": f"{h}.00-{h + 2}.00", "place": place, "org": org,
+               "lines": lines, "createdAt": day(ago) + "T12:00:00Z", "updatedAt": day(ago) + "T12:00:00Z"}
+        if org == "Demo Shooting Club" and k % 2 == 0:          # the range officer signed some club visits
+            who = SIGNERS[k % len(SIGNERS)]
+            doc["sign"] = {"name": who, "img": sigs[who], "at": f"{day(ago)}T{h - 1:02d}:05:00Z"}   # just after the visit ends (Finnish time)
+        put(f"sessions/s-demo-{k:02d}", doc)
         n_visits += 1
 
     # Velocities: a charge ladder, the chosen charge across seasons (temperature effect), .22 LR and .223
