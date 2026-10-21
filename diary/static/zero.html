@@ -741,7 +741,7 @@ function confirmTap(btn,label,fn){      // two taps instead of a browser dialog
 function openZero(zid,keepAdj){
   const s=scope(),z=zid?zOf(zid):null;
   S.zid=zid||null;
-  if(!keepAdj){S.adj={e:0,w:0,t:false};$("aDate").value=today();$("aNote").value=""}
+  if(!keepAdj){S.adj={e:0,w:0,t:false};S.adjFrom="now";$("aDate").value=today();$("aNote").value=""}
   $("zTitle").textContent=z?z.name:"New position";
   $("zAdjust").hidden=!z;$("zHist").hidden=!z;$("zMore").hidden=!z;
   $("zFormH").textContent=z?"Details":"New position";
@@ -769,7 +769,7 @@ function openZero(zid,keepAdj){
 }
 /* Adjust: clicks counted from the dial position now (a correction), or from 0 / 0 (where the new zero is –
    the app works out the move). Either way it's saved as an adjustment, so history and Undo stay the same. */
-S.adjFrom=(()=>{try{return localStorage.getItem("zero-adj-from")==="ref"?"ref":"now"}catch(e){return"now"}})();
+S.adjFrom="now";        // every position opens counting from the dial position now
 function adjDelta(z){   // the move in units, whichever way the clicks are counted
   const e=S.adj.e*click(),w=S.adj.w*click();
   return S.adjFrom==="ref"?(S.adj.t?[rnd(e-z.elev),rnd(w-z.wind)]:[0,0]):[e,w];
@@ -790,7 +790,7 @@ function showAdj(){
   $("aSave").disabled=!ch;
 }
 $("aFrom").addEventListener("click",e=>{const b=e.target.closest("[data-from]");if(!b||b.dataset.from===S.adjFrom)return;
-  S.adjFrom=b.dataset.from;try{localStorage.setItem("zero-adj-from",S.adjFrom)}catch(_){}S.adj={e:0,w:0,t:false};showAdj()});
+  S.adjFrom=b.dataset.from;S.adj={e:0,w:0,t:false};showAdj()});
 document.querySelectorAll("[data-de]").forEach(b=>b.addEventListener("click",()=>{S.adj.e+=+b.dataset.de;S.adj.t=true;showAdj()}));
 document.querySelectorAll("[data-dw]").forEach(b=>b.addEventListener("click",()=>{S.adj.w+=+b.dataset.dw;S.adj.t=true;showAdj()}));
 $("aReset").addEventListener("click",()=>{S.adj={e:0,w:0,t:false};showAdj()});
