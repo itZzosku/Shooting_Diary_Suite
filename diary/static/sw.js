@@ -1,16 +1,49 @@
 /* Shooting diary service worker.
    - The page itself: network first, last good copy when offline (so the app opens at the range).
    - API reads: network first, last answer when offline, marked with X-Offline so the page can say so.
-   - Icons, manifest, fonts and the PDF library: cache first.
+   - Icons, manifest, fonts and the PDF library: cache first; all downloaded when an update installs.
    - Logging out clears everything cached. Writes are never cached; the page queues them itself.
    - Share target: a file shared to the installed app (e.g. from ShotView) is POSTed to chrono/share;
      it is kept in the SHARE cache and the velocity page (/velocity) opens and imports it. */
-const VERSION = "v33";
+const VERSION = "v34";
 const PAGE = "diary-page-" + VERSION, DATA = "diary-data", ASSETS = "diary-assets-" + VERSION, SHARE = "diary-share";
 const BASE = new URL("./", self.registration.scope).pathname;            // "/diary/"
 const ASSET_HOSTS = [];                     // fonts and the PDF library are served from /diary/static now
 
-self.addEventListener("install", () => self.skipWaiting());
+// Downloaded once when an update installs, so the first visit to each page after an update doesn't wait
+// for fonts and scripts (keep in step with diary/static/; tests check every file exists).
+const PRECACHE = [
+  "static/fonts/fonts.css",
+  "static/fonts/barlow-condensed-latin-600-normal.woff2",
+  "static/fonts/barlow-condensed-latin-700-normal.woff2",
+  "static/fonts/barlow-condensed-latin-ext-600-normal.woff2",
+  "static/fonts/barlow-condensed-latin-ext-700-normal.woff2",
+  "static/fonts/ibm-plex-mono-latin-500-normal.woff2",
+  "static/fonts/ibm-plex-mono-latin-600-normal.woff2",
+  "static/fonts/ibm-plex-mono-latin-ext-500-normal.woff2",
+  "static/fonts/ibm-plex-mono-latin-ext-600-normal.woff2",
+  "static/fonts/ibm-plex-sans-latin-400-normal.woff2",
+  "static/fonts/ibm-plex-sans-latin-500-normal.woff2",
+  "static/fonts/ibm-plex-sans-latin-600-normal.woff2",
+  "static/fonts/ibm-plex-sans-latin-ext-400-normal.woff2",
+  "static/fonts/ibm-plex-sans-latin-ext-500-normal.woff2",
+  "static/fonts/ibm-plex-sans-latin-ext-600-normal.woff2",
+  "static/drafts.js",
+  "static/vendor/jspdf.umd.min.js",
+  "static/vendor/jspdf.plugin.autotable.min.js",
+  "static/icons/apple-touch-icon.png",
+  "static/icons/favicon-32.png",
+  "static/icons/icon-192.png",
+  "static/icons/icon-512.png",
+  "static/icons/icon-maskable-512.png"
+];
+self.addEventListener("install", e => e.waitUntil((async () => {
+  const cache = await caches.open(ASSETS);
+  await Promise.all(PRECACHE.map(async p => {
+    try { const res = await fetch(BASE + p, {cache: "no-cache"}); if (res.ok) await cache.put(BASE + p, res); } catch (err) { /* fetched later */ }
+  }));
+  await self.skipWaiting();
+})()));
 self.addEventListener("activate", e => e.waitUntil((async () => {
   const keep = [PAGE, DATA, ASSETS, SHARE];
   for (const k of await caches.keys()) if (k.startsWith("diary-") && !keep.includes(k)) await caches.delete(k);

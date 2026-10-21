@@ -316,3 +316,16 @@ def test_visit_signature_is_checked(two):
                 {"img": "data:image/png;base64," + "A" * 400_000}, "nope"):
         assert o.put("/diary/api/sessions/s-sig", json=dict(base, sign=bad)).status_code == 400
     o.delete("/diary/api/sessions/s-sig", headers=H)
+
+
+def test_service_worker_precache_files_exist():
+    import re
+    here = os.path.join(os.path.dirname(diary.__file__), "static")
+    sw = open(os.path.join(here, "sw.js"), encoding="utf-8").read()
+    block = sw[sw.index("const PRECACHE"):sw.index("];", sw.index("const PRECACHE"))]
+    paths = re.findall(r'"static/([^"]+)"', block)
+    assert len(paths) > 10
+    for p in paths:
+        assert os.path.isfile(os.path.join(here, p)), p
+    fonts = {f for f in os.listdir(os.path.join(here, "fonts")) if f.endswith(".woff2")}
+    assert fonts <= {p.split("/")[-1] for p in paths}          # every font is precached
