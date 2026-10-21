@@ -153,6 +153,7 @@ a scope with three positions, two loans). Anyone can open it without a password:
 
 ```bash
 python -m diary demo-reset    # create it / put the sample data back; also logs demo visitors out
+                              # (update.sh also does this after every update; DEMO_RESET=0 skips it)
 crontab -e                    # nightly: 30 4 * * *  cd /root/Shooting_Diary_Suite && ./venv/bin/python -m diary demo-reset
 ```
 

@@ -7,7 +7,7 @@
 #
 # Steps: refuse if there are local edits → snapshot diary.db → git pull → pip install if requirements.txt
 # changed → compile + tests (pytest, if installed in the venv) → on failure roll back to the old commit and
-# keep the old version running → restart → check the site answers.
+# keep the old version running → restart → check the site answers → reset the demo account if there is one.
 #
 # Restart: set RESTART_CMD (e.g. in the environment or below), or SERVICE for a systemd unit.
 #   RESTART_CMD="systemctl restart shooting-diary.service" ./scripts/update.sh
@@ -129,4 +129,10 @@ fi
 
 # 5. Restart
 restart
+
+# 6. Demo account (if there is one): fresh sample data made by the new code. Skip with DEMO_RESET=0.
+if [ "${DEMO_RESET:-1}" != "0" ] && "$PYTHON" -c "from diary.demo import demo_user; import sys; sys.exit(0 if demo_user() else 1)" 2>/dev/null; then
+  say "Resetting the demo account"
+  "$PYTHON" -m diary demo-reset || echo "  (demo reset failed – the site itself is updated; run: $PYTHON -m diary demo-reset)"
+fi
 say "Updated to $(git log -1 --format='%h %s')"
