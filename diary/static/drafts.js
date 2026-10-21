@@ -110,8 +110,12 @@
   const open = () => [...document.querySelectorAll(SEL)].filter(e => !e.hidden);
   const z = e => parseInt(getComputedStyle(e).zIndex, 10) || 0;
   let depth = 0, skip = 0;
-  // Reloaded while a sheet was open: we're on one of our own history entries – step back to the page's own
-  if (history.state && history.state.sheet) { skip++; history.go(-history.state.sheet); }
+  // Opened on one of our own sheet entries (reload, or Back from another page while a form was open): just
+  // unmark it. Stepping back from here would leave the document and could bring back a frozen copy of the
+  // page (the browser's back/forward cache) stuck at "Loading…".
+  const unmark = () => { if (history.state && history.state.sheet) { try { history.replaceState(null, ""); } catch (e) { /* ignore */ } } };
+  unmark();
+  window.addEventListener("pageshow", e => { if (e.persisted) { depth = 0; skip = 0; unmark(); } });
   function sync() {
     const n = open().length;
     if (n > depth) { while (depth < n) { history.pushState({ sheet: ++depth }, ""); } }
