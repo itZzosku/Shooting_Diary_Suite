@@ -158,6 +158,12 @@ to Home Screen**. It opens full-screen, starts without a connection using the la
 saves until the server is reachable again. Logging out clears the cached data. After changing anything in
 `diary/static/`, bump `VERSION` in `sw.js` so phones drop the old cache.
 
+**Drafts and Back** (`diary/static/drafts.js`, on every page): whatever is typed into a form – a visit, gun,
+your details, a load, a loan, a zero position, scope info, notes – is kept on the phone until it's saved.
+Closing the sheet, pressing Back or the browser dropping the page loses nothing: opening the same record again
+brings the unsaved values back with a *Discard* button. Drafts are per account and record and go after 14 days.
+The phone's Back button closes the open sheet instead of leaving the page.
+
 ## Diary (`/diary/log`)
 
 - **Visits**: *+ New visit* – only the date is required; place, organiser, start/end time are optional. A row per

@@ -265,7 +265,7 @@ header.top{padding-top:6px!important}
 <div class="sigfull" id="sigFull" hidden role="dialog" aria-modal="true" aria-label="Sign">
   <canvas id="sfCanvas"></canvas>
   <div class="sf-ui" id="sfUi"><span class="sf-title">Sign here</span><span class="sf-x">×</span><span class="sf-line"></span><span class="sf-name" id="sfName"></span>
-    <div class="sf-btns"><button type="button" id="sfClear">Clear</button><button type="button" id="sfCancel">Cancel</button><button type="button" class="done" id="sfDone">Done</button></div></div>
+    <div class="sf-btns"><button type="button" id="sfClear">Clear</button><button type="button" id="sfCancel">Cancel</button><button type="button" class="done" id="sfDone" data-back>Done</button></div></div>
 </div>
 <datalist id="dlPlace"></datalist><datalist id="dlOrg"></datalist><datalist id="dlCal"></datalist><datalist id="dlMode"></datalist><datalist id="dlInfo"></datalist>
 
@@ -381,6 +381,7 @@ header.top{padding-top:6px!important}
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="static/drafts.js"></script>
 <script>
 (function(){
 // Firearm types as listed in the Ampuma-aselaki (6 §)
@@ -682,16 +683,19 @@ function openForm(id){
     const [a,b]=(s.klo||"").split("-");
     S.form={date:s.date,start:toTime(a),end:toTime(b),place:s.place||"",org:s.org||"",lines:(s.lines||[]).map(l=>Object.assign({},l)),
       sign:s.sign?Object.assign({},s.sign):null};
-  }else{
-    const d=lsGet(DRAFT_KEY);
-    S.form=d&&d.date?d:{date:todayStr(),start:nowTime(),end:"",place:"",org:"",lines:[]};
-  }
+  }else S.form={date:todayStr(),start:nowTime(),end:"",place:"",org:"",lines:[]};
+  // Unsaved changes of this visit (or of a new one) come back; the old single new-visit draft too
+  S.formBase=JSON.stringify(S.form);
+  const dr=Draft.get("visit",id)||(!id&&lsGet(DRAFT_KEY)),drT=Draft.getT("visit",id)||Date.now();
+  const restored=!!(dr&&dr.date&&JSON.stringify(dr)!==S.formBase);if(restored)S.form=dr;
   $("sheetTitle").textContent=id?"Edit visit":"New visit";
   $("delBtn").hidden=!id;$("delBtn").textContent="Delete";$("fMsg").hidden=true;
   const f=S.form;$("fDate").value=f.date;$("fStart").value=f.start;$("fEnd").value=f.end;$("fPlace").value=f.place;$("fOrg").value=f.org;
   renderChips();renderLines();
   $("sheet").hidden=false;document.body.style.overflow="hidden";
   sigLoad();
+  const dn=$("form").querySelector(".draftnote");if(dn)dn.hidden=true;
+  if(restored)Draft.note($("form"),drT,()=>{Draft.clear("visit",id);lsDel(DRAFT_KEY);openForm(id)});
 }
 function closeSheets(){["gSheet","sheet","pSheet","xSheet","sigFull"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null}
 function presets(){
@@ -735,7 +739,10 @@ function renderLines(){
   updTotal();
 }
 function updTotal(){const t=S.form.lines.reduce((a,l)=>a+(+l.rounds||0),0);$("fTotal").textContent=t?("In total "+fmt(t)+" shots"):""}
-let dT;function saveDraft(){if(S.editId)return;clearTimeout(dT);dT=setTimeout(()=>lsSet(DRAFT_KEY,S.form),300)}
+// Every change is kept on the phone until the visit is saved (new visits and edits alike)
+let dT;function saveDraft(){const id=S.editId,f=S.form;clearTimeout(dT);dT=setTimeout(()=>{
+  if(JSON.stringify(f)===S.formBase)Draft.clear("visit",id);else Draft.set("visit",id,f);lsDel(DRAFT_KEY)},300)}
+function dropDraft(id){clearTimeout(dT);Draft.clear("visit",id);lsDel(DRAFT_KEY)}
 
 $("form").addEventListener("input",e=>{
   const f=S.form,t=e.target;
@@ -821,7 +828,7 @@ function sigTrim(c,pad){   // canvas → PNG trimmed to the strokes, at most 600
     S.form.sign=Object.assign({name:$("fSignName").value},S.form.sign||{},{img:sigExport(),at:new Date().toISOString()});
     sigInfo();saveDraft()};
   c.addEventListener("pointerup",end);c.addEventListener("pointercancel",end);
-  $("fSignName").addEventListener("input",()=>{S.form.sign=Object.assign(S.form.sign||{img:null,at:null},{name:$("fSignName").value});sigInfo()});
+  $("fSignName").addEventListener("input",()=>{S.form.sign=Object.assign(S.form.sign||{img:null,at:null},{name:$("fSignName").value});sigInfo();saveDraft()});
   $("sigClear").addEventListener("click",()=>{if(S.form.sign){S.form.sign.img=null;S.form.sign.at=null}sigPaint();sigInfo();saveDraft()});
   $("sigBox").addEventListener("toggle",()=>{if($("sigBox").open)requestAnimationFrame(sigSize)});
   window.addEventListener("resize",()=>{if(!$("sheet").hidden&&$("sigBox").open)sigSize()});
@@ -887,13 +894,13 @@ $("form").addEventListener("submit",async e=>{
   const doc={date:f.date,klo,place:f.place.trim(),org:f.org.trim(),lines,createdAt:old&&old.createdAt||now,updatedAt:now};
   const sg=f.sign;if(sg&&(sg.img||(sg.name||"").trim()))doc.sign={name:(sg.name||"").trim(),img:sg.img||null,at:sg.at||now};
   const sb=document.querySelectorAll('#form [type=submit]');sb.forEach(b=>b.disabled=true);
-  try{await S.store.saveSession(S.editId||newId(),doc);if(!S.editId)lsDel(DRAFT_KEY);S.year=f.date.slice(0,4);closeSheets();toast("Saved")}
+  try{await S.store.saveSession(S.editId||newId(),doc);dropDraft(S.editId);S.year=f.date.slice(0,4);closeSheets();toast("Saved")}
   catch(err){msg(err&&err.code==="invalid_argument"?"You are not allowed to save to this diary.":"Saving failed ("+(err&&err.code||"error")+"). The draft is kept, try again.")}
   finally{sb.forEach(b=>b.disabled=false)}
 });
 $("delBtn").addEventListener("click",async()=>{
   if(!S.delArm){S.delArm=true;$("delBtn").textContent="Confirm delete";return}
-  try{await S.store.delSession(S.editId);closeSheets();toast("Deleted")}catch(e){$("fMsg").textContent="Delete failed.";$("fMsg").hidden=false}
+  try{await S.store.delSession(S.editId);dropDraft(S.editId);closeSheets();toast("Deleted")}catch(e){$("fMsg").textContent="Delete failed.";$("fMsg").hidden=false}
 });
 $("closeBtn").addEventListener("click",closeSheets);$("pClose").addEventListener("click",closeSheets);
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
@@ -910,9 +917,12 @@ function openGun(id){
   const t=g&&gunTotals()[g.id];
   $("gStats").innerHTML=t?`In the diary: <b>${fmt(t.r)}</b> shots · <b>${t.d.size}</b> visits`:"";
   $("gDel").hidden=!g||!!t;$("gDel").textContent="Delete";$("gMsg").hidden=true;
-  $("gSheet").hidden=false;document.body.style.overflow="hidden";$("gName").focus();
+  $("gSheet").hidden=false;document.body.style.overflow="hidden";
+  Draft.open($("gForm"),id||"new");$("gName").focus();
 }
 $("addGunBtn").addEventListener("click",()=>openGun(null));
+Draft.form($("gForm"),"gun",{reopen:()=>openGun(S.editGun)});
+Draft.form($("pForm"),"profile",{reopen:()=>$("profBtn").click()});
 $("guns").addEventListener("click",e=>{const b=e.target.closest("[data-gun]");if(b)openGun(b.dataset.gun)});
 $("gClose").addEventListener("click",closeSheets);
 $("gForm").addEventListener("submit",async e=>{e.preventDefault();
@@ -920,18 +930,18 @@ $("gForm").addEventListener("submit",async e=>{e.preventDefault();
   const old=S.editGun&&S.guns.find(x=>x.id===S.editGun);
   const d={name,type:$("gType").value,cal:$("gCal").value.trim(),mode:mFi($("gMode").value),
     startCount:Math.max(0,parseInt($("gStart").value)||0),acquired:$("gAcq").value||"",archived:$("gArch").checked,order:old?(old.order??99):S.guns.length+1};
-  await S.store.saveGun(S.editGun||newGunId(),d);closeSheets();toast("Gun saved");
+  await S.store.saveGun(S.editGun||newGunId(),d);Draft.done($("gForm"));closeSheets();toast("Gun saved");
 });
 $("gDel").addEventListener("click",async()=>{
   if(!S.gDelArm){S.gDelArm=true;$("gDel").textContent="Confirm delete";return}
-  await S.store.delGun(S.editGun);closeSheets();toast("Gun deleted");
+  await S.store.delGun(S.editGun);Draft.done($("gForm"));closeSheets();toast("Gun deleted");
 });
 
 /* ---------- profile ---------- */
-$("profBtn").addEventListener("click",()=>{const p=S.profile||{};$("iName").value=p.name||"";$("iSra").value=p.sra||"";$("iIpsc").value=p.ipsc||"";$("iHunt").value=p.hunterNo||"";$("pSheet").hidden=false;document.body.style.overflow="hidden"});
+$("profBtn").addEventListener("click",()=>{const p=S.profile||{};$("iName").value=p.name||"";$("iSra").value=p.sra||"";$("iIpsc").value=p.ipsc||"";$("iHunt").value=p.hunterNo||"";$("pSheet").hidden=false;document.body.style.overflow="hidden";Draft.open($("pForm"),"me")});
 $("pForm").addEventListener("submit",async e=>{e.preventDefault();
   const d={name:$("iName").value.trim(),sra:$("iSra").value.trim(),ipsc:$("iIpsc").value.trim(),hunterNo:$("iHunt").value.trim()};
-  try{await S.store.saveProfile(d);closeSheets();toast("Details saved")}catch(err){toast("Saving failed")}});
+  try{await S.store.saveProfile(d);Draft.done($("pForm"));closeSheets();toast("Details saved")}catch(err){toast("Saving failed")}});
 
 /* ---------- export: PDF or CSV, Finnish or English ---------- */
 // Finnish is the format of the official shooting-activity record; English translates labels, types and modes.

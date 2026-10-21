@@ -271,6 +271,7 @@ header.top{padding-top:6px!important}
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="static/drafts.js"></script>
 <script>
 (function(){
 // Logged-in account (cookie set at login): local storage keys are per account.
@@ -444,6 +445,7 @@ function openLoan(id){
   $("dlFriend").innerHTML=[...friends].map(v=>`<option value="${esc(v)}">`).join("");
   $("dlPrCal").innerHTML=[...new Set(Object.keys(S.prices||{}).concat(S.guns.map(g=>g.cal).filter(Boolean)))].map(v=>`<option value="${esc(v)}">`).join("");$("dlEvent").innerHTML=[...events].map(v=>`<option value="${esc(v)}">`).join("");
   renderLnLines();$("lnSheet").hidden=false;document.body.style.overflow="hidden";$("lnSheet").scrollTop=0;
+  Draft.open($("lnForm"),n?id:"new");
 }
 // Calibre: your gun → its calibre (fixed); their gun → pick from the price list / your guns' calibres, or type another
 function calChoices(){return[...new Set(Object.keys(S.prices||{}).concat(S.guns.map(g=>g.cal).filter(Boolean)))].sort((a,b)=>a.localeCompare(b,"fi",{numeric:true}))}
@@ -497,6 +499,8 @@ $("lnWho").addEventListener("click",async e=>{const b=e.target.closest("[data-sh
   try{if(navigator.share)await navigator.share({title:"Ammo cost",text});else{await navigator.clipboard.writeText(text);toast("Copied")}}catch(err){}
 });
 document.querySelectorAll("[data-lnclose]").forEach(b=>b.addEventListener("click",closeSheets));
+Draft.form($("lnForm"),"loan",{extra:()=>LN?{lines:LN.lines,paid:[...LN.paid]}:null,
+  apply:x=>{LN.lines=(x.lines||[]).map(l=>({...l}));LN.paid=new Set(x.paid||[]);renderLnLines()},reopen:()=>openLoan(LN&&!LN.isNew?LN.id:null)});
 $("lnForm").addEventListener("submit",async e=>{e.preventDefault();
   const msg=m=>{$("lnMsg").textContent=m;$("lnMsg").hidden=false;toast(m)};   // toast too: the top Save is far from the message
   const lines=LN.lines.filter(l=>l.who||l.gunId||+l.rounds).map(l=>({who:l.who,gunId:l.gunId||null,gun:l.gun,cal:(l.cal||"").trim(),rounds:+l.rounds||0,price:+l.price||0}));
@@ -506,12 +510,12 @@ $("lnForm").addEventListener("submit",async e=>{e.preventDefault();
   const whos=new Set(lines.map(l=>l.who));
   const doc={date:$("lnDate").value,event:$("lnEvent").value.trim(),note:$("lnNote").value,lines,paid:[...LN.paid].filter(w=>whos.has(w))};
   const sb=document.querySelectorAll("#lnForm [type=submit]");sb.forEach(x=>x.disabled=true);
-  try{await S.store.saveLoan(LN.id,doc);closeSheets();toast("Saved")}
+  try{await S.store.saveLoan(LN.id,doc);Draft.done($("lnForm"));closeSheets();toast("Saved")}
   catch(err){msg("Saving failed ("+(err&&(err.code||err.message)||"error")+"). Try again.")}
   finally{sb.forEach(x=>x.disabled=false)}
 });
 $("lnDel").addEventListener("click",async()=>{if(!LN.delArm){LN.delArm=true;$("lnDel").textContent="Tap again to delete";return}
-  await S.store.delLoan(LN.id);closeSheets();toast("Deleted")});
+  await S.store.delLoan(LN.id);Draft.done($("lnForm"));closeSheets();toast("Deleted")});
 
 /* ammo prices per calibre */
 function openPrices(){

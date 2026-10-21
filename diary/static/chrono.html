@@ -405,6 +405,7 @@ header.top{padding-top:6px!important}
 <datalist id="dlLCal"></datalist><datalist id="dlBMaker"></datalist><datalist id="dlBModel"></datalist><datalist id="dlBrass"></datalist>
 <datalist id="dlPowder"></datalist><datalist id="dlPrimer"></datalist><datalist id="dlFMaker"></datalist>
 
+<script src="static/drafts.js"></script>
 <script>
 (function(){
 const $=id=>document.getElementById(id);
@@ -965,13 +966,14 @@ function eKind(k){E.kind=k;$("eForm").querySelectorAll("[data-kind]").forEach(b=
 function eName(){$("eName").textContent=genName(eRead());$("eDup").hidden=true;E.force=false}
 async function editLoad(id,pre,onSave){
   fillLoadLists();
-  const l=id?loadOf(id):null;E.id=id;E.onSave=onSave||null;E.delArm=false;E.force=false;
+  const l=id?loadOf(id):null;E.id=id;E.pre=pre||null;E.onSave=onSave||null;E.delArm=false;E.force=false;
   const f=Object.assign({},l||pre||{kind:"handload"});
   $("eTitle").textContent=l?"Edit load":"New load";
   $("eForm").querySelectorAll("[data-k]").forEach(el=>{const v=f[el.dataset.k];
     if(el.type==="checkbox")el.checked=!!v;
     else el.value=v==null?"":(el.inputMode==="decimal"&&v!==""?String(v).replace(".",","):v)});
   eKind(f.kind==="factory"?"factory":"handload");
+  Draft.open($("eForm"),id||"new");
   const u=l&&l.use||{};
   $("eStats").innerHTML=l&&u.shots?`<b>${u.shots}</b> shots · <b>${u.days}</b> days${u.last?" · last "+fiDate(u.last):""}`:(l?"No velocities with this load yet.":"");
   $("eDel").hidden=!l||!!u.shots;$("eDel").textContent="Delete";$("eMsg").hidden=true;$("ePerGun").innerHTML="";
@@ -982,6 +984,8 @@ async function editLoad(id,pre,onSave){
 }
 function closeEditor(){$("eSheet").hidden=true;if(["iSheet","dSheet","lSheet"].every(x=>$(x).hidden))document.body.style.overflow=""}
 $("eClose").addEventListener("click",closeEditor);
+Draft.form($("eForm"),"load",{dataK:true,extra:()=>({kind:E.kind}),apply:x=>eKind(x.kind==="factory"?"factory":"handload"),after:eName,
+  reopen:()=>editLoad(E.id,E.pre,E.onSave)});
 $("eForm").addEventListener("click",e=>{const b=e.target.closest("[data-kind]");if(b)eKind(b.dataset.kind)});
 $("eForm").addEventListener("input",eName);
 $("eForm").addEventListener("submit",async ev=>{ev.preventDefault();
@@ -989,7 +993,7 @@ $("eForm").addEventListener("submit",async ev=>{ev.preventDefault();
   if(E.force)f.allow_duplicate=true;
   $("eSave").disabled=true;
   try{
-    const saved=await api("PUT","chrono/loads/"+encodeURIComponent(id),f);
+    const saved=await api("PUT","chrono/loads/"+encodeURIComponent(id),f);Draft.done($("eForm"));
     await loadAll();toast("Load saved");closeEditor();
     if(E.onSave)E.onSave(saved.id);else if(!$("lSheet").hidden)renderLoads();
   }catch(e){
@@ -1002,13 +1006,13 @@ $("eForm").addEventListener("submit",async ev=>{ev.preventDefault();
 });
 $("eDup").addEventListener("click",async e=>{const b=e.target.closest("button");if(!b)return;
   if(b.dataset.force!=null){E.force=true;$("eForm").requestSubmit();return}
-  if(b.dataset.use){closeEditor();await loadAll();if(E.onSave)E.onSave(b.dataset.use);return}
+  if(b.dataset.use){Draft.done($("eForm"));closeEditor();await loadAll();if(E.onSave)E.onSave(b.dataset.use);return}
   if(b.dataset.merge){try{const r=await api("POST","chrono/loads/"+encodeURIComponent(E.id)+"/merge",{into:b.dataset.merge});
-    toast(`Merged – ${r.moved} strings moved`);if(S.load===E.id)S.load=b.dataset.merge;closeEditor();await loadAll();renderLoads()}catch(err){toast("Merge failed")}}
+    Draft.done($("eForm"));toast(`Merged – ${r.moved} strings moved`);if(S.load===E.id)S.load=b.dataset.merge;closeEditor();await loadAll();renderLoads()}catch(err){toast("Merge failed")}}
 });
 $("eDel").addEventListener("click",async()=>{
   if(!E.delArm){E.delArm=true;$("eDel").textContent="Confirm delete";return}
-  try{await api("DELETE","chrono/loads/"+encodeURIComponent(E.id));toast("Load deleted");closeEditor();await loadAll();renderLoads()}catch(e){toast("Delete failed")}
+  try{await api("DELETE","chrono/loads/"+encodeURIComponent(E.id));Draft.done($("eForm"));toast("Load deleted");closeEditor();await loadAll();renderLoads()}catch(e){toast("Delete failed")}
 });
 
 // Only a width change redraws: the phone keyboard opening shrinks the height, and redrawing then would

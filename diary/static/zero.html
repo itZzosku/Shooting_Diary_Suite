@@ -389,6 +389,7 @@ header.top{padding-top:6px!important}
   </form>
 </div>
 
+<script src="static/drafts.js"></script>
 <script>
 (function(){
 const $=id=>document.getElementById(id);
@@ -676,10 +677,10 @@ $("notesView").addEventListener("change",async e=>{   // tick a to-do straight f
   try{await saveScope({notes:lines.join("\n")});toast(cb.checked?"Done":"Reopened")}catch(err){cb.checked=!cb.checked;toast(errText(err))}
 });
 $("notesEdit").addEventListener("click",()=>{const s=scope();$("notesTxt").value=s.notes||"";$("statusTxt").value=s.status||"";
-  $("notesView").hidden=true;$("notesForm").hidden=false;$("notesEdit").hidden=true;$("notesTxt").focus()});
-$("notesCancel").addEventListener("click",renderNotes);
+  $("notesView").hidden=true;$("notesForm").hidden=false;$("notesEdit").hidden=true;Draft.open($("notesForm"),S.sid);$("notesTxt").focus()});
+$("notesCancel").addEventListener("click",()=>{Draft.done($("notesForm"));renderNotes()});
 $("notesForm").addEventListener("submit",async e=>{e.preventDefault();
-  try{await saveScope({notes:$("notesTxt").value,status:$("statusTxt").value});toast("Notes saved")}catch(err){toast(errText(err))}});
+  try{await saveScope({notes:$("notesTxt").value,status:$("statusTxt").value});Draft.done($("notesForm"));toast("Notes saved")}catch(err){toast(errText(err))}});
 async function saveScope(patch){
   const s=scope();
   const body={name:s.name,unit:s.unit,click:s.click,zero_stop:s.zero_stop,elev_turn:s.elev_turn,wind_turn:s.wind_turn,notes:s.notes,status:s.status,ord:s.ord,archived:!!s.archived,...patch};
@@ -756,6 +757,7 @@ function openZero(zid,keepAdj){
     $("zLog").innerHTML=(s.log||[]).filter(e=>e.zero_id===z.id).map(e=>logLine({...e,position:""})).join("")||'<p class="hint" style="margin:0">Nothing yet.</p>';
     showAdj();
   }
+  Draft.open($("zForm"),z?z.id:"new:"+S.sid);
   if(!$("zSheet").hidden&&keepAdj)return;
   openSheet("zSheet");
 }
@@ -804,7 +806,7 @@ $("zForm").addEventListener("submit",async e=>{e.preventDefault();
     elev:el??0,wind:wi==null?0:Math.abs(wi)*(+$("fWdir").value),date:today()};
   const zid=z?z.id:"z-"+Math.random().toString(36).slice(2,10);
   let w;try{w=await write("PUT","zero/zeros/"+encodeURIComponent(zid),body,{k:"zero",sid:S.sid,zid,body,date:today()})}catch(err){$("zMsg").textContent=errText(err);$("zMsg").hidden=false;return}
-  S.zid=zid;
+  S.zid=zid;Draft.done($("zForm"));
   if(!w.sent){toast(OFFLINE_SAVED);openZero(zid,!!z);return}
   toast(z?"Saved":"Position added");await loadAll(true);if(!z)openZero(zid);
 });
@@ -837,7 +839,11 @@ function openScope(s){
   if(s)$("sRef").innerHTML=`<option value="">Turret zero (dial readings)</option>`+(s.zeros||[]).filter(z=>!z.archived)
     .map(z=>`<option value="${esc(z.id)}" ${z.id===s.ref_zero_id?"selected":""}>${esc(z.name)} (${elevDial(z.elev)} / ${windShort(z.wind)})</option>`).join("");
   $("sDelRow").hidden=!s;$("sMsg").hidden=true;$("sArch").textContent=s&&s.archived?"Restore scope":"Archive scope";openSheet("sSheet");
+  Draft.open($("sForm"),s?s.id:"new");
 }
+Draft.form($("zForm"),"position",{reopen:()=>openZero(S.zid)});
+Draft.form($("sForm"),"scope",{after:()=>turnLabels(),reopen:()=>openScope(editingScope?S.scopes.find(x=>x.id===editingScope):null)});
+Draft.form($("notesForm"),"notes",{reopen:()=>{renderNotes();$("notesEdit").click()}});
 $("scopeBtn").addEventListener("click",()=>openScope(scope()));
 $("newScopeBtn").addEventListener("click",()=>openScope(null));
 // Labels show the unit and how many clicks a turn is, so "100" (clicks) isn't typed for a 10 MRAD turn
@@ -856,7 +862,7 @@ $("sForm").addEventListener("submit",async e=>{e.preventDefault();
     if(s&&!$("sRefRow").hidden&&($("sRef").value||null)!==(s.ref_zero_id||null))
       await api("POST",`zero/scopes/${encodeURIComponent(id)}/reference`,{zero_id:$("sRef").value||null,date:today()});
   }catch(err){$("sMsg").textContent=errText(err);$("sMsg").hidden=false;return}
-  S.sid=id;closeSheets();toast("Saved");await loadAll();
+  Draft.done($("sForm"));S.sid=id;closeSheets();toast("Saved");await loadAll();
 });
 $("sArch").addEventListener("click",async()=>{
   const s=S.scopes.find(x=>x.id===editingScope);if(!s)return;
