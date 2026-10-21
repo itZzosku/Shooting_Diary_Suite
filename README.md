@@ -164,7 +164,8 @@ saves until the server is reachable again. Logging out clears the cached data. A
   gun (or *Other row*) with type, calibre, firing mode, shots and notes. Save is at the top and the bottom of the
   sheet; a field the browser refuses is named in a message.
 - **Signature (optional)**: someone (e.g. the range officer) can sign a visit – a name and a signature drawn
-  with a finger at the bottom of the sheet. It's stored with the visit (a small PNG), the list marks the visit
+  with a finger at the bottom of the sheet (open by default). The ⛶ button signs full screen: on a phone held
+  upright the page turns sideways (turn the phone left), and the signature is stored upright. It's stored with the visit (a small PNG), the list marks the visit
   *signed*, and the export gets a *Kuittaus* / *Signed by* column (name, signature and a small "allekirjoitettu 21.10.2026 21.02 EEST" timestamp in the PDF; name and time in the CSV)
   when any visit in the range is signed.
 - **Guns**: name, type, calibre, firing mode, shots before the diary, acquired date. The list shows each gun's
