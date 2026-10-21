@@ -267,7 +267,7 @@ header.top{padding-top:6px!important}
   <div class="sf-ui" id="sfUi"><span class="sf-title">Sign here</span><span class="sf-x">×</span><span class="sf-line"></span><span class="sf-name" id="sfName"></span>
     <div class="sf-btns"><button type="button" id="sfClear">Clear</button><button type="button" id="sfCancel">Cancel</button><button type="button" class="done" id="sfDone" data-back>Done</button></div></div>
 </div>
-<datalist id="dlPlace"></datalist><datalist id="dlOrg"></datalist><datalist id="dlCal"></datalist><datalist id="dlMode"></datalist><datalist id="dlInfo"></datalist>
+<datalist id="dlSigner"></datalist><datalist id="dlPlace"></datalist><datalist id="dlOrg"></datalist><datalist id="dlCal"></datalist><datalist id="dlMode"></datalist><datalist id="dlInfo"></datalist>
 
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <form class="sheet-in" id="form" autocomplete="off">
@@ -297,7 +297,7 @@ header.top{padding-top:6px!important}
 
     <details class="sig" id="sigBox">
       <summary><span class="lbl">Signature – optional</span><span class="hint" id="sigSum" style="font-size:.82rem"></span></summary>
-      <label class="f">Signed by<input type="text" id="fSignName" maxlength="80" autocomplete="off" placeholder="Name, e.g. the range officer"></label>
+      <label class="f">Signed by<input type="text" id="fSignName" maxlength="80" autocomplete="off" list="dlSigner" placeholder="Name, e.g. the range officer"></label>
       <div class="sigpad" id="sigPad"><button type="button" class="sigexp" id="sigFullBtn" aria-label="Sign full screen" title="Sign full screen (sideways)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button><span class="sigline"></span><span class="sighint" id="sigHint">Sign here with a finger</span><canvas id="sigCanvas"></canvas></div>
       <div class="sigrow"><span class="hint" id="sigWhen" style="font-size:.82rem"></span><button class="ghost" type="button" id="sigClear">Clear signature</button></div>
     </details>
@@ -667,6 +667,7 @@ function fillLists(){
   const opt=a=>a.map(v=>`<option value="${esc(v)}">`).join("");
   $("dlPlace").innerHTML=opt(distinct(s=>[s.place]));
   $("dlOrg").innerHTML=opt(distinct(s=>[s.org]));
+  $("dlSigner").innerHTML=opt(distinct(s=>[s.sign&&s.sign.name]));   // earlier signers, most frequent first
   $("dlCal").innerHTML=opt(distinct(s=>(s.lines||[]).map(l=>l.cal)));
   $("dlMode").innerHTML=opt([...new Set(MODES.concat(distinct(s=>(s.lines||[]).map(l=>l.mode))).map(mEn))]);
   $("dlInfo").innerHTML=opt(distinct(s=>(s.lines||[]).map(l=>l.info)));
