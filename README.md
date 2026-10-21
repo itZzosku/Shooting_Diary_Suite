@@ -8,6 +8,8 @@ The site is the diary: the bare domain (`/`) redirects to `/diary/`. Everything 
 except the login, sign-up and privacy pages. (Markdown files dropped into a `notes/` folder are served at
 `/notes/<name>` – a leftover from the old site, unused now.)
 
+New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the app.
+
 ## Pages
 
 | Address | What |
