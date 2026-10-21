@@ -161,6 +161,25 @@ def upsert_gun(conn, gid, body):
                  (gid, json.dumps(body, ensure_ascii=False)))
 
 
+MAX_SIGN_BYTES = 300_000      # a finger-drawn PNG is ~5–40 kB
+
+
+def clean_sign(sign):
+    """Optional signature on a visit: {name, img (PNG data URL or None), at}. None/empty → None."""
+    if sign is None:
+        return None
+    if not isinstance(sign, dict):
+        raise ValueError("bad_signature")
+    name = " ".join(str(sign.get("name") or "").split())[:80]
+    img = sign.get("img") or None
+    if img is not None and (not isinstance(img, str) or not img.startswith("data:image/png;base64,")
+                            or len(img) > MAX_SIGN_BYTES):
+        raise ValueError("bad_signature")
+    if not (name or img):
+        return None
+    return {"name": name, "img": img, "at": str(sign.get("at") or "")[:40]}
+
+
 def upsert_session(conn, sid, body):
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     conn.execute(
@@ -426,6 +445,12 @@ def put_session(sid):
         return jsonify(error="bad_date"), 400
     if not isinstance(body.get("lines", []), list):
         return jsonify(error="bad_lines"), 400
+    try:
+        sign = clean_sign(body.pop("sign", None))
+    except ValueError:
+        return jsonify(error="bad_signature"), 400
+    if sign:
+        body["sign"] = sign
     upsert_session(db(), sid, body)
     db().commit()
     return jsonify(ok=True)

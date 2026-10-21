@@ -119,6 +119,20 @@ h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform
 .sheet-bar .primary.sm{padding:9px 18px;font-size:.92rem;flex:0 0 auto}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;min-width:0}
 .field{display:flex;flex-direction:column;gap:6px}
+/* signature */
+.sig{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
+.sig>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sig>summary::-webkit-details-marker{display:none}
+.sig>summary::after{content:"▸";color:var(--muted)}
+.sig[open]>summary::after{content:"▾"}
+.sig[open]>summary{margin-bottom:10px}
+.sig .f+.sigpad,.sig .sigpad+.sigrow{margin-top:10px}
+.sigpad{position:relative;height:170px;border:1px dashed var(--line);border-radius:8px;background:#fff;touch-action:none;overflow:hidden}
+.sigpad canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.sigpad .sighint{position:absolute;left:12px;bottom:10px;color:#8a8f86;font-size:.8rem;pointer-events:none}
+.sigpad .sigline{position:absolute;left:12px;right:12px;bottom:34px;border-bottom:1px solid #d5d8d0;pointer-events:none}
+.sigrow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.signed{display:inline-block;font-size:.68rem;border:1px solid var(--accent);color:var(--accent);border-radius:4px;padding:0 5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 input[type=text],input[type=date],input[type=time],input[type=number],select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:1rem;color:var(--fg);font-weight:400;text-transform:none;letter-spacing:0;min-width:0}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.9rem}
@@ -262,6 +276,13 @@ header.top{padding-top:6px!important}
       <div id="lines" style="display:flex;flex-direction:column;gap:10px"></div>
       <div class="total" id="fTotal"></div>
     </div>
+
+    <details class="sig" id="sigBox">
+      <summary><span class="lbl">Signature – optional</span><span class="hint" id="sigSum" style="font-size:.82rem"></span></summary>
+      <label class="f">Signed by<input type="text" id="fSignName" maxlength="80" autocomplete="off" placeholder="Name, e.g. the range officer"></label>
+      <div class="sigpad" id="sigPad"><span class="sigline"></span><span class="sighint" id="sigHint">Sign here with a finger</span><canvas id="sigCanvas"></canvas></div>
+      <div class="sigrow"><span class="hint" id="sigWhen" style="font-size:.82rem"></span><button class="ghost" type="button" id="sigClear">Clear signature</button></div>
+    </details>
 
     <div class="msg" id="fMsg" hidden></div>
     <div class="actions">
@@ -618,7 +639,7 @@ function renderLog(){
     const lines=(s.lines||[]).map(l=>`<div class="e-line"><div class="what">${l.mode?`<span class="tm" title="${esc(mEn(l.mode))}">${esc(modeNo(l.mode))}</span>`:""}${l.gun?`<span class="gname">${esc(l.gun)}</span> `:(l.type?esc(tEn(l.type))+" ":"")}${l.cal?`<span>${esc(l.cal)}</span>`:""}${l.info?` <span>· ${esc(l.info)}</span>`:""}</div><div class="num">${l.rounds?fmt(+l.rounds):""}</div></div>`).join("");
     html+=`<button class="entry" type="button" data-id="${esc(s.id)}">
       <div class="day"><b>${fiDate(s.date)}</b><small>${WD[d.getDay()]}</small></div>
-      <div style="min-width:0"><div class="e-head"><span class="e-place">${esc(s.place||"No place")}</span><span class="e-meta num">${esc(s.klo||"")}</span></div>
+      <div style="min-width:0"><div class="e-head"><span class="e-place">${esc(s.place||"No place")}</span><span class="e-meta num">${esc(s.klo||"")}</span>${s.sign?`<span class="signed" title="${esc("Signed"+(s.sign.name?" by "+s.sign.name:""))}">signed</span>`:""}</div>
       ${s.org?`<div class="e-meta">${esc(s.org)}</div>`:""}<div class="e-lines">${lines}</div></div></button>`;
   });
   el.innerHTML=html||(match?"":'<div class="empty">No visits this year.</div>');
@@ -641,7 +662,8 @@ function openForm(id){
   S.editId=id||null;S.delArm=false;
   if(id){const s=S.sessions.find(x=>x.id===id);if(!s)return;
     const [a,b]=(s.klo||"").split("-");
-    S.form={date:s.date,start:toTime(a),end:toTime(b),place:s.place||"",org:s.org||"",lines:(s.lines||[]).map(l=>Object.assign({},l))};
+    S.form={date:s.date,start:toTime(a),end:toTime(b),place:s.place||"",org:s.org||"",lines:(s.lines||[]).map(l=>Object.assign({},l)),
+      sign:s.sign?Object.assign({},s.sign):null};
   }else{
     const d=lsGet(DRAFT_KEY);
     S.form=d&&d.date?d:{date:todayStr(),start:nowTime(),end:"",place:"",org:"",lines:[]};
@@ -651,6 +673,7 @@ function openForm(id){
   const f=S.form;$("fDate").value=f.date;$("fStart").value=f.start;$("fEnd").value=f.end;$("fPlace").value=f.place;$("fOrg").value=f.org;
   renderChips();renderLines();
   $("sheet").hidden=false;document.body.style.overflow="hidden";
+  sigLoad();
 }
 function closeSheets(){["gSheet","sheet","pSheet","xSheet"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null}
 function presets(){
@@ -731,6 +754,61 @@ $("form").addEventListener("click",e=>{
   else if(b.dataset.rm!==undefined){f.lines.splice(+b.dataset.rm,1);renderLines();saveDraft()}
   else if(b.dataset.step){const box=b.closest(".line"),i=+box.dataset.i,l=f.lines[i];l.rounds=Math.max(0,(+l.rounds||0)+(+b.dataset.step));box.querySelector('input[data-k="rounds"]').value=l.rounds;updTotal();saveDraft()}
 });
+/* ---------- signature (optional): a name and a finger-drawn signature, stored with the visit ---------- */
+const SIG={drawing:false,last:null};
+function sigSize(){   // backing store = displayed size × pixel ratio; repaints the stored image after a resize
+  const c=$("sigCanvas"),r=c.getBoundingClientRect();if(!r.width)return false;
+  const dpr=Math.min(3,window.devicePixelRatio||1),w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);
+  if(c.width!==w||c.height!==h){c.width=w;c.height=h;sigPaint()}
+  return true;
+}
+function sigCtx(){const c=$("sigCanvas"),x=c.getContext("2d"),dpr=c.width/(c.getBoundingClientRect().width||1);
+  x.setTransform(dpr,0,0,dpr,0,0);x.lineCap="round";x.lineJoin="round";x.strokeStyle="#111";x.fillStyle="#111";x.lineWidth=2.4;return x}
+function sigPaint(){
+  const c=$("sigCanvas"),x=c.getContext("2d");x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,c.width,c.height);
+  const img=S.form&&S.form.sign&&S.form.sign.img;
+  if(img){const im=new Image();im.onload=()=>{const k=Math.min(c.width/im.width,c.height/im.height)*0.9;
+    x.setTransform(1,0,0,1,0,0);x.drawImage(im,(c.width-im.width*k)/2,(c.height-im.height*k)/2,im.width*k,im.height*k)};im.src=img}
+  $("sigHint").hidden=!!img;
+}
+function sigInfo(){
+  const sg=S.form.sign||{};
+  $("sigSum").textContent=sg.img||(sg.name||"").trim()?"✓ "+((sg.name||"").trim()||"signed"):"";
+  $("sigWhen").textContent=sg.img&&sg.at?"Signed "+fiDate(sg.at.slice(0,10))+" "+new Date(sg.at).toTimeString().slice(0,5):"";
+  $("sigClear").hidden=!sg.img;
+}
+function sigLoad(){
+  const sg=S.form.sign||{};$("fSignName").value=sg.name||"";
+  $("sigBox").open=!!(sg.img||sg.name);sigInfo();
+  requestAnimationFrame(()=>{sigSize();sigPaint()});
+}
+function sigExport(){   // trimmed to the strokes, at most 600 px wide, PNG
+  const c=$("sigCanvas"),x=c.getContext("2d"),w=c.width,h=c.height,d=x.getImageData(0,0,w,h).data;
+  let x0=w,y0=h,x1=-1,y1=-1;
+  for(let y=0;y<h;y+=2)for(let i=0;i<w;i+=2)if(d[(y*w+i)*4+3]>8){if(i<x0)x0=i;if(i>x1)x1=i;if(y<y0)y0=y;if(y>y1)y1=y}
+  if(x1<0)return null;
+  const pad=Math.round(8*w/(c.getBoundingClientRect().width||w));
+  x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(w,x1+pad);y1=Math.min(h,y1+pad);
+  const k=Math.min(1,600/(x1-x0)),o=document.createElement("canvas");o.width=Math.max(1,Math.round((x1-x0)*k));o.height=Math.max(1,Math.round((y1-y0)*k));
+  o.getContext("2d").drawImage(c,x0,y0,x1-x0,y1-y0,0,0,o.width,o.height);
+  return o.toDataURL("image/png");
+}
+(()=>{
+  const c=$("sigCanvas"),pt=e=>{const r=c.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+  c.addEventListener("pointerdown",e=>{if(!sigSize())return;e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(_){}
+    SIG.drawing=true;SIG.last=pt(e);const x=sigCtx();x.beginPath();x.arc(SIG.last[0],SIG.last[1],1.2,0,7);x.fill();$("sigHint").hidden=true});
+  c.addEventListener("pointermove",e=>{if(!SIG.drawing)return;e.preventDefault();
+    const p=pt(e),x=sigCtx();x.beginPath();x.moveTo(SIG.last[0],SIG.last[1]);x.lineTo(p[0],p[1]);x.stroke();SIG.last=p});
+  const end=()=>{if(!SIG.drawing)return;SIG.drawing=false;
+    S.form.sign=Object.assign({name:$("fSignName").value},S.form.sign||{},{img:sigExport(),at:new Date().toISOString()});
+    sigInfo();saveDraft()};
+  c.addEventListener("pointerup",end);c.addEventListener("pointercancel",end);
+  $("fSignName").addEventListener("input",()=>{S.form.sign=Object.assign(S.form.sign||{img:null,at:null},{name:$("fSignName").value});sigInfo()});
+  $("sigClear").addEventListener("click",()=>{if(S.form.sign){S.form.sign.img=null;S.form.sign.at=null}sigPaint();sigInfo();saveDraft()});
+  $("sigBox").addEventListener("toggle",()=>{if($("sigBox").open)requestAnimationFrame(sigSize)});
+  window.addEventListener("resize",()=>{if(!$("sheet").hidden&&$("sigBox").open)sigSize()});
+})();
+
 $("form").addEventListener("submit",async e=>{
   e.preventDefault();const f=S.form;const msg=m=>{$("fMsg").textContent=m;$("fMsg").hidden=false;toast(m)};   // toast too: the top Save is far from the message
   if(!f.date)return msg("Enter a date.");
@@ -741,6 +819,7 @@ $("form").addEventListener("submit",async e=>{
   const now=new Date().toISOString();
   const old=S.editId&&S.sessions.find(x=>x.id===S.editId);
   const doc={date:f.date,klo,place:f.place.trim(),org:f.org.trim(),lines,createdAt:old&&old.createdAt||now,updatedAt:now};
+  const sg=f.sign;if(sg&&(sg.img||(sg.name||"").trim()))doc.sign={name:(sg.name||"").trim(),img:sg.img||null,at:sg.at||now};
   const sb=document.querySelectorAll('#form [type=submit]');sb.forEach(b=>b.disabled=true);
   try{await S.store.saveSession(S.editId||newId(),doc);if(!S.editId)lsDel(DRAFT_KEY);S.year=f.date.slice(0,4);closeSheets();toast("Saved")}
   catch(err){msg(err&&err.code==="invalid_argument"?"You are not allowed to save to this diary.":"Saving failed ("+(err&&err.code||"error")+"). The draft is kept, try again.")}
@@ -793,10 +872,10 @@ $("pForm").addEventListener("submit",async e=>{e.preventDefault();
 const XL={
   fi:{title:"Ampumapäiväkirja",name:"Nimi:",sra:"SRA Lisenssi:",ipsc:"IPSC Lisenssi:",hunter:"Metsästäjänumero:",days:"Harrastuskerrat:",
       types:"Asetyypit:",total:"Yhteenlasketut laukaukset:",page:"Sivu",y2:" – 2 vuotta",file:"ampumapaivakirja",all:"kaikki",y2slug:"2v",
-      cols:["Päivämäärä","klo","Paikka","Järjestäjä","Toimintatapa","Tyyppi","Kaliiperi","Laukaukset","Lisätietoja"],type:t=>t,mode:m=>m},
+      cols:["Päivämäärä","klo","Paikka","Järjestäjä","Toimintatapa","Tyyppi","Kaliiperi","Laukaukset","Lisätietoja"],sigcol:"Kuittaus",type:t=>t,mode:m=>m},
   en:{title:"Shooting diary",name:"Name:",sra:"SRA licence:",ipsc:"IPSC licence:",hunter:"Hunter number:",days:"Shooting days:",
       types:"Firearm types:",total:"Total shots:",page:"Page",y2:" – 2 years",file:"shooting-diary",all:"all",y2slug:"2y",
-      cols:["Date","Time","Place","Organiser","Firing mode","Type","Calibre","Shots","Notes"],type:tEn,mode:mEn}};
+      cols:["Date","Time","Place","Organiser","Firing mode","Type","Calibre","Shots","Notes"],sigcol:"Signed by",type:tEn,mode:mEn}};
 const XPREF="ampumapk-export";
 const X=Object.assign({fmt:"pdf",lang:"fi"},lsGet(XPREF)||{});
 function xRender(){
@@ -813,8 +892,10 @@ function exportCsv(R,L){
   const tc=typeCounts(list),tot=list.reduce((a,s)=>a+sRounds(s),0);
   const rows=[[L.name,L.sra,L.ipsc,L.hunter,L.days,L.total],
     [p.name,p.sra,p.ipsc,p.hunterNo,new Set(list.map(s=>s.date)).size,tot],
-    [L.types].concat(TYPES.filter(t=>tc[t]).map(t=>L.type(t)+": "+tc[t])),[],L.cols];
-  list.forEach(s=>{const ls=exportLines(s);(ls.length?ls:[{}]).forEach(l=>rows.push([fiDate(s.date),s.klo,s.place,s.org,L.mode(l.mode),L.type(l.type),l.cal,l.rounds||"",l.info]))});
+    [L.types].concat(TYPES.filter(t=>tc[t]).map(t=>L.type(t)+": "+tc[t])),[]];
+  const signed=list.some(s=>s.sign);rows.push(signed?L.cols.concat([L.sigcol]):L.cols);   // signer's name only when someone signed
+  list.forEach(s=>{const ls=exportLines(s);(ls.length?ls:[{}]).forEach((l,i)=>rows.push([fiDate(s.date),s.klo,s.place,s.org,L.mode(l.mode),L.type(l.type),l.cal,l.rounds||"",l.info]
+    .concat(signed?[i===0&&s.sign?(s.sign.name||(s.sign.img?"✓":"")):""]:[])))});
   const csv="\ufeff"+rows.map(r=>r.map(q).join(";")).join("\r\n");
   saveFile(L.file+"-"+R.slug+".csv",csv,"text/csv;charset=utf-8");
 }
@@ -885,12 +966,22 @@ $("xForm").addEventListener("submit",async e=>{e.preventDefault();
     TYPES.filter(t=>tc[t]).forEach((t,i)=>val(L.type(t)+": "+tc[t],cols[4],y0+12+i*11));
     lab(L.total,cols[5],y0);val(tot,cols[5],y0+12);
     const startY=y0+Math.max(48,18+Object.keys(tc).length*11);
-    const body=[];list.forEach(s=>{const ls=exportLines(s);(ls.length?ls:[{}]).forEach(l=>body.push([fiDate(s.date),s.klo||"",s.place||"",s.org||"",L.mode(l.mode||""),L.type(l.type||""),l.cal||"",l.rounds?String(l.rounds):"",l.info||""]))});
+    // Signature column only when a visit in the range is signed: the signer's name with the drawn signature below
+    const signed=list.some(s=>s.sign);
+    const body=[];list.forEach(s=>{const ls=exportLines(s),n=Math.max(1,ls.length);(ls.length?ls:[{}]).forEach((l,i)=>{
+      const row=[fiDate(s.date),s.klo||"",s.place||"",s.org||"",L.mode(l.mode||""),L.type(l.type||""),l.cal||"",l.rounds?String(l.rounds):"",l.info||""];
+      if(signed&&i===0)row.push({content:s.sign?s.sign.name||"":"",rowSpan:n,img:s.sign&&s.sign.img||null,
+        styles:s.sign&&s.sign.img?{minCellHeight:34,valign:"top"}:{}});
+      body.push(row)})});
     doc.autoTable({startY,margin:{left:M,right:M,bottom:40},theme:"grid",rowPageBreak:"avoid",
-      head:[L.cols],body,
+      head:[signed?L.cols.concat([L.sigcol]):L.cols],body,
+      didDrawCell:d=>{const im=d.section==="body"&&d.cell.raw&&d.cell.raw.img;if(!im)return;
+        try{const pr=doc.getImageProperties(im),top=d.cell.raw.content?9:2,bw=d.cell.width-4,bh=d.cell.height-top-2;
+          const k=Math.min(bw/pr.width,bh/pr.height),w=pr.width*k,h=pr.height*k;
+          doc.addImage(im,"PNG",d.cell.x+2+(bw-w)/2,d.cell.y+top+(bh-h)/2,w,h)}catch(_){}},
       styles:{font:"helvetica",fontSize:6.5,cellPadding:2,lineColor:[180,180,180],lineWidth:.4,textColor:20,overflow:"linebreak"},
       headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
-      columnStyles:{0:{cellWidth:44},1:{cellWidth:46},7:{halign:"right",cellWidth:40}},
+      columnStyles:{0:{cellWidth:44},1:{cellWidth:46},7:{halign:"right",cellWidth:40},9:{cellWidth:72}},
       didDrawPage:d=>{doc.setFontSize(7);doc.setTextColor(120);doc.text((p.name?p.name+" · ":"")+L.title,M,doc.internal.pageSize.getHeight()-20);doc.text(L.page+" "+d.pageNumber,W-M,doc.internal.pageSize.getHeight()-20,{align:"right"});doc.setTextColor(0)}});
     closeSheets();
     saveFile(L.file+"-"+R.slug+".pdf",doc.output("arraybuffer"),"application/pdf");

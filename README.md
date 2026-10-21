@@ -163,6 +163,10 @@ saves until the server is reachable again. Logging out clears the cached data. A
 - **Visits**: *+ New visit* – only the date is required; place, organiser, start/end time are optional. A row per
   gun (or *Other row*) with type, calibre, firing mode, shots and notes. Save is at the top and the bottom of the
   sheet; a field the browser refuses is named in a message.
+- **Signature (optional)**: someone (e.g. the range officer) can sign a visit – a name and a signature drawn
+  with a finger at the bottom of the sheet. It's stored with the visit (a small PNG), the list marks the visit
+  *signed*, and the export gets a *Kuittaus* / *Signed by* column (name + signature in the PDF, name in the CSV)
+  when any visit in the range is signed.
 - **Guns**: name, type, calibre, firing mode, shots before the diary, acquired date. The list shows each gun's
   round count, including shots of friends it was loaned to.
 - **Firing mode** is a fixed list (1 single shot, 2 magazine-fed single shot, 3 semi-automatic, 4 automatic),

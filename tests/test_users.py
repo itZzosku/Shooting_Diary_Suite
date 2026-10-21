@@ -298,3 +298,21 @@ def test_deleted_accounts_are_purged_after_30_days(tmp_path):
     finally:
         diary.use_db(None)                      # backup() points the module at each account's file
     assert not ghost.exists() and mine.exists()
+
+
+def test_visit_signature_is_checked(two):
+    app, o, m = two
+    png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    base = {"date": "2026-10-21", "lines": [{"rounds": 10}]}
+    ok = o.put("/diary/api/sessions/s-sig", json=dict(base, sign={"name": "  Range   Officer ", "img": png, "at": "2026-10-21T18:00:00Z"}))
+    assert ok.status_code == 200
+    s = [x for x in o.get("/diary/api/sessions").get_json() if x["id"] == "s-sig"][0]
+    assert s["sign"] == {"name": "Range Officer", "img": png, "at": "2026-10-21T18:00:00Z"}
+    # Name only is fine; empty is dropped; anything but a PNG data URL, or too big, is refused
+    assert o.put("/diary/api/sessions/s-sig", json=dict(base, sign={"name": "RO"})).status_code == 200
+    o.put("/diary/api/sessions/s-sig", json=dict(base, sign={"name": " ", "img": None}))
+    assert "sign" not in [x for x in o.get("/diary/api/sessions").get_json() if x["id"] == "s-sig"][0]
+    for bad in ({"img": "javascript:alert(1)"}, {"img": "data:image/svg+xml;base64,AAAA"},
+                {"img": "data:image/png;base64," + "A" * 400_000}, "nope"):
+        assert o.put("/diary/api/sessions/s-sig", json=dict(base, sign=bad)).status_code == 400
+    o.delete("/diary/api/sessions/s-sig", headers=H)
