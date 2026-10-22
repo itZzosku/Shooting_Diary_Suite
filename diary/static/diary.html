@@ -378,6 +378,7 @@ header.top{padding-top:6px!important}
       </div>
     </div>
     <div class="opt"><label class="r"><input type="radio" name="xr" value="all" id="xrAll">Whole diary</label></div>
+    <label class="check" id="xSignRow" hidden><input type="checkbox" id="xSign" checked><span>Include signatures (<i>Kuittaus</i> column) <span class="hint" id="xSignN"></span></span></label>
     <div class="actions"><button class="primary" type="submit" id="pdfGo">Create PDF</button></div>
   </form>
 </div>
@@ -978,7 +979,7 @@ function exportCsv(R,L){
   const rows=[[L.name,L.sra,L.ipsc,L.hunter,L.days,L.total],
     [p.name,p.sra,p.ipsc,p.hunterNo,new Set(list.map(s=>s.date)).size,tot],
     [L.types].concat(TYPES.filter(t=>tc[t]).map(t=>L.type(t)+": "+tc[t])),[]];
-  const signed=list.some(s=>s.sign);rows.push(signed?L.cols.concat([L.sigcol]):L.cols);   // signer's name only when someone signed
+  const signed=$("xSign").checked&&list.some(s=>s.sign);rows.push(signed?L.cols.concat([L.sigcol]):L.cols);   // signer's name only when someone signed
   list.forEach(s=>{const ls=exportLines(s);(ls.length?ls:[{}]).forEach((l,i)=>rows.push([fiDate(s.date),s.klo,s.place,s.org,L.mode(l.mode),L.type(l.type),l.cal,l.rounds||"",l.info]
     .concat(signed?[i===0&&s.sign?[s.sign.name||(s.sign.img?"✓":""),s.sign.img&&s.sign.at?`(${L.signed} ${signedAt(s.sign.at,X.lang)})`:""].filter(Boolean).join(" "):""]:[])))});
   const csv="\ufeff"+rows.map(r=>r.map(q).join(";")).join("\r\n");
@@ -1007,6 +1008,8 @@ function updHint(){
   const sel=document.querySelector('input[name="xr"]:checked').value;
   $("x2yHint").innerHTML=sel==="2y"?`${esc(r.span)}<br>Shooting days <b>${days}</b><br>Pistol/revolver <b>${pd}</b> · small-bore pistol/revolver <b>${sd}</b>`:"";
   $("xRangeHint").innerHTML=sel==="range"?`${esc(r.span)}<br><b>${list.length}</b> visits · shooting days <b>${days}</b>`:"";
+  const ns=list.filter(s=>s.sign).length;   // the signature toggle only matters when the range has signed visits
+  $("xSignRow").hidden=!ns;$("xSignN").textContent=ns?`· ${ns} signed visit${ns===1?"":"s"}`:"";
 }
 $("pdfBtn").addEventListener("click",()=>{
   if(!$("xEnd").value)$("xEnd").value=todayStr();
@@ -1015,7 +1018,7 @@ $("pdfBtn").addEventListener("click",()=>{
   const ys=[...new Set(S.sessions.map(s=>s.date.slice(0,4)))].sort().reverse();
   const cur=$("xYear").value||(S.year&&S.year!=="all"?S.year:ys[0]);
   $("xYear").innerHTML=ys.map(y=>`<option ${y===cur?"selected":""}>${y}</option>`).join("");
-  xRender();updHint();$("xSheet").hidden=false;document.body.style.overflow="hidden";
+  $("xSign").checked=true;xRender();updHint();$("xSheet").hidden=false;document.body.style.overflow="hidden";
 });
 $("xClose").addEventListener("click",closeSheets);
 $("xForm").addEventListener("input",e=>{if(e.target.id==="xYear")$("xrYear").checked=true;if(e.target.id==="xEnd")$("xr2y").checked=true;
@@ -1052,7 +1055,7 @@ $("xForm").addEventListener("submit",async e=>{e.preventDefault();
     lab(L.total,cols[5],y0);val(tot,cols[5],y0+12);
     const startY=y0+Math.max(48,18+Object.keys(tc).length*11);
     // Signature column only when a visit in the range is signed: the signer's name with the drawn signature below
-    const signed=list.some(s=>s.sign);
+    const signed=$("xSign").checked&&list.some(s=>s.sign);
     const body=[];list.forEach(s=>{const ls=exportLines(s),n=Math.max(1,ls.length);(ls.length?ls:[{}]).forEach((l,i)=>{
       const row=[fiDate(s.date),s.klo||"",s.place||"",s.org||"",L.mode(l.mode||""),L.type(l.type||""),l.cal||"",l.rounds?String(l.rounds):"",l.info||""];
       if(signed&&i===0)row.push({content:s.sign?s.sign.name||"":"",rowSpan:n,img:s.sign&&s.sign.img||null,
