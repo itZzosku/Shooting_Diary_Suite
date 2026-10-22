@@ -498,7 +498,7 @@ function renderDays(list){
   const byDate=new Map();list.forEach(x=>{if(!byDate.has(x.date))byDate.set(x.date,[]);byDate.get(x.date).push(x)});
   $("days").innerHTML=[...byDate.entries()].sort((a,b)=>b[0].localeCompare(a[0])).map(([date,rows])=>{
     const chg=x=>(loadOf(x.load_id)||{}).charge_gr??0;
-    rows.sort((a,b)=>String(a.started_at||"").localeCompare(String(b.started_at||""))||chg(a)-chg(b));
+    rows.sort((a,b)=>String(b.started_at||"").localeCompare(String(a.started_at||""))||chg(b)-chg(a));   // last shot first
     const temps=rows.map(r=>r.temp_c).filter(t=>t!=null);
     return`<div class="dcard"><div class="dh"><span>${fiDate(date)} <small>${wd(date)}${rows.length>1?" · "+rows.length+" strings":""}</small></span><small>${temps.length?f1(temps.reduce((a,b)=>a+b,0)/temps.length)+" °C":""}</small></div>`
     +rows.map(x=>{const st=x.stats,mean=means[(x.gun_id||"")+"|"+(x.load_id||"")];
@@ -728,7 +728,7 @@ async function upload(files){
     s.ui={on:!s.already_imported&&!s.existing_shots,gun:s.suggest.gun_id||"",load:s.suggest.load_id||(s.suggest.load?"new":""),
       swap:s.warnings.some(w=>w.code==="weather_range"&&w.swap),date:s.date};
   });
-  p.strings.sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.started_at||"").localeCompare(b.started_at||""));
+  p.strings.sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.started_at||"").localeCompare(a.started_at||""));   // newest first, like the list
   p.weather={};p.wOverwrite=false;
   renderPreview();
 }
@@ -847,7 +847,7 @@ async function openDay(date,focusId){
   let list;try{list=await api("GET","chrono/strings?date="+date)}catch(e){return}
   const full=await Promise.all(list.map(s=>api("GET","chrono/strings/"+s.id)));
   const chg=x=>(loadOf(x.load_id)||{}).charge_gr??0;
-  full.sort((a,b)=>String(a.started_at||"").localeCompare(String(b.started_at||""))||chg(a)-chg(b));
+  full.sort((a,b)=>String(b.started_at||"").localeCompare(String(a.started_at||""))||chg(b)-chg(a));   // last shot first
   S.dayDate=date;S.dayStrings=full;renderDay();
   const el=focusId&&$("dBody").querySelector(`[data-card="${CSS.escape(focusId)}"]`);
   if(el)el.scrollIntoView({block:"start"});

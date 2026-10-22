@@ -162,7 +162,8 @@ def build(c, today):
 
     def string(ago, hour, gun, load, base, sd, n, temp):
         shots = [{"n": i + 1, "v_ms": round(rnd.gauss(base, sd), 1), "t": f"{hour:02d}:{10 + i:02d}:{rnd.randint(0, 59):02d}"} for i in range(n)]
-        strings.append({"date": day(ago), "gun_id": gun, "load": load, "shots": shots, "temp_c": temp, "rh": rnd.randint(45, 85), "hpa": rnd.randint(995, 1025)})
+        strings.append({"date": day(ago), "started_at": f"{hour:02d}:10", "gun_id": gun, "load": load, "shots": shots,
+                        "temp_c": temp, "rh": rnd.randint(45, 85), "hpa": rnd.randint(995, 1025)})
 
     ladder_day = 140
     for j, ch in enumerate([43.0, 43.5, 44.0, 44.5, 45.0]):
