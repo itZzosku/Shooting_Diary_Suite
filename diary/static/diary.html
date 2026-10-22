@@ -805,7 +805,7 @@ function sigInfo(){
   const sg=S.form.sign||{};
   $("sigSum").textContent=sg.img||(sg.name||"").trim()?"✓ "+((sg.name||"").trim()||"signed"):"";
   $("sigWhen").textContent=sg.img&&sg.at?"Signed "+fiDate(sg.at.slice(0,10))+" "+new Date(sg.at).toTimeString().slice(0,5):"";
-  $("sigClear").hidden=!sg.img;
+  $("sigClear").hidden=!(sg.img||(sg.name||"").trim());
 }
 function sigLoad(){
   const sg=S.form.sign||{};$("fSignName").value=sg.name||"";
@@ -834,7 +834,7 @@ function sigTrim(c,pad){   // canvas → PNG trimmed to the strokes, at most 600
     sigInfo();saveDraft()};
   c.addEventListener("pointerup",end);c.addEventListener("pointercancel",end);
   $("fSignName").addEventListener("input",()=>{S.form.sign=Object.assign(S.form.sign||{img:null,at:null},{name:$("fSignName").value});sigInfo();saveDraft()});
-  $("sigClear").addEventListener("click",()=>{if(S.form.sign){S.form.sign.img=null;S.form.sign.at=null}sigPaint();sigInfo();saveDraft()});
+  $("sigClear").addEventListener("click",()=>{S.form.sign=null;$("fSignName").value="";sigPaint();sigInfo();saveDraft()});   // drawing and name
   $("sigBox").addEventListener("toggle",()=>{if($("sigBox").open)requestAnimationFrame(sigSize)});
   window.addEventListener("resize",()=>{if(!$("sheet").hidden&&$("sigBox").open)sigSize()});
 })();
