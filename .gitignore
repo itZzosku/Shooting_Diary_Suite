@@ -173,4 +173,3 @@ diary_backups/
 # Velocity data files (ShotView exports, logs, Kestrel CSVs) never go in the public repo
 *.xls
 *.xlsx
-ssi-probe.json
