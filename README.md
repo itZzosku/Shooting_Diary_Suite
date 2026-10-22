@@ -190,7 +190,7 @@ The phone's Back button closes the open sheet instead of leaving the page.
   with a finger at the bottom of the sheet (open by default). The ⛶ button signs full screen: on a phone held
   upright the page turns sideways (turn the phone left), and the signature is stored upright. It's stored with the visit (a small PNG), the list marks the visit
   *signed*, and the export gets a *Kuittaus* / *Signed by* column (name, signature and a small "allekirjoitettu 21.10.2026 21.02 EEST" timestamp in the PDF; name and time in the CSV)
-  when any visit in the range is signed; untick *Include signatures* in Export to leave it out (on by default).
+  when any visit in the range is signed; *Include signatures* in Export is ticked when the range has signed visits and can be unticked.
 - **Guns**: name, type, calibre, firing mode, shots before the diary, acquired date. The list shows each gun's
   round count, including shots of friends it was loaned to.
 - **Firing mode** is a fixed list (1 single shot, 2 magazine-fed single shot, 3 semi-automatic, 4 automatic),

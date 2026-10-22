@@ -378,7 +378,7 @@ header.top{padding-top:6px!important}
       </div>
     </div>
     <div class="opt"><label class="r"><input type="radio" name="xr" value="all" id="xrAll">Whole diary</label></div>
-    <label class="check" id="xSignRow" hidden><input type="checkbox" id="xSign" checked><span>Include signatures (<i>Kuittaus</i> column) <span class="hint" id="xSignN"></span></span></label>
+    <label class="check" id="xSignRow"><input type="checkbox" id="xSign" checked><span>Include signatures (<i>Kuittaus</i> column) <span class="hint" id="xSignN"></span></span></label>
     <div class="actions"><button class="primary" type="submit" id="pdfGo">Create PDF</button></div>
   </form>
 </div>
@@ -1008,8 +1008,10 @@ function updHint(){
   const sel=document.querySelector('input[name="xr"]:checked').value;
   $("x2yHint").innerHTML=sel==="2y"?`${esc(r.span)}<br>Shooting days <b>${days}</b><br>Pistol/revolver <b>${pd}</b> · small-bore pistol/revolver <b>${sd}</b>`:"";
   $("xRangeHint").innerHTML=sel==="range"?`${esc(r.span)}<br><b>${list.length}</b> visits · shooting days <b>${days}</b>`:"";
-  const ns=list.filter(s=>s.sign).length;   // the signature toggle only matters when the range has signed visits
-  $("xSignRow").hidden=!ns;$("xSignN").textContent=ns?`· ${ns} signed visit${ns===1?"":"s"}`:"";
+  // Signatures: ticked when the range has signed visits, unticked when it has none – until you tick it yourself
+  const ns=list.filter(s=>s.sign).length;
+  if(!S.xSignTouched)$("xSign").checked=ns>0;
+  $("xSignN").textContent=`· ${ns} signed visit${ns===1?"":"s"}`;
 }
 $("pdfBtn").addEventListener("click",()=>{
   if(!$("xEnd").value)$("xEnd").value=todayStr();
@@ -1018,11 +1020,12 @@ $("pdfBtn").addEventListener("click",()=>{
   const ys=[...new Set(S.sessions.map(s=>s.date.slice(0,4)))].sort().reverse();
   const cur=$("xYear").value||(S.year&&S.year!=="all"?S.year:ys[0]);
   $("xYear").innerHTML=ys.map(y=>`<option ${y===cur?"selected":""}>${y}</option>`).join("");
-  $("xSign").checked=true;xRender();updHint();$("xSheet").hidden=false;document.body.style.overflow="hidden";
+  S.xSignTouched=false;xRender();updHint();$("xSheet").hidden=false;document.body.style.overflow="hidden";
 });
 $("xClose").addEventListener("click",closeSheets);
 $("xForm").addEventListener("input",e=>{if(e.target.id==="xYear")$("xrYear").checked=true;if(e.target.id==="xEnd")$("xr2y").checked=true;
   if(e.target.id==="xFrom"||e.target.id==="xTo")$("xrRange").checked=true;updHint()});
+["input","change"].forEach(t=>$("xSign").addEventListener(t,()=>{S.xSignTouched=true}));   // before the form's own input/change
 $("xForm").addEventListener("change",updHint);
 $("xForm").addEventListener("submit",async e=>{e.preventDefault();
   const L=XL[X.lang];
