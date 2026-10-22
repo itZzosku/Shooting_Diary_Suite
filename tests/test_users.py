@@ -362,3 +362,27 @@ def test_demo_account(two):
         diary.use_db(None)
         if users.by_name("demo"):
             users.delete("demo")
+
+
+def test_health_endpoint(two, tmp_path, monkeypatch):
+    app, o, m = two
+    anon = app.test_client()
+    monkeypatch.setenv("DIARY_BACKUP_DIR", str(tmp_path))
+    monkeypatch.setenv("DIARY_DISK_MIN_MB", "1")
+    r = anon.get("/diary/health")                                   # no login needed
+    j = r.get_json()
+    assert r.status_code == 200 and j["checks"]["database"] == "ok"
+    assert j["checks"]["backup"] == "none" and j["status"] == "degraded"
+    (tmp_path / "diary-osku-2026-10-18.json").write_text("{}")
+    j = anon.get("/diary/health").get_json()
+    assert j["checks"] == {"database": "ok", "disk": "ok", "backup": "ok"} and j["status"] == "ok"
+    os.utime(tmp_path / "diary-osku-2026-10-18.json", (0, 0))
+    assert anon.get("/diary/health").get_json()["checks"]["backup"] == "stale"
+    monkeypatch.setenv("DIARY_BACKUP_MAX_DAYS", "0")
+    assert "backup" not in anon.get("/diary/health").get_json()["checks"]
+    body = anon.get("/diary/health").get_data(as_text=True)
+    assert "osku" not in body and "mikko" not in body                # no account names
+    from diary import health
+    monkeypatch.setattr(health, "_db_ok", lambda: False)
+    r = anon.get("/diary/health")
+    assert r.status_code == 503 and r.get_json()["status"] == "down"

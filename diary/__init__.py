@@ -640,3 +640,4 @@ from . import zero  # noqa: E402,F401
 from . import loans  # noqa: E402,F401
 # Landing-page summary.
 from . import summary  # noqa: E402,F401
+from . import health  # noqa: E402,F401

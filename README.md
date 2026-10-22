@@ -108,6 +108,20 @@ Backups contain everyone's data, licence numbers included – the privacy page s
 mailbox. Restore one account: `python -m diary import --user NAME diary_backups/diary-NAME-YYYY-MM-DD.json --replace`
 (or stop the app and copy the `.db` over that account's file in `diary_data/`).
 
+### Health check (Uptime Kuma)
+
+`GET /diary/health` needs no login and answers JSON:
+
+| `status` | HTTP | Meaning |
+|---|---|---|
+| `ok` | 200 | databases readable, disk space fine, newest backup recent |
+| `degraded` | 200 | site works, but disk is low (`DIARY_DISK_MIN_MB`, default 1024) or the newest backup is older than `DIARY_BACKUP_MAX_DAYS` (default 8; 0 = don't check) |
+| `down` | 503 | a database can't be read |
+
+`checks` names which part failed; `version` is the running git commit. Uptime Kuma: *HTTP(s) – Keyword* monitor
+on `https://<your-domain>/diary/health` with keyword `"status":"ok"` alerts on both down and degraded; a plain
+*HTTP(s)* monitor alerts only when it's down. Backups are looked for in `DIARY_BACKUP_DIR` (default `diary_backups/`).
+
 ### Tests
 
 `python -m pytest tests` (synthetic data). GitHub Actions runs them on every push (`.github/workflows/tests.yml`).
