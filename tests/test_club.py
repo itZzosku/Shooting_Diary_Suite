@@ -343,3 +343,21 @@ def test_box_with_two_calibres(setup):
     assert sorted((ln["cal"], ln["rounds"]) for ln in lines) == [("12/70", 25), ("7.62x54R", 10)]
     # Can't drop a calibre that still has rounds in the box
     assert a.post(f"{C}/boxes", json={"id": bid, "name": "Charlie", "calibre": "12/70", "cals": []}).status_code == 400
+
+
+def test_refill_level_per_calibre(setup):
+    app, a, ids, codes = setup
+    C = "/ammo/api/c/testclub"
+    sg = a.post(f"{C}/items", json={"calibre": "12/70", "name": "", "price": 0.40}).json["id"]
+    rf = a.post(f"{C}/items", json={"calibre": "7.62x54R", "name": "", "price": 0.80}).json["id"]
+    bid = a.post(f"{C}/boxes", json={"name": "Charlie", "calibre": "12/70", "cals": ["7.62x54R"],
+                                     "lows": {"12/70": 50, "7.62x54R": 40}}).json["id"]
+    a.post(f"{C}/moves", json={"kind": "buy", "box": bid, "item": sg, "qty": 100})
+    a.post(f"{C}/moves", json={"kind": "buy", "box": bid, "item": rf, "qty": 30})
+    st = a.get(C).json
+    assert next(b for b in st["boxes"] if b["id"] == bid)["lows"] == {"12/70": 50, "7.62x54R": 40}
+    w = [x for x in st["warnings"] if x["kind"] == "box" and x["box"] == bid]
+    assert [(x["calibre"], x["n"], x["low"]) for x in w] == [("7.62x54R", 30, 40)]      # 12/70: 100 ≥ 50
+    # An old single level stays on the box's main calibre
+    old = next(b for b in st["boxes"] if b["name"] == "9 mm A")
+    assert old["lows"] == {"9 mm Luger": 200}

@@ -212,7 +212,7 @@ function renderHead(){
 /* ---- warnings ---- */
 function renderWarn(){
   $("warn").innerHTML=S.warnings.map(w=>w.kind==="merch"?`<div class="banner">${T("warnMerch",{name:"<b>"+esc(w.name)+"</b>",n:fmt(w.n),low:fmt(w.low)})}</div>`
-    :w.kind==="box"?`<div class="banner">${T("warnBox",{name:"<b>"+esc(w.name)+"</b>",n:fmt(w.n),low:fmt(w.low)})}</div>`
+    :w.kind==="box"?`<div class="banner">${T("warnBox",{name:"<b>"+esc(w.name+(w.calibre?" "+w.calibre:""))+"</b>",n:fmt(w.n),low:fmt(w.low)})}</div>`
     :`<div class="banner" style="border:1px solid var(--accent)">${T("warnCal",{cal:"<b>"+esc(w.calibre)+"</b>",n:fmt(w.n),low:fmt(w.low)})}</div>`).join("");
 }
 
@@ -228,11 +228,12 @@ function renderStock(){
   const boxes=active.map(b=>{
     const rows=b.cals.map(c=>{const its=S.items.filter(i=>i.calibre===c&&(b.stock[i.id]||!i.archived)),
         n=its.reduce((a,i)=>a+(b.stock[i.id]||0),0),
-        parts=its.filter(i=>b.stock[i.id]).map(i=>`${esc(i.name||T("Default"))} ${fmt(b.stock[i.id])}`);
-      return`<div class="crow"><span>${esc(c)}${parts.length>1||(parts.length===1&&its.find(i=>b.stock[i.id]).name)?` <small>${parts.join(" · ")}</small>`:""}</span><span class="num">${fmt(n)}</span></div>`}).join("");
+        parts=its.filter(i=>b.stock[i.id]).map(i=>`${esc(i.name||T("Default"))} ${fmt(b.stock[i.id])}`),lw=(b.lows||{})[c];
+      return`<div class="crow"><span>${esc(c)}${parts.length>1||(parts.length===1&&its.find(i=>b.stock[i.id]).name)?` <small>${parts.join(" · ")}</small>`:""}
+        ${lw&&n<lw?`<span class="tag warn">${T("refill")}</span>`:""}${lw?` <small>${T("refill below {n}",{n:fmt(lw)})}</small>`:""}</span><span class="num">${fmt(n)}</span></div>`}).join("");
     return`<button class="box bx" type="button" data-box="${b.id}">
-      <span class="bh"><span><b>${esc(b.name)}</b>${b.low&&b.total<b.low?`<span class="tag warn">${T("refill")}</span>`:""}${b.mine?`<span class="tag">${T("yours")}</span>`:""}
-        <br><small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}${b.low?" · "+T("refill below {n}",{n:fmt(b.low)}):""}</small></span><span class="n">${fmt(b.total)}</span></span>
+      <span class="bh"><span><b>${esc(b.name)}</b>${b.mine?`<span class="tag">${T("yours")}</span>`:""}
+        <br><small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}</small></span><span class="n">${fmt(b.total)}</span></span>
       <span class="crows">${rows}</span></button>`}).join("");
   const allCals=[...new Set(active.flatMap(b=>b.cals))];
   const cals=`<div class="cal" style="margin-top:22px"><div class="calhead"><h2>${T("Calibres in all boxes")}</h2></div>${allCals.map(c=>{const tot=(S.cal_totals||{})[c]||0,lv=S.levels[c];
@@ -278,7 +279,7 @@ function boxSheet(b){
   sheet(b.name,`<div class="hint">${esc(b.cals.join(" + "))}${b.type?" · "+esc(b.type):""} · ${b.holder_name?T("held by {name}",{name:"<b>"+esc(b.holder_name)+"</b>"}):T("no holder")}</div>
     <div class="card"><div class="rows">${its.length?its.map(([i,n])=>`<div class="row"><span>${esc(itemName(itemOf(+i)))}</span><span class="num">${fmt(n)}</span></div>`).join("")
       :`<div class="hint">${T("Empty.")}</div>`}<div class="row"><b>${T("In the box")}</b><b class="num">${fmt(b.total)}</b></div></div>
-      ${b.low?`<div class="hint">${T("Refill below {n}",{n:fmt(b.low)})}</div>`:""}
+      ${Object.entries(b.lows||{}).map(([c,lw])=>`<div class="hint">${b.cals.length>1?esc(c)+": ":""}${T("Refill below {n}",{n:fmt(lw)})}</div>`).join("")}
       <div class="hint">${T(b.pay_url?"MobilePay link set":"noBoxMp")}</div></div>
     ${mayBox(b)?`<div class="acts"><button type="button" data-a="buy">${T("+ Refill")}</button><button type="button" data-a="move">${T("Move to another box")}</button>
       <button type="button" data-a="count">${T("Count")}</button>${isAdmin()?`<button type="button" data-a="hand">${T("Hand over")}</button>`:""}
@@ -327,7 +328,7 @@ function handSheet(b){
     <label class="f">${T("Their diary account (optional – gives rights to this box)")}<input type="text" id="hUser" maxlength="32" value="${esc(b.holder_user||"")}" autocapitalize="none"></label>`,
     async()=>{await api("POST",`c/${SLUG}/boxes`,Object.assign(boxBody(b),{holder_name:v("hName"),holder_user:v("hUser")}));toast(T("Handed over"))});
 }
-function boxBody(b){return{id:b.id,name:b.name,calibre:b.calibre,cals:(b.cals||[]).slice(1),type:b.type,low:b.low,holder_name:b.holder_name,holder_user:b.holder_user||"",archived:!!b.archived,pay_url:b.pay_url||""}}
+function boxBody(b){return{id:b.id,name:b.name,calibre:b.calibre,cals:(b.cals||[]).slice(1),type:b.type,lows:b.lows||{},holder_name:b.holder_name,holder_user:b.holder_user||"",archived:!!b.archived,pay_url:b.pay_url||""}}
 function boxEdit(b){
   const n=!b;b=b||{name:"",calibre:"",cals:[],type:"",low:0,holder_name:"",holder_user:"",archived:0,pay_url:""};
   const cals=[...new Set(S.items.map(i=>i.calibre))];
@@ -336,15 +337,22 @@ function boxEdit(b){
     <label class="f">${T("More calibres in this box (optional)")}<input type="text" id="eCals" maxlength="200" value="${esc((b.cals||[]).slice(1).join(", "))}" placeholder="${T("e.g. 12/70, 7.62x54R")}"></label>
     <p class="hint" style="margin:-6px 0 0">${T("hintCals")}</p>
     <datalist id="calList">${cals.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
-    <div class="grid2"><label class="f">${T("Firearm type (for the diary)")}<select id="eType"><option value="">—</option>${S.types.map(t=>`<option ${t===b.type?"selected":""}>${t}</option>`).join("")}</select></label>
-      <label class="f">${T("Refill below")}<input type="number" inputmode="numeric" id="eLow" min="0" value="${b.low||""}" placeholder="${T("0 = no warning")}"></label></div>
+    <label class="f">${T("Firearm type (for the diary)")}<select id="eType"><option value="">—</option>${S.types.map(t=>`<option ${t===b.type?"selected":""}>${t}</option>`).join("")}</select></label>
+    <div><div class="lbl hint" style="margin-bottom:6px">${T("Refill below (per calibre)")}</div><div class="grid2" id="eLows"></div></div>
     <label class="f">${T("MobilePay link (optional)")}<input type="text" id="ePay" maxlength="400" inputmode="url" autocapitalize="none" value="${esc(b.pay_url||"")}" placeholder="${T("https://… from the box's MobilePay QR")}"></label>
     <p class="hint" style="margin:-6px 0 0">${T("hintBoxMp")}</p>
     ${n?`<div class="grid2"><label class="f">${T("Held by")}<input type="text" id="eHold" maxlength="60"></label><label class="f">${T("Their diary account (optional)")}<input type="text" id="eUser" maxlength="32" autocapitalize="none"></label></div>`:""}
     ${n?"":`<label class="check"><input type="checkbox" id="eArch" ${b.archived?"checked":""}> ${T("Archived (hidden, link stops working)")}</label>${delHtml("delBox")}`}`,
-    async()=>{const body=Object.assign(boxBody(b),{name:v("eName"),calibre:v("eCal").trim(),cals:v("eCals").split(",").map(x=>x.trim()).filter(Boolean),type:v("eType"),low:v("eLow")||0,pay_url:v("ePay").trim()});
+    async()=>{const body=Object.assign(boxBody(b),{name:v("eName"),calibre:v("eCal").trim(),cals:v("eCals").split(",").map(x=>x.trim()).filter(Boolean),type:v("eType"),lows:readLows(),pay_url:v("ePay").trim()});
       if(n){body.holder_name=v("eHold");body.holder_user=v("eUser");delete body.id}else body.archived=$("eArch").checked;
       await api("POST",`c/${SLUG}/boxes`,body);toast(T("Box saved"))});
+  // One refill level per calibre in the box; the fields follow the calibre fields as they're typed
+  const lows={...(b.lows||{})};
+  const readLows=()=>{document.querySelectorAll("#eLows input").forEach(i=>{lows[i.dataset.cal]=+i.value||0});return lows};
+  const drawLows=()=>{readLows();const cs=[v("eCal").trim()].concat(v("eCals").split(",").map(x=>x.trim())).filter((c,i,a)=>c&&a.indexOf(c)===i);
+    $("eLows").innerHTML=cs.length?cs.map(c=>`<label class="f">${esc(c)}<input type="number" inputmode="numeric" min="0" data-cal="${esc(c)}" value="${lows[c]||""}" placeholder="${T("0 = no warning")}"></label>`).join("")
+      :`<span class="hint">${T("Write the calibre first.")}</span>`};
+  drawLows();$("sBody").oninput=e=>{if(e.target.id==="eCal"||e.target.id==="eCals")drawLows()};
   if(!n)delButton(`boxes/${b.id}`);
 }
 function levelSheet(cal){

@@ -104,6 +104,7 @@ const ADMIN_FI={
   "{n} season fees in {year}":"{n} kausimaksua vuonna {year}","Names are as people typed them.":"Nimet ovat sellaisina kuin ihmiset ne kirjoittivat.",
   "✓ paid":"✓ maksettu","No season fee under that name – a one-time fee then.":"Tällä nimellä ei ole kausimaksua – siis kertamaksu.",
   "Not allowed.":"Ei sallittu.",
+  "Refill below (per calibre)":"Täydennä alle (kaliipereittain)","Write the calibre first.":"Kirjoita ensin kaliiperi.",
   "Calibres in all boxes":"Kaliiperit kaikissa laatikoissa","refill below {n}":"täydennä alle {n}",
   "More calibres in this box (optional)":"Muut kaliiperit samassa laatikossa (valinnainen)","e.g. 12/70, 7.62x54R":"esim. 12/70, 7.62x54R",
   hintCals:"Pilkuilla erotettuna. Ampuja näkee lomakkeella jokaisen patruunan omalla rivillään ja kirjaa vain sen, mitä ampui.",

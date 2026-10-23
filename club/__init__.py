@@ -138,6 +138,8 @@ def init_db():
         conn.execute("ALTER TABLE boxes ADD COLUMN pay_url TEXT NOT NULL DEFAULT ''")   # MobilePay link of the box
     if "cals" not in {r[1] for r in conn.execute("PRAGMA table_info(boxes)")}:
         conn.execute("ALTER TABLE boxes ADD COLUMN cals TEXT NOT NULL DEFAULT '[]'")    # more calibres in the same box
+    if "lows" not in {r[1] for r in conn.execute("PRAGMA table_info(boxes)")}:
+        conn.execute("ALTER TABLE boxes ADD COLUMN lows TEXT NOT NULL DEFAULT '{}'")    # refill level per calibre
     from . import shop
     shop.init_db(conn)                        # fees and merch
     conn.commit()
@@ -338,6 +340,29 @@ def box_cals(b):
     return [b["calibre"]] + [c for c in more if c and c != b["calibre"]]
 
 
+def box_lows(b):
+    """{calibre: refill level} of a box; a box from before per-calibre levels keeps its one level on its main calibre."""
+    try:
+        lows = {k: int(v) for k, v in json.loads(b["lows"] or "{}").items() if int(v) > 0}
+    except (ValueError, TypeError, IndexError, KeyError, AttributeError):
+        lows = {}
+    if not lows and b["low"]:
+        lows = {b["calibre"]: b["low"]}
+    cals = box_cals(b)
+    return {c: lows[c] for c in cals if c in lows}
+
+
+def box_cal_stock(conn, club_id):
+    """{box_id: {calibre: rounds}}."""
+    cal = {r["id"]: r["calibre"] for r in conn.execute("SELECT id, calibre FROM items WHERE club_id=?", (club_id,))}
+    out = {}
+    for (b, i), n in stock(conn, club_id).items():
+        if i in cal:
+            d = out.setdefault(b, {})
+            d[cal[i]] = d.get(cal[i], 0) + n
+    return out
+
+
 def cal_stock(conn, club_id):
     """{calibre: rounds in all boxes} (by the ammo's calibre, so a box with two calibres counts right)."""
     cal = {r["id"]: r["calibre"] for r in conn.execute("SELECT id, calibre FROM items WHERE club_id=?", (club_id,))}
@@ -364,12 +389,15 @@ def _cal_list(v, main):
 
 def warnings(conn, club_id):
     """Boxes below their refill level and calibres below their buy-more level."""
-    bs = box_stock(conn, club_id)
+    bcs = box_cal_stock(conn, club_id)
     out, per_cal = [], cal_stock(conn, club_id)
     for b in conn.execute("SELECT * FROM boxes WHERE club_id=? AND NOT archived", (club_id,)):
-        n = bs.get(b["id"], 0)
-        if b["low"] and n < b["low"]:
-            out.append({"kind": "box", "box": b["id"], "name": b["name"], "n": n, "low": b["low"]})
+        multi = len(box_cals(b)) > 1
+        for c, low in box_lows(b).items():
+            n = bcs.get(b["id"], {}).get(c, 0)
+            if n < low:
+                out.append({"kind": "box", "box": b["id"], "name": b["name"], "calibre": c if multi else "",
+                            "n": n, "low": low})
     for lv in conn.execute("SELECT * FROM levels WHERE club_id=?", (club_id,)):
         n = per_cal.get(lv["calibre"], 0)
         if lv["low"] and n < lv["low"]:
@@ -708,6 +736,7 @@ def api_state(slug):
         b["stock"] = {str(i): n for (bx, i), n in st.items() if bx == b["id"] and n}
         b["total"] = sum(n for (bx, _i), n in st.items() if bx == b["id"])
         b["mine"] = b["holder_uid"] == u["id"]
+        b["lows"] = box_lows(b)
         b["cals"] = box_cals(b)
         if role != "admin" and not b["mine"]:
             b["code"] = None                   # only admins and the holder see a box's secret link
@@ -799,7 +828,11 @@ def api_boxes(slug):
     if pay and (len(pay) > 400 or not re.match(r"^(https://|mobilepay://)\S+$", pay)):
         return _err("MobilePay link: paste the address from the MobilePay QR code (https://… or mobilepay://…).")
     try:
-        low = _int(b.get("low") or 0, 0, 100000)
+        allc = [cal] + json.loads(cals)
+        raw = b.get("lows") if isinstance(b.get("lows"), dict) else {cal: b.get("low") or 0}
+        lows_d = {c: _int(raw.get(c) or 0, 0, 100000) for c in allc}
+        lows = json.dumps({c: n for c, n in lows_d.items() if n}, ensure_ascii=False)
+        low = 0                                # the old single level; levels are per calibre now (lows)
         hn, huid = _holder(b)
     except ValueError as e:
         return _err(str(e) if "account" in str(e) else "Refill level: a whole number.")
@@ -816,12 +849,12 @@ def api_boxes(slug):
         if (r["holder_name"], r["holder_uid"]) != (hn, huid):
             _handover_row(conn, club, r["id"], hn, u, r["holder_name"])
         conn.execute("UPDATE boxes SET name=?, calibre=?, type=?, low=?, holder_name=?, holder_uid=?, archived=?, "
-                     "pay_url=?, cals=? WHERE id=?", (name, cal, typ, low, hn, huid, 1 if b.get("archived") else 0, pay,
-                                                      cals, bid))
+                     "pay_url=?, cals=?, lows=? WHERE id=?", (name, cal, typ, low, hn, huid, 1 if b.get("archived") else 0,
+                                                              pay, cals, lows, bid))
     else:
         bid = conn.execute("INSERT INTO boxes(club_id,name,calibre,type,code,holder_name,holder_uid,low,created,pay_url,"
-                           "cals) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                           (club["id"], name, cal, typ, new_code(conn), hn, huid, low, _now(), pay, cals)).lastrowid
+                           "cals,lows) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                           (club["id"], name, cal, typ, new_code(conn), hn, huid, low, _now(), pay, cals, lows)).lastrowid
         if hn:
             _handover_row(conn, club, bid, hn, u, "")
     conn.commit()
