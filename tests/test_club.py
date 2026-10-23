@@ -272,3 +272,18 @@ def test_product_delete_only_without_history(setup):
     assert a.post(f"{P}/{used}/delete", json={}).status_code == 400
     assert a.post(f"{P}/{unused}/delete", json={}).status_code == 200
     assert {p["id"] for p in a.get("/ammo/api/c/testclub").json["products"]} == {used}
+
+
+def test_box_and_item_delete_only_without_history(setup):
+    app, a, ids, codes = setup
+    C = "/ammo/api/c/testclub"
+    # 7.62 A: a hand-over only (no rounds ever) → can go; its unused ammo price too
+    assert a.post(f"{C}/boxes/{ids['7.62 A']}/delete", json={}).status_code == 200
+    assert a.post(f"{C}/items/{ids['762']}/delete", json={}).status_code == 200
+    # 9 mm B gets rounds → stays; the ammo used → stays
+    a.post(f"{C}/moves", json={"kind": "buy", "box": ids["9 mm B"], "item": ids["Geco"], "qty": 10})
+    r = a.post(f"{C}/boxes/{ids['9 mm B']}/delete", json={})
+    assert r.status_code == 400 and r.json["error"] == "in_use"
+    assert a.post(f"{C}/items/{ids['Geco']}/delete", json={}).status_code == 400
+    st = a.get(C).json
+    assert {b["name"] for b in st["boxes"]} == {"9 mm A", "9 mm B"} and "" not in {i["name"] for i in st["items"]}

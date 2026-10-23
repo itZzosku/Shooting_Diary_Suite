@@ -49,19 +49,18 @@
 <body>
 <div class="wrap wide noprint" style="padding-bottom:16px">
   <header class="top">
-    <div><div class="kicker" id="clubName">Club ammo</div><h1>QR <span>stickers</span></h1></div>
-    <a class="ghost" id="back" href="admin">Back</a>
+    <div><div class="kicker" id="clubName"></div><h1 data-u="QR stickers"></h1></div>
+    <a class="ghost" id="back" href="admin" data-u="Back"></a>
   </header>
   <div class="ctl card">
-    <div><div class="kicker" style="margin-bottom:6px">Boxes</div><div class="boxes" id="boxes"></div></div>
-    <div><div class="kicker" style="margin-bottom:6px">Size</div><div class="seg" id="size">
-      <button type="button" data-v="1">1 per A4</button><button type="button" data-v="2">2 per A4</button><button type="button" data-v="4">4 per A4</button></div></div>
-    <div><div class="kicker" style="margin-bottom:6px">Language</div><div class="seg" id="lang">
-      <button type="button" data-v="fi">Suomi</button><button type="button" data-v="en">English</button></div></div>
-    <label class="check"><input type="checkbox" id="prices" checked> Show prices</label>
-    <button class="primary" type="button" id="print">Print / save as PDF</button>
-    <p class="hint" style="margin:0">Print at 100 % (no "fit to page"). Scan one sticker with a phone before taping it on. A box's
-      <i>New link</i> makes its old sticker stop working – print a new one then.</p>
+    <div><div class="kicker" style="margin-bottom:6px" data-u="Stickers"></div><div class="boxes" id="boxes"></div></div>
+    <div><div class="kicker" style="margin-bottom:6px" data-u="Size"></div><div class="seg" id="size">
+      <button type="button" data-v="1" data-u="1 per A4"></button><button type="button" data-v="2" data-u="2 per A4"></button><button type="button" data-v="4" data-u="4 per A4"></button></div></div>
+    <div><div class="kicker" style="margin-bottom:6px" data-u="Sticker language"></div><div class="seg" id="lang">
+      <button type="button" data-v="fi">Suomi</button><button type="button" data-v="sv">Svenska</button><button type="button" data-v="en">English</button></div></div>
+    <label class="check"><input type="checkbox" id="prices" checked> <span data-u="Show prices"></span></label>
+    <button class="primary" type="button" id="print" data-u="Print / save as PDF"></button>
+    <p class="hint" style="margin:0" data-u="printHint"></p>
   </div>
 </div>
 <div class="sheet-preview" id="sheet"></div>
@@ -73,15 +72,28 @@ const $=id=>document.getElementById(id);
 const SLUG=location.pathname.split("/")[2];
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+// Page controls follow the admin pages' language (FI / EN); the stickers have their own (FI / SV / EN)
+const UI_FI={"QR stickers":"QR-tarrat","Back":"Takaisin","Stickers":"Tarrat","Size":"Koko","1 per A4":"1 / A4","2 per A4":"2 / A4","4 per A4":"4 / A4",
+  "Sticker language":"Tarran kieli","Show prices":"Näytä hinnat","Print / save as PDF":"Tulosta / tallenna PDF:ksi",
+  printHint:"Tulosta 100 %:n koossa (ei \"sovita sivulle\"). Skannaa yksi tarra puhelimella ennen kuin teippaat sen. Laatikon Uusi linkki lakkauttaa vanhan tarran – tulosta silloin uusi.",
+  "Payments page":"Maksusivu","fees & merch":"maksut ja tuotteet","No boxes yet.":"Ei vielä laatikoita.","Pick at least one sticker.":"Valitse vähintään yksi tarra."};
+const UI_EN={printHint:"Print at 100 % (no \"fit to page\"). Scan one sticker with a phone before taping it on. A box's New link makes its old sticker stop working – print a new one then."};
+const UL=ls.get("ammo:adminlang",(navigator.language||"").toLowerCase().startsWith("fi")?"fi":"en");
+const U=s=>(UL==="fi"&&UI_FI[s])||UI_EN[s]||s;
+document.querySelectorAll("[data-u]").forEach(el=>el.textContent=U(el.dataset.u));
 const T={
+  sv:{payTitle:"Avgifter",paySteps:["Skanna QR-koden med telefonens kamera.","Skriv ditt namn, välj vad du betalar och tryck <b>Spara</b>.",
+      "Betala med MobilePay: sidan visar summan och meddelandet."],kinds:{season:"säsongsavgift",single:"engångsavgift",merch:""},
+    title:"Föreningens patroner",steps:["Skanna QR-koden med telefonens kamera.","Skriv ditt namn och antalet skjutna patroner och tryck <b>Spara</b>.",
+      "Betala med MobilePay: sidan visar summan och meddelandet <b>{msg}</b>."],msgRef:"+ kod",ref:"kod",perRound:"€ / st",qty:"st"},
   fi:{payTitle:"Maksut",paySteps:["Skannaa QR-koodi puhelimen kameralla.","Kirjoita nimesi, valitse mitä maksat ja paina <b>Tallenna</b>.",
       "Maksa MobilePaylla: sivu näyttää summan ja viestin."],kinds:{season:"kausimaksu",single:"kertamaksu",merch:""},
     title:"Seuran patruunat",steps:["Skannaa QR-koodi puhelimen kameralla.","Kirjoita nimesi ja ammutut patruunat ja paina <b>Tallenna</b>.",
-      "Maksa MobilePaylla: sivu näyttää summan ja viestin <b>{msg}</b>."],msgRef:"+ koodi",ref:"koodi",perRound:"€ / kpl",price:"Hinta",noAcc:"Tunnuksia ei tarvita."},
+      "Maksa MobilePaylla: sivu näyttää summan ja viestin <b>{msg}</b>."],msgRef:"+ koodi",ref:"koodi",perRound:"€ / kpl",qty:"kpl"},
   en:{payTitle:"Payments",paySteps:["Scan the QR code with your phone's camera.","Write your name, pick what you pay for, tap <b>Save</b>.",
       "Pay with MobilePay: the page shows the amount and the message."],kinds:{season:"season fee",single:"one-time fee",merch:""},
     title:"Club ammo",steps:["Scan the QR code with your phone's camera.","Write your name and the rounds you shot, tap <b>Save</b>.",
-      "Pay with MobilePay: the page shows the amount and the message <b>{msg}</b>."],msgRef:"+ code",ref:"code",perRound:"€ / round",price:"Price",noAcc:"No account needed."}};
+      "Pay with MobilePay: the page shows the amount and the message <b>{msg}</b>."],msgRef:"+ code",ref:"code",perRound:"€ / round",qty:"for"}};
 let S=null;
 const opt={size:ls.get("qr:size","2"),lang:ls.get("qr:lang","fi"),prices:ls.get("qr:prices",true),sel:null};
 
@@ -95,7 +107,7 @@ function sticker(b){
   const t=T[opt.lang],url=location.origin+"/ammo/"+SLUG+"/"+b.code;
   const msg=S.club.pay_msg?`${esc(S.club.pay_msg)} ${t.msgRef}`:t.ref;
   const items=S.items.filter(i=>i.calibre===b.calibre&&!i.archived);
-  const price=opt.prices&&items.length?`<div class="price">${items.map(i=>`${esc(i.name||b.calibre)} ${(+i.price).toFixed(2).replace(".",opt.lang==="fi"?",":".")} ${t.perRound}`).join("<br>")}</div>`:"";
+  const price=opt.prices&&items.length?`<div class="price">${items.map(i=>`${esc(i.name||b.calibre)} ${(+i.price).toFixed(2).replace(".",opt.lang==="en"?".":",")} ${t.perRound}`).join("<br>")}</div>`:"";
   const head=`<div class="club">${esc(S.club.name)}</div><div><div class="box">${esc(b.name)}</div><div class="cal">${esc(b.calibre)} · ${t.title}</div></div>`;
   const steps=`<ol>${t.steps.map(s=>`<li>${s.replace("{msg}",msg)}</li>`).join("")}</ol>`;
   const tail=`${price}<div class="url">${esc(url)}</div>`;
@@ -106,8 +118,8 @@ function sticker(b){
 function paySticker(){
   const t=T[opt.lang],url=location.origin+"/ammo/"+SLUG+"/pay/"+S.pay_code;
   const ps=(S.products||[]).filter(p=>!p.archived);
-  const price=opt.prices&&ps.length?`<div class="price">${ps.map(p=>{const f=x=>(+x).toFixed(2).replace(".",opt.lang==="fi"?",":".")+" €";
-    return `${esc(p.name)} ${f(p.price)}`+(p.deal_qty>1&&p.deal_price>0?` · ${p.deal_qty} ${opt.lang==="fi"?"kpl":"for"} ${f(p.deal_price)}`:"")}).join("<br>")}</div>`:"";
+  const price=opt.prices&&ps.length?`<div class="price">${ps.map(p=>{const f=x=>(+x).toFixed(2).replace(".",opt.lang==="en"?".":",")+" €";
+    return `${esc(p.name)} ${f(p.price)}`+(p.deal_qty>1&&p.deal_price>0?` · ${p.deal_qty} ${t.qty} ${f(p.deal_price)}`:"")}).join("<br>")}</div>`:"";
   const head=`<div class="club">${esc(S.club.name)}</div><div><div class="box">${t.payTitle}</div><div class="cal">${ps.map(p=>t.kinds[p.kind]).filter((x,i,a)=>x&&a.indexOf(x)===i).join(" · ")}</div></div>`;
   const steps=`<ol>${t.paySteps.map(x=>`<li>${x}</li>`).join("")}</ol>`,tail=`${price}<div class="url">${esc(url)}</div>`;
   return opt.size==="2"
@@ -122,7 +134,7 @@ function render(){
   const stk=S.boxes.filter(b=>opt.sel.has(b.id)).map(sticker).concat(opt.sel.has("pay")?[paySticker()]:[]),per=+opt.size,pages=[];
   for(let i=0;i<stk.length;i+=per)pages.push(stk.slice(i,i+per));
   $("sheet").innerHTML=pages.length?pages.map(p=>`<div class="page s${per}">${p.join("")}</div>`).join("")
-    :`<div class="card hint" style="max-width:640px;margin:0 auto">Pick at least one box.</div>`;
+    :`<div class="card hint" style="max-width:640px;margin:0 auto">${U("Pick at least one sticker.")}</div>`;
   fit();
 }
 // On a phone the A4 preview is scaled down to the screen width (printing is always full size)
@@ -140,12 +152,12 @@ $("print").addEventListener("click",()=>window.print());
   if(r.status===401){location.href="/diary/login";return}
   S=await r.json();
   S.boxes=S.boxes.filter(b=>!b.archived&&b.code);
-  $("clubName").textContent=S.club.name;document.title="QR stickers · "+S.club.name;
+  $("clubName").textContent=S.club.name;document.title=U("QR stickers")+" · "+S.club.name;
   const qs=new URLSearchParams(location.search),want=qs.get("box"),wantPay=qs.get("pay");
   opt.sel=new Set(wantPay?["pay"]:S.boxes.filter(b=>!want||String(b.id)===want).map(b=>b.id));
   const hasPay=S.pay_code&&(S.products||[]).some(p=>!p.archived);
   $("boxes").innerHTML=(S.boxes.length?S.boxes.map(b=>`<label class="check"><input type="checkbox" value="${b.id}" ${opt.sel.has(b.id)?"checked":""}> ${esc(b.name)} <span class="hint">${esc(b.calibre)}</span></label>`).join("")
-    :`<div class="hint">No boxes yet.</div>`)+(hasPay?`<label class="check"><input type="checkbox" value="pay" ${opt.sel.has("pay")?"checked":""}> Payments page <span class="hint">fees &amp; merch</span></label>`:"");
+    :`<div class="hint">${U("No boxes yet.")}</div>`)+(hasPay?`<label class="check"><input type="checkbox" value="pay" ${opt.sel.has("pay")?"checked":""}> ${U("Payments page")} <span class="hint">${U("fees & merch")}</span></label>`:"");
   render();
 })();
 </script>

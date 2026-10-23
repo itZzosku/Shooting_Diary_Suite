@@ -358,8 +358,11 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   code. Same languages, offline queue and *Take back* as the box form; also works for the organiser at the desk
   (one shooter after another with *New entry*). Admins: **Season fees** tab – who has paid in a year, search by name
   (names as typed) – and the fees in *Log & payments* (filter *Fees & merch*, Mark paid, Void). Box holders don't
-  see fees. Archived fees and items are hidden in Setup (*Show N archived*); one that was never paid for or stocked
-  can be deleted.
+  see fees.
+- **Archived** ammo prices, boxes, fees and items are hidden in Setup (*Show N archived*). One that was never used
+  (no rounds / payments / stock in the log; a box's hand-overs don't count) can be deleted from its Edit sheet.
+- **Languages**: admin pages in Finnish or English (FI · EN at the top, remembered per phone; Finnish texts in
+  `club/static/admin_fi.js`); stickers in Finnish, Swedish or English; shooter forms in Finnish, Swedish or English.
 - **Roles per club**: admins (diary accounts) do everything; a box's holder, if given a diary account, can buy,
   move and count for that box and sees stock but not shooters' names. Site admins act as admin of every club.
   Stock is never stored – it's the sum of all moves, so the log is the audit trail.

@@ -780,6 +780,37 @@ def _handover_row(conn, club, box_id, new, by, old):
                   f"from {old}" if old else "", by["id"]))
 
 
+@cbp.post("/api/c/<slug>/items/<int:iid>/delete")
+def api_item_delete(slug, iid):
+    """Delete an ammo price that was never used; one with history can only be archived."""
+    club, _u, _r = _club_for(slug)
+    _body()
+    conn = cdb()
+    if not conn.execute("SELECT 1 FROM items WHERE id=? AND club_id=?", (iid, club["id"])).fetchone():
+        return _err("not_found", 404)
+    if conn.execute("SELECT 1 FROM moves WHERE item_id=? LIMIT 1", (iid,)).fetchone():
+        return _err("in_use")
+    conn.execute("DELETE FROM items WHERE id=?", (iid,))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+@cbp.post("/api/c/<slug>/boxes/<int:bid>/delete")
+def api_box_delete(slug, bid):
+    """Delete a box that never had rounds in it (hand-overs don't count); otherwise archive it."""
+    club, _u, _r = _club_for(slug)
+    _body()
+    conn = cdb()
+    if not conn.execute("SELECT 1 FROM boxes WHERE id=? AND club_id=?", (bid, club["id"])).fetchone():
+        return _err("not_found", 404)
+    if conn.execute("SELECT 1 FROM moves WHERE box_id=? AND kind!='handover' LIMIT 1", (bid,)).fetchone():
+        return _err("in_use")
+    conn.execute("DELETE FROM moves WHERE box_id=?", (bid,))
+    conn.execute("DELETE FROM boxes WHERE id=?", (bid,))
+    conn.commit()
+    return jsonify(ok=True)
+
+
 @cbp.post("/api/c/<slug>/boxes/<int:bid>/newcode")
 def api_newcode(slug, bid):
     """A leaked link: the box gets a new secret (print a new sticker); the old link stops working."""
