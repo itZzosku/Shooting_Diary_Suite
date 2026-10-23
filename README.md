@@ -209,7 +209,9 @@ The phone's Back button closes the open sheet instead of leaving the page.
   round count, including shots of friends it was loaned to.
 - **Firing mode** is a fixed list (1 single shot, 2 magazine-fed single shot, 3 semi-automatic, 4 automatic),
   stored in the Finnish legal wording so the licence export matches.
-- **Export**: *Preview* shows the PDF page by page before anything is downloaded. PDF or CSV, in Finnish (the shooting-activity record for a licence application) or English, for
+- **Export**: *Preview* shows the PDF page by page before anything is downloaded. *Page*: portrait or landscape (remembered).
+  The table text is as large as the page allows while no cell needs more than two lines (portrait about 6.5 pt,
+  landscape up to 10 pt); date, time and shots never wrap. PDF or CSV, in Finnish (the shooting-activity record for a licence application) or English, for
   the last 2 years, a year, custom dates (from – to) or the whole diary. Exports drop gun names and merge rows of
   the same type, calibre, firing mode and notes within a visit.
 - **My details**: name and licence numbers for the export (optional; the row is hidden while empty).

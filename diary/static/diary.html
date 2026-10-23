@@ -367,6 +367,8 @@ header.top{padding-top:6px!important}
       <div class="field"><span class="lbl">Language</span><div class="chips" role="radiogroup" aria-label="Language">
         <button type="button" class="chip" data-xlang="fi">Suomi</button><button type="button" class="chip" data-xlang="en">English</button></div></div>
     </div>
+    <div class="field" id="xPageRow"><span class="lbl">Page</span><div class="chips" role="radiogroup" aria-label="Page orientation">
+      <button type="button" class="chip" data-xpage="portrait">Portrait</button><button type="button" class="chip" data-xpage="landscape">Landscape – bigger text</button></div></div>
     <div class="hint" id="xLangHint"></div>
     <label class="f">Henkilötunnus – optional, for this export only
       <input type="text" id="xHetu" maxlength="11" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DDMMYY-XXXX" inputmode="text"></label>
@@ -976,7 +978,7 @@ function signedAt(at,lang){const d=new Date(at);if(!at||isNaN(d))return"";
   const t=pad(d.getHours())+(lang==="fi"?".":":")+pad(d.getMinutes()),day=lang==="fi"?`${d.getDate()}.${d.getMonth()+1}.${d.getFullYear()}`:fiDate(d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()));
   return`${day} ${t}${tz?" "+tz:""}`}
 const XPREF="ampumapk-export";
-const X=Object.assign({fmt:"pdf",lang:"fi"},lsGet(XPREF)||{});
+const X=Object.assign({fmt:"pdf",lang:"fi",page:"portrait"},lsGet(XPREF)||{});
 /* Henkilötunnus: typed for one export, kept only in the field (no draft, no storage, never sent anywhere);
    cleared when Export closes. Checked against the format and check character. */
 const HETU_RE=/^(\d{2})(\d{2})(\d{2})([-+A-FU-Y])(\d{3})([0-9A-Y])$/;
@@ -992,11 +994,13 @@ function hetuHint(){const v=$("xHetu").value.trim().toUpperCase(),ok=!v||hetuChe
 function xRender(){
   $("xForm").querySelectorAll("[data-xfmt]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.xfmt===X.fmt));
   $("xForm").querySelectorAll("[data-xlang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.xlang===X.lang));
+  $("xForm").querySelectorAll("[data-xpage]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.xpage===X.page));$("xPageRow").hidden=X.fmt!=="pdf";
   $("pdfGo").textContent=X.fmt==="pdf"?"Create PDF":"Create CSV";$("pdfPrev").hidden=X.fmt!=="pdf";
   $("xLangHint").textContent=X.lang==="fi"?"Finnish: the format of the shooting-activity record for a licence application.":"English: labels, firearm types and firing modes translated.";
 }
-$("xForm").addEventListener("click",e=>{const b=e.target.closest("[data-xfmt],[data-xlang]");if(!b)return;
-  if(b.dataset.xfmt)X.fmt=b.dataset.xfmt;else X.lang=b.dataset.xlang;lsSet(XPREF,{fmt:X.fmt,lang:X.lang});xRender()});
+$("xForm").addEventListener("click",e=>{const b=e.target.closest("[data-xfmt],[data-xlang],[data-xpage]");if(!b)return;
+  if(b.dataset.xfmt)X.fmt=b.dataset.xfmt;else if(b.dataset.xlang)X.lang=b.dataset.xlang;else X.page=b.dataset.xpage;
+  lsSet(XPREF,{fmt:X.fmt,lang:X.lang,page:X.page});xRender()});
 function exportCsv(R,L){
   const q=v=>{v=String(v??"");return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
   const p=S.profile||{},list=sortSessions(S.sessions.filter(R.filter)).reverse();     // oldest first
@@ -1072,47 +1076,63 @@ async function buildPdf(L){
     const p=S.profile||{};
     const tc=typeCounts(list),tot=list.reduce((a,s)=>a+sRounds(s),0);
     const days=new Set(list.map(s=>s.date)).size;
-    const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:"pt",format:"a4"});
-    const W=doc.internal.pageSize.getWidth(),M=36;
-    doc.setFont("helvetica","bold");doc.setFontSize(14);doc.text(L.title+R.title,M,M+4);
-    doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(90);
-    const span=R.span?R.span:list.length?fiDate(list[list.length-1].date)+" – "+fiDate(list[0].date):"";
-    doc.text(span,W-M,M+4,{align:"right"});doc.setTextColor(0);
-    const y0=M+24,cols=[M,M+110,M+190,M+270,M+355,M+450];
-    const lab=(t,x,y)=>{doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.text(t,x,y)};
-    const val=(t,x,y)=>{doc.setFont("helvetica","normal");doc.setFontSize(9);doc.text(String(t||""),x,y)};
-    lab(L.name,cols[0],y0);val(p.name,cols[0],y0+12);
-    lab(L.sra,cols[1],y0);val(p.sra,cols[1],y0+12);
-    lab(L.hunter,cols[1],y0+28);val(p.hunterNo,cols[1],y0+40);
-    const hetu=hetuNow();if(hetu){lab(L.hetu,cols[0],y0+28);val(hetu,cols[0],y0+40)}
-    lab(L.ipsc,cols[2],y0);val(p.ipsc,cols[2],y0+12);
-    lab(L.days,cols[3],y0);val(days,cols[3],y0+12);
-    lab(L.types,cols[4],y0);
-    TYPES.filter(t=>tc[t]).forEach((t,i)=>val(L.type(t)+": "+tc[t],cols[4],y0+12+i*11));
-    lab(L.total,cols[5],y0);val(tot,cols[5],y0+12);
-    const startY=y0+Math.max(48,18+Object.keys(tc).length*11);
+    const land=X.page==="landscape",hetu=hetuNow();
     // Signature column only when a visit in the range is signed: the signer's name with the drawn signature below
     const signed=$("xSign").checked&&list.some(s=>s.sign);
     const body=[];list.forEach(s=>{const ls=exportLines(s),n=Math.max(1,ls.length);(ls.length?ls:[{}]).forEach((l,i)=>{
       const row=[fiDate(s.date),s.klo||"",s.place||"",s.org||"",L.mode(l.mode||""),L.type(l.type||""),l.cal||"",l.rounds?String(l.rounds):"",l.info||""];
       if(signed&&i===0)row.push({content:s.sign?s.sign.name||"":"",rowSpan:n,img:s.sign&&s.sign.img||null,
-        when:s.sign&&s.sign.img&&s.sign.at?L.signed+" "+signedAt(s.sign.at,X.lang):"",
-        styles:s.sign&&s.sign.img?{minCellHeight:42,valign:"top"}:{}});
+        when:s.sign&&s.sign.img&&s.sign.at?L.signed+" "+signedAt(s.sign.at,X.lang):""});
       body.push(row)})});
-    doc.autoTable({startY,margin:{left:M,right:M,bottom:40},theme:"grid",rowPageBreak:"avoid",
-      head:[signed?L.cols.concat([L.sigcol]):L.cols],body,
-      didDrawCell:d=>{const im=d.section==="body"&&d.cell.raw&&d.cell.raw.img;if(!im)return;
-        try{const when=d.cell.raw.when,pr=doc.getImageProperties(im),top=d.cell.raw.content?9:2,bot=when?8:2;
-          const bw=d.cell.width-4,bh=d.cell.height-top-bot,k=Math.min(bw/pr.width,bh/pr.height),w=pr.width*k,h=pr.height*k;
-          doc.addImage(im,"PNG",d.cell.x+2+(bw-w)/2,d.cell.y+top+(bh-h)/2,w,h);
-          if(when){doc.setFont("helvetica","normal");let fs=4.8;doc.setFontSize(fs);                  // small timestamp under it, on one line
-            while(fs>3.4&&doc.getTextWidth(when)>d.cell.width-4){fs-=.2;doc.setFontSize(fs)}
-            doc.setTextColor(120);doc.text(when,d.cell.x+2,d.cell.y+d.cell.height-2.5);doc.setTextColor(20)}}catch(_){}},
-      styles:{font:"helvetica",fontSize:6.5,cellPadding:2,lineColor:[180,180,180],lineWidth:.4,textColor:20,overflow:"linebreak"},
-      headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
-      columnStyles:{0:{cellWidth:44},1:{cellWidth:46},7:{halign:"right",cellWidth:40},9:{cellWidth:72}},
-      didDrawPage:d=>{doc.setFontSize(7);doc.setTextColor(120);doc.text((p.name?p.name+" · ":"")+L.title,M,doc.internal.pageSize.getHeight()-20);doc.text(L.page+" "+d.pageNumber,W-M,doc.internal.pageSize.getHeight()-20,{align:"right"});doc.setTextColor(0)}});
-    return{name:L.file+"-"+R.slug+".pdf",buf:doc.output("arraybuffer")};
+    const head=signed?L.cols.concat([L.sigcol]):L.cols;
+    const {jsPDF}=window.jspdf;
+
+    // One page layout at table font size fs → {doc, lines: most lines any table cell needed}
+    function make(fs){
+      const doc=new jsPDF({unit:"pt",format:"a4",orientation:land?"landscape":"portrait"});
+      const W=doc.internal.pageSize.getWidth(),Hh=doc.internal.pageSize.getHeight(),M=36,k=(W-2*M)/(595.28-72);
+      doc.setFont("helvetica","bold");doc.setFontSize(14);doc.text(L.title+R.title,M,M+4);
+      doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(90);
+      const span=R.span?R.span:list.length?fiDate(list[list.length-1].date)+" – "+fiDate(list[0].date):"";
+      doc.text(span,W-M,M+4,{align:"right"});doc.setTextColor(0);
+      const y0=M+24,cols=[0,110,190,270,355,450].map(x=>M+x*k);
+      const lab=(t,x,y)=>{doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.text(t,x,y)};
+      const val=(t,x,y)=>{doc.setFont("helvetica","normal");doc.setFontSize(9);doc.text(String(t||""),x,y)};
+      lab(L.name,cols[0],y0);val(p.name,cols[0],y0+12);
+      lab(L.sra,cols[1],y0);val(p.sra,cols[1],y0+12);
+      lab(L.hunter,cols[1],y0+28);val(p.hunterNo,cols[1],y0+40);
+      if(hetu){lab(L.hetu,cols[0],y0+28);val(hetu,cols[0],y0+40)}
+      lab(L.ipsc,cols[2],y0);val(p.ipsc,cols[2],y0+12);
+      lab(L.days,cols[3],y0);val(days,cols[3],y0+12);
+      lab(L.types,cols[4],y0);
+      TYPES.filter(t=>tc[t]).forEach((t,i)=>val(L.type(t)+": "+tc[t],cols[4],y0+12+i*11));
+      lab(L.total,cols[5],y0);val(tot,cols[5],y0+12);
+      const startY=y0+Math.max(48,18+Object.keys(tc).length*11);
+      // Date, time and shots never wrap: their columns are as wide as their longest entry
+      doc.setFont("helvetica","normal");doc.setFontSize(fs);
+      const pad=2,widest=c=>{doc.setFont("helvetica","bold");const hw=doc.getTextWidth(String(head[c]));doc.setFont("helvetica","normal");   // headings are bold
+        return Math.max(hw,...body.map(r=>doc.getTextWidth(String(r[c]||""))))+2*pad+1.5};
+      const tsFs=Math.min(fs*0.74,6.5);
+      doc.autoTable({startY,margin:{left:M,right:M,bottom:40},theme:"grid",rowPageBreak:"avoid",head:[head],body,
+        didParseCell:d=>{if(d.section==="body"&&d.cell.raw&&d.cell.raw.img){d.cell.styles.minCellHeight=fs*6.4;d.cell.styles.valign="top"}},
+        didDrawCell:d=>{const im=d.section==="body"&&d.cell.raw&&d.cell.raw.img;if(!im)return;
+          try{const when=d.cell.raw.when,pr=doc.getImageProperties(im),top=d.cell.raw.content?fs*1.4:2,bot=when?tsFs*1.6:2;
+            const bw=d.cell.width-4,bh=d.cell.height-top-bot,kk=Math.min(bw/pr.width,bh/pr.height),w=pr.width*kk,h=pr.height*kk;
+            doc.addImage(im,"PNG",d.cell.x+2+(bw-w)/2,d.cell.y+top+(bh-h)/2,w,h);
+            if(when){doc.setFont("helvetica","normal");let f=tsFs;doc.setFontSize(f);       // small timestamp under it, on one line
+              while(f>3.4&&doc.getTextWidth(when)>d.cell.width-4){f-=.2;doc.setFontSize(f)}
+              doc.setTextColor(120);doc.text(when,d.cell.x+2,d.cell.y+d.cell.height-2.5);doc.setTextColor(20)}}catch(_){}},
+        styles:{font:"helvetica",fontSize:fs,cellPadding:pad,lineColor:[180,180,180],lineWidth:.4,textColor:20,overflow:"linebreak"},
+        headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
+        columnStyles:{0:{cellWidth:widest(0)},1:{cellWidth:widest(1)},7:{halign:"right",cellWidth:widest(7)},9:{cellWidth:Math.max(72,fs*11)}},
+        didDrawPage:d=>{doc.setFontSize(7);doc.setTextColor(120);doc.text((p.name?p.name+" · ":"")+L.title,M,Hh-20);doc.text(L.page+" "+d.pageNumber,W-M,Hh-20,{align:"right"});doc.setTextColor(0)}});
+      let lines=1;(doc.lastAutoTable.body||[]).forEach(r=>Object.entries(r.cells).forEach(([c,cell])=>{if(+c!==9)lines=Math.max(lines,(cell.text||[]).length)}));
+      return{doc,lines};
+    }
+    // As big as the page allows while no cell needs more than two lines
+    let out=null;
+    for(let fs=land?10:8.5;fs>=6.5-1e-9;fs-=0.25){out=make(fs);if(out.lines<=2)break}
+    return{name:L.file+"-"+R.slug+(land?(X.lang==="fi"?"-vaaka":"-landscape"):"")+".pdf",buf:out.doc.output("arraybuffer")};
 }
 
 /* Preview: the same PDF drawn page by page (pdf.js) inside the app; nothing is downloaded until Download */
