@@ -213,6 +213,8 @@ The phone's Back button closes the open sheet instead of leaving the page.
   the last 2 years, a year, custom dates (from – to) or the whole diary. Exports drop gun names and merge rows of
   the same type, calibre, firing mode and notes within a visit.
 - **My details**: name and licence numbers for the export (optional; the row is hidden while empty).
+- **Henkilötunnus** can be typed in Export for that one PDF/CSV (checked for format and check character). It's never
+  stored – not on the server, not in the browser – and the field empties when Export closes.
 
 Data commands work on one account: add `--user NAME` (default: the first admin account).
 
