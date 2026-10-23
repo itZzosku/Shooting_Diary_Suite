@@ -288,3 +288,33 @@ def test_box_and_item_delete_only_without_history(setup):
     assert a.post(f"{C}/items/{ids['Geco']}/delete", json={}).status_code == 400
     st = a.get(C).json
     assert {b["name"] for b in st["boxes"]} == {"9 mm A", "9 mm B"} and "" not in {i["name"] for i in st["items"]}
+
+
+def test_treasurer_export(setup):
+    app, a, ids, codes = setup
+    import io
+    from openpyxl import load_workbook
+    anon = app.test_client()
+    a.post("/ammo/api/c/testclub/moves", json={"kind": "buy", "box": ids["9 mm A"], "item": ids["Geco"], "qty": 500})
+    anon.post(f"/ammo/api/b/{codes['9 mm A']}/use", json={"name": "Matti Meikäläinen", "date": _today(),
+                                                          "lines": [{"item": ids["Geco"], "qty": 50}]})
+    anon.post(f"/ammo/api/b/{codes['9 mm A']}/use", json={"name": "Liisa L", "date": _today(), "paid": False,
+                                                          "lines": [{"item": ids["Geco"], "qty": 10}]})
+    fee = a.post("/ammo/api/c/testclub/products", json={"kind": "single", "name": "Kertamaksu", "price": 10}).json["id"]
+    code = a.get("/ammo/api/c/testclub").json["pay_code"]
+    anon.post(f"/ammo/api/p/{code}/pay", json={"name": "Matti Meikäläinen", "date": _today(), "lines": [{"product": fee}]})
+    E = f"/ammo/api/c/testclub/export?from={_today()}&to={_today()}"
+    j = a.get(E + "&fmt=json").json
+    assert j["total"] == {"count": 3, "amount": 28.0, "paid": 25.0, "unpaid": 3.0}
+    assert {(s["kind"], s["what"], s["qty"]) for s in j["summary"]} == {("ammo", "9 mm Luger · Geco", 60), ("single", "Kertamaksu", 1)}
+    assert a.get(E + "&fmt=json&what=fees").json["total"]["count"] == 1
+    assert a.get(E + "&fmt=json&unpaid=1").json["total"]["amount"] == 3.0
+    c = a.get(E + "&fmt=csv&lang=fi")
+    text = c.get_data(as_text=True)
+    assert c.headers["Content-Disposition"].startswith("attachment") and text.startswith("﻿Päivämäärä;Nimi;")
+    assert "Matti Meikäläinen;Patruunat;9 mm Luger · Geco;9 mm A;50;15,00;kyllä;" in text
+    x = a.get(E + "&fmt=xlsx&lang=fi")
+    wb = load_workbook(io.BytesIO(x.data))
+    assert wb.sheetnames == ["Tapahtumat", "Yhteenveto"] and wb["Tapahtumat"].max_row == 4
+    h = _login(app, "chold", "chold-password-1")
+    assert h.get(E + "&fmt=csv").status_code == 403                    # box holders: no names, no money

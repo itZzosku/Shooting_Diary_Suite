@@ -23,7 +23,8 @@ const ADMIN_EN={
   delItem:"Only if it was never used – otherwise archive it.",
   delProd:"Only if it was never paid for or stocked – otherwise archive it.",
   inUse:"It has history in the log, so it can't be deleted – archive it instead.",
-  ref:"code"
+  ref:"code",
+  hintExport:"Ammo and payments, voided entries left out. PDF for printing, Excel (entries + summary) and CSV for the books."
 };
 const ADMIN_FI={
   "Club ammo":"Seuran patruunat","admin":"ylläpitäjä","box holder":"laatikon haltija",
@@ -101,5 +102,11 @@ const ADMIN_FI={
   "Added":"Lisätty","Tap again to remove":"Napauta uudelleen poistaaksesi",
   "{n} season fees in {year}":"{n} kausimaksua vuonna {year}","Names are as people typed them.":"Nimet ovat sellaisina kuin ihmiset ne kirjoittivat.",
   "✓ paid":"✓ maksettu","No season fee under that name – a one-time fee then.":"Tällä nimellä ei ole kausimaksua – siis kertamaksu.",
-  "Not allowed.":"Ei sallittu."
+  "Not allowed.":"Ei sallittu.",
+  "Export for the treasurer…":"Vie rahastonhoitajalle…","Export for the treasurer":"Vienti rahastonhoitajalle","Period":"Aikaväli",
+  "This month":"Tämä kuukausi","Last month":"Edellinen kuukausi","This year":"Tämä vuosi","Last year":"Edellinen vuosi","Dates…":"Päivämäärät…",
+  "From":"Alkaen","To":"Asti","Only not paid":"Vain maksamattomat","Check the dates.":"Tarkista päivämäärät.",
+  hintExport:"Patruunat ja maksut ilman mitätöityjä. PDF tulostamiseen, Excel (tapahtumat + yhteenveto) ja CSV kirjanpitoon.",
+  "Payments":"Maksut","made {d}":"tehty {d}","Qty":"Määrä","Paid":"Maksettu","yes":"kyllä","no":"ei","Summary":"Yhteenveto",
+  "Total €":"Yhteensä €","Paid €":"Maksettu €","Not paid €":"Maksamatta €","Total":"Yhteensä","{n} entries":"{n} kirjausta","What":"Mitä","Code":"Koodi"
 };

@@ -980,3 +980,5 @@ def api_people(slug):
 
 # Fees and merch (season fee, one-time fee, patches …): routes on the same blueprint
 from . import shop  # noqa: E402,F401
+# Treasurer's export (CSV / Excel / data for the PDF)
+from . import export  # noqa: E402,F401

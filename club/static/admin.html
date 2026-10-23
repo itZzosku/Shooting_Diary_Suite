@@ -83,6 +83,7 @@
     <label class="f"><span data-t="Find a name or reference"></span><input type="search" id="lFind" data-tp="e.g. Matti, A7K3 or the whole message"></label>
     <div class="rows" id="log"></div>
     <p class="hint" id="logHint"></p>
+    <div id="exportRow"><button type="button" class="ghost" id="exportBtn" data-t="Export for the treasurer…"></button></div>
   </section>
 
   <!-- Season fees (admins): who has paid this year – for the match desk -->
@@ -390,6 +391,51 @@ $("log").addEventListener("click",async e=>{
   await load();await loadLog();
 });
 
+/* ---- treasurer's export: PDF (made here), Excel and CSV (from the server) ---- */
+function periodOf(p){const d=new Date(),y=d.getFullYear(),m=d.getMonth()+1,pad=n=>String(n).padStart(2,"0"),last=(yy,mm)=>new Date(yy,mm,0).getDate();
+  if(p==="month")return[`${y}-${pad(m)}-01`,`${y}-${pad(m)}-${last(y,m)}`];
+  if(p==="lastmonth"){const yy=m===1?y-1:y,mm=m===1?12:m-1;return[`${yy}-${pad(mm)}-01`,`${yy}-${pad(mm)}-${last(yy,mm)}`]}
+  if(p==="year")return[`${y}-01-01`,`${y}-12-31`];
+  if(p==="lastyear")return[`${y-1}-01-01`,`${y-1}-12-31`];
+  return[v("xFrom"),v("xTo")]}
+function exportSheet(){
+  sheet(T("Export for the treasurer"),`<label class="f">${T("Period")}<select id="xPer">${[["month","This month"],["lastmonth","Last month"],["year","This year"],["lastyear","Last year"],["custom","Dates…"]]
+      .map(([k,l])=>`<option value="${k}">${T(l)}</option>`).join("")}</select></label>
+    <div class="grid2" id="xDates" hidden><label class="f">${T("From")}<input type="date" id="xFrom" value="${today().slice(0,8)}01"></label><label class="f">${T("To")}<input type="date" id="xTo" value="${today()}"></label></div>
+    <label class="f">${T("Show")}<select id="xWhat"><option value="all">${T("Everything")}</option><option value="ammo">${T("Ammo")}</option><option value="fees">${T("Fees & merch")}</option></select></label>
+    <label class="check"><input type="checkbox" id="xUnpaid"> ${T("Only not paid")}</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="primary" data-x="pdf">PDF</button><button type="button" class="ghost" data-x="xlsx">Excel</button><button type="button" class="ghost" data-x="csv">CSV</button></div>
+    <p class="hint" style="margin:0">${T("hintExport")}</p>`,null);
+  $("sBody").onchange=e=>{if(e.target.id==="xPer")$("xDates").hidden=e.target.value!=="custom"};
+  $("sBody").onclick=async e=>{const b=e.target.closest("[data-x]");if(!b)return;
+    const[from,to]=periodOf(v("xPer"));if(!from||!to||from>to){$("sMsg").textContent=T("Check the dates.");$("sMsg").hidden=false;return}
+    const q=`c/${SLUG}/export?from=${from}&to=${to}&what=${v("xWhat")}&unpaid=${$("xUnpaid").checked?1:0}&lang=${LANG}`;
+    if(b.dataset.x!=="pdf"){location.href="/ammo/api/"+q+"&fmt="+b.dataset.x;return}
+    b.disabled=true;try{await exportPdf(await api("GET",q+"&fmt=json"))}catch(err){$("sMsg").textContent=err.message;$("sMsg").hidden=false}finally{b.disabled=false}};
+}
+$("exportBtn").addEventListener("click",exportSheet);
+function loadScript(src){return new Promise((ok,no)=>{if(document.querySelector(`script[src="${src}"]`))return ok();const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+async function exportPdf(d){
+  await loadScript("/diary/static/vendor/jspdf.umd.min.js");await loadScript("/diary/static/vendor/jspdf.plugin.autotable.min.js");
+  const doc=new window.jspdf.jsPDF({unit:"pt",format:"a4"}),M=36,K={ammo:T("Ammo"),season:T("Season fee"),single:T("One-time fee"),merch:T("Merch")};
+  const dt=s=>LANG==="fi"?fiDate(s):s,num=n=>eur(n).replace(" €","");
+  doc.setFont("helvetica","bold");doc.setFontSize(15);doc.text(d.club,M,M+8);
+  doc.setFont("helvetica","normal");doc.setFontSize(10);
+  doc.text(`${T("Payments")} ${dt(d.start)} – ${dt(d.end)}${d.what!=="all"?" · "+T(d.what==="ammo"?"Ammo":"Fees & merch"):""} · ${T("made {d}",{d:dt(today())})}`,M,M+26);
+  doc.autoTable({startY:M+38,margin:{left:M,right:M},theme:"grid",styles:{fontSize:8,cellPadding:3},headStyles:{fillColor:[60,60,60]},
+    head:[[T("Date"),T("Name"),T("Type"),T("What"),T("Box"),T("Qty"),"€",T("Paid"),T("Code")]],
+    body:d.entries.map(e=>[dt(e.date),e.name,K[e.kind]||e.kind,e.what,e.box,e.qty,num(e.amount),e.paid?T("yes"):T("no"),e.ref]),
+    columnStyles:{5:{halign:"right"},6:{halign:"right"}}});
+  let y=doc.lastAutoTable.finalY+18;if(y>760){doc.addPage();y=M}
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text(T("Summary"),M,y);
+  doc.autoTable({startY:y+8,margin:{left:M,right:M},theme:"grid",styles:{fontSize:8.5,cellPadding:3},headStyles:{fillColor:[60,60,60]},
+    head:[[T("Type"),T("What"),T("Qty"),T("Total €"),T("Paid €"),T("Not paid €")]],
+    body:d.summary.map(s=>[K[s.kind]||s.kind,s.what,s.qty,num(s.amount),num(s.paid),num(s.unpaid)]),
+    foot:[[T("Total"),T("{n} entries",{n:d.total.count}),"",num(d.total.amount),num(d.total.paid),num(d.total.unpaid)]],
+    footStyles:{fillColor:[230,230,230],textColor:20,fontStyle:"bold"},columnStyles:{2:{halign:"right"},3:{halign:"right"},4:{halign:"right"},5:{halign:"right"}}});
+  doc.save(`${SLUG}-${d.start}-${d.end}.pdf`);
+}
+
 /* ---- setup ---- */
 const archRow=a=>a?' style="opacity:.5"':"",archTag=a=>a?`<span class="tag">${T("archived")}</span>`:"";
 // Archived rows are hidden behind "Show N archived"
@@ -489,6 +535,7 @@ $("fYear").addEventListener("change",loadFees);$("fFind").addEventListener("inpu
 /* ---- tabs ---- */
 function tab(t){document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tab===t));
   $("tStock").hidden=t!=="stock";$("tLog").hidden=t!=="log";$("tSetup").hidden=t!=="setup";$("tFees").hidden=t!=="fees";
+  $("exportRow").hidden=!isAdmin();
   if(t==="log"&&!LOG)loadLog();if(t==="fees")loadFees();try{sessionStorage.setItem("ammo:tab",t)}catch(e){}}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="log")LOG_BOX=null,LOG=null;tab(b.dataset.tab)}));
 applyLang();

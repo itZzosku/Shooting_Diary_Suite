@@ -359,6 +359,11 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   (one shooter after another with *New entry*). Admins: **Season fees** tab – who has paid in a year, search by name
   (names as typed) – and the fees in *Log & payments* (filter *Fees & merch*, Mark paid, Void). Box holders don't
   see fees.
+- **Treasurer's export** (*Log & payments* → *Export for the treasurer…*, admins): a period (this / last month, this /
+  last year or dates), everything / ammo / fees & merch, optionally only not paid → **PDF** (entries + summary, made
+  in the browser with the diary's jsPDF), **Excel** (sheets entries + summary, real dates and numbers) or **CSV**
+  (Finnish: `;` and decimal comma, UTF-8 for Excel). One row per ammo / product line; voided entries left out; in
+  the admin page's language (`club/export.py`).
 - **Archived** ammo prices, boxes, fees and items are hidden in Setup (*Show N archived*). One that was never used
   (no rounds / payments / stock in the log; a box's hand-overs don't count) can be deleted from its Edit sheet.
 - **Languages**: admin pages in Finnish or English (FI · EN at the top, remembered per phone; Finnish texts in
