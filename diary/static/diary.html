@@ -368,6 +368,9 @@ header.top{padding-top:6px!important}
         <button type="button" class="chip" data-xlang="fi">Suomi</button><button type="button" class="chip" data-xlang="en">English</button></div></div>
     </div>
     <div class="hint" id="xLangHint"></div>
+    <label class="f">Henkilötunnus – optional, for this export only
+      <input type="text" id="xHetu" maxlength="11" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DDMMYY-XXXX" inputmode="text"></label>
+    <div class="hint" id="xHetuHint" style="margin-top:-10px">Printed on the PDF / CSV under your name. Never saved – not on the server, not in this browser.</div>
     <label class="check" id="xSignRow"><input type="checkbox" id="xSign" checked><span>Include signatures (<i>Kuittaus</i> column) <span class="hint" id="xSignN"></span></span></label>
     <div class="opt">
       <label class="r"><input type="radio" name="xr" value="2y" id="xr2y" checked>Last 2 years</label>
@@ -711,7 +714,8 @@ function openForm(id){
   const dn=$("form").querySelector(".draftnote");if(dn)dn.hidden=true;
   if(restored)Draft.note($("form"),drT,()=>{Draft.clear("visit",id);lsDel(DRAFT_KEY);openForm(id)});
 }
-function closeSheets(){["gSheet","sheet","pSheet","xSheet","pvSheet","sigFull"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null}
+function closeSheets(){["gSheet","sheet","pSheet","xSheet","pvSheet","sigFull"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null;
+  $("xHetu").value="";PV.out=null}   // the henkilötunnus and a previewed PDF never outlive the export
 function presets(){
   const c=new Map();
   S.sessions.slice(0,120).forEach(s=>(s.lines||[]).forEach(l=>{if(!l.type)return;const k=[l.type,l.cal,l.mode].join("|");c.set(k,(c.get(k)||0)+1)}));
@@ -960,10 +964,10 @@ $("pForm").addEventListener("submit",async e=>{e.preventDefault();
 /* ---------- export: PDF or CSV, Finnish or English ---------- */
 // Finnish is the format of the official shooting-activity record; English translates labels, types and modes.
 const XL={
-  fi:{title:"Ampumapäiväkirja",name:"Nimi:",sra:"SRA Lisenssi:",ipsc:"IPSC Lisenssi:",hunter:"Metsästäjänumero:",days:"Harrastuskerrat:",
+  fi:{title:"Ampumapäiväkirja",name:"Nimi:",sra:"SRA Lisenssi:",ipsc:"IPSC Lisenssi:",hunter:"Metsästäjänumero:",hetu:"Henkilötunnus:",days:"Harrastuskerrat:",
       types:"Asetyypit:",total:"Yhteenlasketut laukaukset:",page:"Sivu",y2:" – 2 vuotta",file:"ampumapaivakirja",all:"kaikki",y2slug:"2v",
       cols:["Päivämäärä","klo","Paikka","Järjestäjä","Toimintatapa","Tyyppi","Kaliiperi","Laukaukset","Lisätietoja"],sigcol:"Kuittaus",signed:"allekirjoitettu",type:t=>t,mode:m=>m},
-  en:{title:"Shooting diary",name:"Name:",sra:"SRA licence:",ipsc:"IPSC licence:",hunter:"Hunter number:",days:"Shooting days:",
+  en:{title:"Shooting diary",name:"Name:",sra:"SRA licence:",ipsc:"IPSC licence:",hunter:"Hunter number:",hetu:"Personal identity code:",days:"Shooting days:",
       types:"Firearm types:",total:"Total shots:",page:"Page",y2:" – 2 years",file:"shooting-diary",all:"all",y2slug:"2y",
       cols:["Date","Time","Place","Organiser","Firing mode","Type","Calibre","Shots","Notes"],sigcol:"Signed by",signed:"signed",type:tEn,mode:mEn}};
 // When a visit was signed, in this device's time zone: "21.10.2026 21.02 EEST" (fi) / "21/10/2026 21:02 EEST" (en)
@@ -973,6 +977,18 @@ function signedAt(at,lang){const d=new Date(at);if(!at||isNaN(d))return"";
   return`${day} ${t}${tz?" "+tz:""}`}
 const XPREF="ampumapk-export";
 const X=Object.assign({fmt:"pdf",lang:"fi"},lsGet(XPREF)||{});
+/* Henkilötunnus: typed for one export, kept only in the field (no draft, no storage, never sent anywhere);
+   cleared when Export closes. Checked against the format and check character. */
+const HETU_RE=/^(\d{2})(\d{2})(\d{2})([-+A-FU-Y])(\d{3})([0-9A-Y])$/;
+function hetuCheck(v){
+  const m=HETU_RE.exec(v);if(!m)return false;
+  return"0123456789ABCDEFHJKLMNPRSTUVWXY"[parseInt(m[1]+m[2]+m[3]+m[5],10)%31]===m[6];
+}
+function hetuNow(){const v=$("xHetu").value.trim().toUpperCase();return v&&hetuCheck(v)?v:""}
+function hetuHint(){const v=$("xHetu").value.trim().toUpperCase(),ok=!v||hetuCheck(v);
+  $("xHetuHint").textContent=ok?"Printed on the PDF / CSV under your name. Never saved – not on the server, not in this browser."
+    :"That doesn't look like a valid henkilötunnus (check the character at the end) – it won't be printed.";
+  $("xHetuHint").style.color=ok?"":"var(--danger,#b3261e)"}
 function xRender(){
   $("xForm").querySelectorAll("[data-xfmt]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.xfmt===X.fmt));
   $("xForm").querySelectorAll("[data-xlang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.xlang===X.lang));
@@ -985,8 +1001,9 @@ function exportCsv(R,L){
   const q=v=>{v=String(v??"");return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
   const p=S.profile||{},list=sortSessions(S.sessions.filter(R.filter)).reverse();     // oldest first
   const tc=typeCounts(list),tot=list.reduce((a,s)=>a+sRounds(s),0);
-  const rows=[[L.name,L.sra,L.ipsc,L.hunter,L.days,L.total],
-    [p.name,p.sra,p.ipsc,p.hunterNo,new Set(list.map(s=>s.date)).size,tot],
+  const hetu=hetuNow();
+  const rows=[[L.name].concat(hetu?[L.hetu]:[],[L.sra,L.ipsc,L.hunter,L.days,L.total]),
+    [p.name].concat(hetu?[hetu]:[],[p.sra,p.ipsc,p.hunterNo,new Set(list.map(s=>s.date)).size,tot]),
     [L.types].concat(TYPES.filter(t=>tc[t]).map(t=>L.type(t)+": "+tc[t])),[]];
   const signed=$("xSign").checked&&list.some(s=>s.sign);rows.push(signed?L.cols.concat([L.sigcol]):L.cols);   // signer's name only when someone signed
   list.forEach(s=>{const ls=exportLines(s);(ls.length?ls:[{}]).forEach((l,i)=>rows.push([fiDate(s.date),s.klo,s.place,s.org,L.mode(l.mode),L.type(l.type),l.cal,l.rounds||"",l.info]
@@ -1029,9 +1046,11 @@ $("pdfBtn").addEventListener("click",()=>{
   const ys=[...new Set(S.sessions.map(s=>s.date.slice(0,4)))].sort().reverse();
   const cur=$("xYear").value||(S.year&&S.year!=="all"?S.year:ys[0]);
   $("xYear").innerHTML=ys.map(y=>`<option ${y===cur?"selected":""}>${y}</option>`).join("");
-  S.xSignTouched=false;xRender();updHint();$("xSheet").hidden=false;document.body.style.overflow="hidden";
+  S.xSignTouched=false;$("xHetu").value="";hetuHint();xRender();updHint();$("xSheet").hidden=false;document.body.style.overflow="hidden";
 });
 $("xClose").addEventListener("click",closeSheets);
+$("xHetu").addEventListener("input",hetuHint);
+window.addEventListener("pagehide",()=>{$("xHetu").value=""});
 $("xForm").addEventListener("input",e=>{if(e.target.id==="xYear")$("xrYear").checked=true;if(e.target.id==="xEnd")$("xr2y").checked=true;
   if(e.target.id==="xFrom"||e.target.id==="xTo")$("xrRange").checked=true;updHint()});
 ["input","change"].forEach(t=>$("xSign").addEventListener(t,()=>{S.xSignTouched=true}));   // before the form's own input/change
@@ -1065,6 +1084,7 @@ async function buildPdf(L){
     lab(L.name,cols[0],y0);val(p.name,cols[0],y0+12);
     lab(L.sra,cols[1],y0);val(p.sra,cols[1],y0+12);
     lab(L.hunter,cols[1],y0+28);val(p.hunterNo,cols[1],y0+40);
+    const hetu=hetuNow();if(hetu){lab(L.hetu,cols[0],y0+28);val(hetu,cols[0],y0+40)}
     lab(L.ipsc,cols[2],y0);val(p.ipsc,cols[2],y0+12);
     lab(L.days,cols[3],y0);val(days,cols[3],y0+12);
     lab(L.types,cols[4],y0);
