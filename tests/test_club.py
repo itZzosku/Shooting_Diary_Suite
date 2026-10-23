@@ -318,3 +318,28 @@ def test_treasurer_export(setup):
     assert wb.sheetnames == ["Tapahtumat", "Yhteenveto"] and wb["Tapahtumat"].max_row == 4
     h = _login(app, "chold", "chold-password-1")
     assert h.get(E + "&fmt=csv").status_code == 403                    # box holders: no names, no money
+
+
+def test_box_with_two_calibres(setup):
+    app, a, ids, codes = setup
+    C = "/ammo/api/c/testclub"
+    sg = a.post(f"{C}/items", json={"calibre": "12/70", "name": "Trap", "price": 0.40}).json["id"]
+    rf = a.post(f"{C}/items", json={"calibre": "7.62x54R", "name": "", "price": 0.80}).json["id"]
+    bid = a.post(f"{C}/boxes", json={"name": "Charlie", "calibre": "12/70", "cals": ["7.62x54R"], "type": ""}).json["id"]
+    a.post(f"{C}/moves", json={"kind": "buy", "box": bid, "item": sg, "qty": 100})
+    a.post(f"{C}/moves", json={"kind": "buy", "box": bid, "item": rf, "qty": 60})
+    assert a.post(f"{C}/moves", json={"kind": "buy", "box": bid, "item": ids["Geco"], "qty": 5}).status_code == 400
+    st = a.get(C).json
+    box = next(b for b in st["boxes"] if b["id"] == bid)
+    assert box["cals"] == ["12/70", "7.62x54R"] and box["total"] == 160
+    assert st["cal_totals"]["12/70"] == 100 and st["cal_totals"]["7.62x54R"] == 60
+    info = app.test_client().get(f"/ammo/api/b/{box['code']}").json
+    assert info["box"]["calibre"] == "12/70 + 7.62x54R" and [i["calibre"] for i in info["items"]] == ["12/70", "7.62x54R"]
+    s = _login(app, "cshooter", "cshooter-password-1")
+    r = s.post(f"/ammo/api/b/{box['code']}/use", json={"name": "Seppo", "date": _today(), "diary": True,
+                                                       "lines": [{"item": sg, "qty": 25}, {"item": rf, "qty": 10}]}).json
+    assert r["total"] == 18.0 and r["diary"] is True
+    lines = [ln for v in s.get("/diary/api/sessions").json for ln in v["lines"] if ln.get("club") == r["grp"]]
+    assert sorted((ln["cal"], ln["rounds"]) for ln in lines) == [("12/70", 25), ("7.62x54R", 10)]
+    # Can't drop a calibre that still has rounds in the box
+    assert a.post(f"{C}/boxes", json={"id": bid, "name": "Charlie", "calibre": "12/70", "cals": []}).status_code == 400

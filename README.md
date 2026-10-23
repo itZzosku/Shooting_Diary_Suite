@@ -328,6 +328,10 @@ club's admins see stock and payments and know when to buy more. Separate from th
 pages and database (`diary_data/clubs.db`) – and talks to the diary only through `club/bridge.py` (who's logged
 in, their name, "add to my diary"). Moving it to its own repository means rewriting that one file.
 
+- **Several calibres in one box** (Edit box → *More calibres in this box*, e.g. 12/70 and 7.62x54R in a box that is
+  used less): the form then lists every ammo in the box on its own line with its own rounds; the shooter fills in
+  what they shot and pays the total. Stock, totals and buy-more levels are per calibre; Move works between boxes
+  that share the calibre; the diary gets one line per calibre.
 - **Boxes**, not just calibres: each physical box has a name, one calibre, a holder and a refill level. Every
   box has its own secret link; print it as a QR code on the lid. *New link* replaces a leaked one.
 - **Shooter form** (scan the box), in Finnish, Swedish or English (FI · SV · EN at the top, remembered on the phone;

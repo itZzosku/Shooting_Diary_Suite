@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS items (            -- an ammo the club sells: calibre
     price REAL NOT NULL DEFAULT 0,
     archived INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS boxes (            -- a physical ammo box, one calibre, held by one person
+CREATE TABLE IF NOT EXISTS boxes (            -- a physical ammo box: one calibre (+ more in cals), held by one person
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     club_id INTEGER NOT NULL,
     name TEXT NOT NULL,
@@ -136,6 +136,8 @@ def init_db():
         conn.execute("ALTER TABLE clubs ADD COLUMN pay_msg TEXT NOT NULL DEFAULT ''")    # text before the reference
     if "pay_url" not in {r[1] for r in conn.execute("PRAGMA table_info(boxes)")}:
         conn.execute("ALTER TABLE boxes ADD COLUMN pay_url TEXT NOT NULL DEFAULT ''")   # MobilePay link of the box
+    if "cals" not in {r[1] for r in conn.execute("PRAGMA table_info(boxes)")}:
+        conn.execute("ALTER TABLE boxes ADD COLUMN cals TEXT NOT NULL DEFAULT '[]'")    # more calibres in the same box
     from . import shop
     shop.init_db(conn)                        # fees and merch
     conn.commit()
@@ -327,13 +329,45 @@ def box_stock(conn, club_id):
     return out
 
 
+def box_cals(b):
+    """All calibres a box holds: its main one first, then the others (e.g. 12/70 and 7.62x54R in one box)."""
+    try:
+        more = json.loads(b["cals"] or "[]")
+    except (ValueError, TypeError, IndexError, KeyError):
+        more = []
+    return [b["calibre"]] + [c for c in more if c and c != b["calibre"]]
+
+
+def cal_stock(conn, club_id):
+    """{calibre: rounds in all boxes} (by the ammo's calibre, so a box with two calibres counts right)."""
+    cal = {r["id"]: r["calibre"] for r in conn.execute("SELECT id, calibre FROM items WHERE club_id=?", (club_id,))}
+    arch = {r["id"] for r in conn.execute("SELECT id FROM boxes WHERE club_id=? AND archived", (club_id,))}
+    out = {}
+    for (b, i), n in stock(conn, club_id).items():
+        if b not in arch and i in cal:
+            out[cal[i]] = out.get(cal[i], 0) + n
+    return out
+
+
+def _cal_list(v, main):
+    if isinstance(v, str):
+        v = v.split(",")
+    if not isinstance(v, list):
+        return []
+    out = []
+    for c in v:
+        c = _clean(c, 40)
+        if c and c != main and c not in out:
+            out.append(c)
+    return out[:5]
+
+
 def warnings(conn, club_id):
     """Boxes below their refill level and calibres below their buy-more level."""
     bs = box_stock(conn, club_id)
-    out, per_cal = [], {}
+    out, per_cal = [], cal_stock(conn, club_id)
     for b in conn.execute("SELECT * FROM boxes WHERE club_id=? AND NOT archived", (club_id,)):
         n = bs.get(b["id"], 0)
-        per_cal[b["calibre"]] = per_cal.get(b["calibre"], 0) + n
         if b["low"] and n < b["low"]:
             out.append({"kind": "box", "box": b["id"], "name": b["name"], "n": n, "low": b["low"]})
     for lv in conn.execute("SELECT * FROM levels WHERE club_id=?", (club_id,)):
@@ -448,18 +482,24 @@ def _box(code, conn):
     return dict(b), dict(c)
 
 
-def _items_for(conn, club_id, calibre):
-    return [dict(r) for r in conn.execute(
-        "SELECT id, name, price FROM items WHERE club_id=? AND calibre=? AND NOT archived ORDER BY price DESC, name",
-        (club_id, calibre))]
+def _items_for(conn, club_id, calibres):
+    """Ammo of these calibres, in the box's calibre order, dearest first within a calibre."""
+    if isinstance(calibres, str):
+        calibres = [calibres]
+    rows = [dict(r) for r in conn.execute(
+        f"SELECT id, name, price, calibre FROM items WHERE club_id=? AND NOT archived AND calibre IN "
+        f"({','.join('?' * len(calibres))}) ORDER BY price DESC, name", [club_id] + list(calibres))]
+    return sorted(rows, key=lambda r: calibres.index(r["calibre"]))
 
 
 def _box_items(conn, club, box):
     """What the shooter can pick: the ammo that's in this box (by the log); every ammo of the calibre if none is."""
-    items = _items_for(conn, club["id"], box["calibre"])
+    cals = box_cals(box)
+    items = _items_for(conn, club["id"], cals)
     st = stock(conn, club["id"])
     have = [i for i in items if st.get((box["id"], i["id"]), 0) > 0]
-    return have or items
+    # Per calibre: what's in the box, or every ammo of that calibre if none of it is
+    return [i for i in items if i in have or not any(h["calibre"] == i["calibre"] for h in have)]
 
 
 @cbp.get("/api/b/<code>")
@@ -471,7 +511,8 @@ def api_box(code):
     u = current_user()
     return jsonify(club={"name": club["name"], "slug": club["slug"], "mobilepay": club["mobilepay"],
                          "pay_msg": club["pay_msg"]},
-                   box={"name": box["name"], "calibre": box["calibre"], "pay_url": box["pay_url"]},
+                   box={"name": box["name"], "calibre": " + ".join(box_cals(box)), "cals": box_cals(box),
+                        "pay_url": box["pay_url"]},
                    items=_box_items(conn, club, box),
                    me={"name": bridge.display_name(u), "user": u["username"]} if u else None,
                    withdraw_min=WITHDRAW_MIN)
@@ -510,7 +551,7 @@ def api_use(code):
     d = str(body.get("date") or "")
     if not _valid_date(d):
         return _err("Check the date.")
-    items = {i["id"]: i for i in _items_for(conn, club["id"], box["calibre"])}
+    items = {i["id"]: i for i in _items_for(conn, club["id"], box_cals(box))}
     lines = body.get("lines")
     if not isinstance(lines, list) or not 1 <= len(lines) <= 5:
         return _err("Add the rounds.")
@@ -538,7 +579,7 @@ def api_use(code):
     out = _entry_out(conn, grp)
     if u and body.get("diary"):
         try:
-            out["diary"] = add_to_diary(u, club, box, grp, d, sum(q for _i, q in rows))
+            out["diary"] = add_to_diary(u, club, box, grp, d, rows)
         except (sqlite3.Error, ValueError, KeyError):
             out["diary"] = False
     return jsonify(ok=True, **out)
@@ -592,9 +633,16 @@ def api_withdraw(code, grp):
     return jsonify(ok=True)
 
 
-def add_to_diary(user, club, box, grp, d, rounds):
-    return bridge.add_rounds(user, d, rounds, box["calibre"], box["type"], f"{club['name']} ammo · {box['name']}",
-                             club["name"], grp)
+def add_to_diary(user, club, box, grp, d, rows):
+    """One diary line per calibre shot (a box can hold several); the box's firearm type only for a one-calibre box."""
+    per = {}
+    for it, q in rows:
+        per[it["calibre"]] = per.get(it["calibre"], 0) + q
+    typ = box["type"] if len(box_cals(box)) == 1 else ""
+    ok = True
+    for cal, q in per.items():
+        ok = bridge.add_rounds(user, d, q, cal, typ, f"{club['name']} ammo · {box['name']}", club["name"], grp) and ok
+    return ok
 
 
 # ------------------------------------------------------------------ admin API (diary login + a role in the club)
@@ -660,10 +708,12 @@ def api_state(slug):
         b["stock"] = {str(i): n for (bx, i), n in st.items() if bx == b["id"] and n}
         b["total"] = sum(n for (bx, _i), n in st.items() if bx == b["id"])
         b["mine"] = b["holder_uid"] == u["id"]
+        b["cals"] = box_cals(b)
         if role != "admin" and not b["mine"]:
             b["code"] = None                   # only admins and the holder see a box's secret link
         boxes.append(b)
     levels = {r["calibre"]: r["low"] for r in conn.execute("SELECT * FROM levels WHERE club_id=?", (club["id"],))}
+    cal_totals = cal_stock(conn, club["id"])
     people = [{"user_id": r["user_id"], "role": r["role"]}
               for r in conn.execute("SELECT * FROM club_roles WHERE club_id=?", (club["id"],))]
     names = _user_names({p["user_id"] for p in people} | {b["holder_uid"] for b in boxes if b["holder_uid"]})
@@ -674,7 +724,7 @@ def api_state(slug):
     from . import shop
     admin = role == "admin"
     return jsonify(club={k: club[k] for k in ("slug", "name", "mobilepay", "pay_msg")}, role=role, me=u["username"],
-                   items=items, boxes=boxes, levels=levels, people=people if admin else [],
+                   items=items, boxes=boxes, levels=levels, cal_totals=cal_totals, people=people if admin else [],
                    warnings=warnings(conn, club["id"]), types=TYPES,
                    products=shop._products(conn, club["id"]) if admin else [],
                    pay_code=shop.pay_code(conn, club) if admin else None)
@@ -741,6 +791,7 @@ def api_boxes(slug):
     club, u, _r = _club_for(slug)
     b, conn = _body(), cdb()
     name, cal = _clean(b.get("name"), 40), _clean(b.get("calibre"), 40)
+    cals = json.dumps(_cal_list(b.get("cals"), cal), ensure_ascii=False)
     typ = b.get("type") if b.get("type") in TYPES else ""
     if not name or not cal:
         return _err("Name and calibre are needed.")
@@ -757,16 +808,20 @@ def api_boxes(slug):
         r = conn.execute("SELECT * FROM boxes WHERE id=? AND club_id=?", (bid, club["id"])).fetchone()
         if not r:
             return _err("not_found", 404)
-        if r["calibre"] != cal and box_stock(conn, club["id"]).get(r["id"]):
+        # A calibre that still has rounds in the box can't be taken off it
+        keep = set([cal] + json.loads(cals))
+        icals = {i["id"]: i["calibre"] for i in conn.execute("SELECT id, calibre FROM items WHERE club_id=?", (club["id"],))}
+        if any(n and icals.get(i) not in keep for (bx, i), n in stock(conn, club["id"]).items() if bx == r["id"]):
             return _err("Empty the box (move or count it to 0) before changing its calibre.")
         if (r["holder_name"], r["holder_uid"]) != (hn, huid):
             _handover_row(conn, club, r["id"], hn, u, r["holder_name"])
         conn.execute("UPDATE boxes SET name=?, calibre=?, type=?, low=?, holder_name=?, holder_uid=?, archived=?, "
-                     "pay_url=? WHERE id=?", (name, cal, typ, low, hn, huid, 1 if b.get("archived") else 0, pay, bid))
+                     "pay_url=?, cals=? WHERE id=?", (name, cal, typ, low, hn, huid, 1 if b.get("archived") else 0, pay,
+                                                      cals, bid))
     else:
-        bid = conn.execute("INSERT INTO boxes(club_id,name,calibre,type,code,holder_name,holder_uid,low,created,pay_url) "
-                           "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                           (club["id"], name, cal, typ, new_code(conn), hn, huid, low, _now(), pay)).lastrowid
+        bid = conn.execute("INSERT INTO boxes(club_id,name,calibre,type,code,holder_name,holder_uid,low,created,pay_url,"
+                           "cals) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                           (club["id"], name, cal, typ, new_code(conn), hn, huid, low, _now(), pay, cals)).lastrowid
         if hn:
             _handover_row(conn, club, bid, hn, u, "")
     conn.commit()
@@ -852,8 +907,8 @@ def api_move(slug):
         item = items[int(b.get("item"))]
     except (KeyError, TypeError, ValueError):
         return _err("Pick the box and the ammo.")
-    if item["calibre"] != box["calibre"]:
-        return _err(f"{box['name']} is a {box['calibre']} box.")
+    if item["calibre"] not in box_cals(box):
+        return _err(f"{box['name']} is a {' + '.join(box_cals(box))} box.")
     d = str(b.get("date") or time.strftime("%Y-%m-%d"))
     if not DATE_RE.match(d):
         return _err("Check the date.")
@@ -875,7 +930,7 @@ def api_move(slug):
                 to = boxes[int(b.get("to"))]
             except (KeyError, TypeError, ValueError):
                 return _err("Pick the box to move to.")
-            if to["id"] == box["id"] or to["calibre"] != box["calibre"]:
+            if to["id"] == box["id"] or item["calibre"] not in box_cals(to):
                 return _err("Move between two boxes of the same calibre.")
             if not (_may_box(conn, club, u, role, box["id"]) or _may_box(conn, club, u, role, to["id"])):
                 abort(403)

@@ -106,9 +106,9 @@ function qrSvg(text){
 function sticker(b){
   const t=T[opt.lang],url=location.origin+"/ammo/"+SLUG+"/"+b.code;
   const msg=S.club.pay_msg?`${esc(S.club.pay_msg)} ${t.msgRef}`:t.ref;
-  const items=S.items.filter(i=>i.calibre===b.calibre&&!i.archived);
-  const price=opt.prices&&items.length?`<div class="price">${items.map(i=>`${esc(b.calibre)}${i.name?" "+esc(i.name):""} ${(+i.price).toFixed(2).replace(".",opt.lang==="en"?".":",")} ${t.perRound}`).join("<br>")}</div>`:"";
-  const head=`<div class="club">${esc(S.club.name)}</div><div><div class="box">${esc(b.name)}</div><div class="cal">${esc(b.calibre)} · ${t.title}</div></div>`;
+  const items=S.items.filter(i=>(b.cals||[b.calibre]).includes(i.calibre)&&!i.archived);
+  const price=opt.prices&&items.length?`<div class="price">${items.map(i=>`${esc(i.calibre)}${i.name?" "+esc(i.name):""} ${(+i.price).toFixed(2).replace(".",opt.lang==="en"?".":",")} ${t.perRound}`).join("<br>")}</div>`:"";
+  const head=`<div class="club">${esc(S.club.name)}</div><div><div class="box">${esc(b.name)}</div><div class="cal">${esc((b.cals||[b.calibre]).join(" + "))} · ${t.title}</div></div>`;
   const steps=`<ol>${t.steps.map(s=>`<li>${s.replace("{msg}",msg)}</li>`).join("")}</ol>`;
   const tail=`${price}<div class="url">${esc(url)}</div>`;
   return opt.size==="2"
@@ -156,7 +156,7 @@ $("print").addEventListener("click",()=>window.print());
   const qs=new URLSearchParams(location.search),want=qs.get("box"),wantPay=qs.get("pay");
   opt.sel=new Set(wantPay?["pay"]:S.boxes.filter(b=>!want||String(b.id)===want).map(b=>b.id));
   const hasPay=S.pay_code&&(S.products||[]).some(p=>!p.archived);
-  $("boxes").innerHTML=(S.boxes.length?S.boxes.map(b=>`<label class="check"><input type="checkbox" value="${b.id}" ${opt.sel.has(b.id)?"checked":""}> ${esc(b.name)} <span class="hint">${esc(b.calibre)}</span></label>`).join("")
+  $("boxes").innerHTML=(S.boxes.length?S.boxes.map(b=>`<label class="check"><input type="checkbox" value="${b.id}" ${opt.sel.has(b.id)?"checked":""}> ${esc(b.name)} <span class="hint">${esc((b.cals||[b.calibre]).join(" + "))}</span></label>`).join("")
     :`<div class="hint">${U("No boxes yet.")}</div>`)+(hasPay?`<label class="check"><input type="checkbox" value="pay" ${opt.sel.has("pay")?"checked":""}> ${U("Payments page")} <span class="hint">${U("fees & merch")}</span></label>`:"");
   render();
 })();

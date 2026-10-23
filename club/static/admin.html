@@ -212,16 +212,20 @@ function renderWarn(){
 
 /* ---- stock ---- */
 function renderStock(){
-  const cals=[...new Set(S.boxes.filter(b=>!b.archived).map(b=>b.calibre))];
+  // Boxes grouped by what they hold ("9 mm Luger", or "12/70 + 7.62x54R" for a box with two calibres);
+  // the totals and buy-more levels are per calibre, over all boxes
+  const calLabel=b=>b.cals.join(" + "),active=S.boxes.filter(b=>!b.archived),cals=[...new Set(active.map(calLabel))];
   const merch=(S.products||[]).filter(p=>p.track&&!p.archived);
   const merchHtml=merch.length?`<div class="cal"><div class="calhead"><h2>${T("Merch")}</h2></div>${merch.map(p=>
     `<button class="box" type="button" data-pm="${p.id}"><span><b>${esc(p.name)}</b>${p.low&&p.stock<p.low?`<span class="tag warn">${T("low")}</span>`:""}<br><small>${eur(p.price)}${p.low?" · "+T("warn below {n}",{n:fmt(p.low)}):""}</small></span><span class="n">${fmt(p.stock)}</span></button>`).join("")}</div>`:"";
   if(!cals.length){$("stock").innerHTML=`<div class="card hint">${T("No boxes yet.")}${isAdmin()?" "+T("Add ammo prices and boxes on Setup."):""}</div>`+merchHtml;$("stockActs").innerHTML="";return}
-  $("stock").innerHTML=cals.map(cal=>{
-    const bs=S.boxes.filter(b=>b.calibre===cal&&!b.archived),tot=bs.reduce((a,b)=>a+b.total,0),lv=S.levels[cal];
-    return`<div class="cal"><div class="calhead"><h2>${esc(cal)}</h2><span><b>${fmt(tot)}</b>
+  const calTot=c=>{const tot=(S.cal_totals||{})[c]||0,lv=S.levels[c];return`<b>${fmt(tot)}</b>
       ${lv?`<span class="tag ${tot<lv?"bad":""}">${T("buy below {n}",{n:fmt(lv)})}</span>`:""}
-      ${isAdmin()?`<button class="link" type="button" data-level="${esc(cal)}" style="margin-left:8px">${T("Level")}</button>`:""}</span></div>
+      ${isAdmin()?`<button class="link" type="button" data-level="${esc(c)}" style="margin-left:8px">${T("Level")}</button>`:""}`};
+  $("stock").innerHTML=cals.map(grp=>{
+    const bs=active.filter(b=>calLabel(b)===grp),cs=bs[0].cals;
+    return`<div class="cal"><div class="calhead"><h2>${esc(grp)}</h2>${cs.length===1?`<span>${calTot(cs[0])}</span>`:""}</div>
+      ${cs.length>1?`<div style="display:flex;gap:4px 18px;flex-wrap:wrap;font-size:.9rem;margin:2px 0 4px">${cs.map(c=>`<span>${esc(c)} ${calTot(c)}</span>`).join("")}</div>`:""}
       ${bs.map(b=>{const its=Object.entries(b.stock).filter(([,n])=>n).map(([i,n])=>`${esc(itemName(itemOf(+i)))} ${fmt(n)}`).join(" · ");
         return`<button class="box" type="button" data-box="${b.id}"><span><b>${esc(b.name)}</b>${b.low&&b.total<b.low?`<span class="tag warn">${T("refill")}</span>`:""}${b.mine?`<span class="tag">${T("yours")}</span>`:""}<br>
           <small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}${its&&Object.keys(b.stock).length>1?" · "+its:""}</small></span><span class="n">${fmt(b.total)}</span></button>`}).join("")}
@@ -260,7 +264,7 @@ const delHtml=what=>`<div><button type="button" class="danger" data-del>${T("Del
 function boxSheet(b){
   const its=Object.entries(b.stock).filter(([,n])=>n);
   const url=boxUrl(b);
-  sheet(b.name,`<div class="hint">${esc(b.calibre)}${b.type?" · "+esc(b.type):""} · ${b.holder_name?T("held by {name}",{name:"<b>"+esc(b.holder_name)+"</b>"}):T("no holder")}</div>
+  sheet(b.name,`<div class="hint">${esc(b.cals.join(" + "))}${b.type?" · "+esc(b.type):""} · ${b.holder_name?T("held by {name}",{name:"<b>"+esc(b.holder_name)+"</b>"}):T("no holder")}</div>
     <div class="card"><div class="rows">${its.length?its.map(([i,n])=>`<div class="row"><span>${esc(itemName(itemOf(+i)))}</span><span class="num">${fmt(n)}</span></div>`).join("")
       :`<div class="hint">${T("Empty.")}</div>`}<div class="row"><b>${T("In the box")}</b><b class="num">${fmt(b.total)}</b></div></div>
       ${b.low?`<div class="hint">${T("Refill below {n}",{n:fmt(b.low)})}</div>`:""}
@@ -281,18 +285,18 @@ function boxSheet(b){
       await api("POST",`c/${SLUG}/boxes/${b.id}/newcode`,{});await load();boxSheet(boxOf(b.id));toast(T("New link – print a new QR sticker"))}};
 }
 
-function boxOpts(sel,filter){return S.boxes.filter(b=>!b.archived&&(!filter||filter(b))).map(b=>`<option value="${b.id}" ${sel===b.id?"selected":""}>${esc(b.name)} (${esc(b.calibre)}) – ${fmt(b.total)}</option>`).join("")}
-function itemOpts(cal,box){return S.items.filter(i=>i.calibre===cal&&!i.archived).map(i=>`<option value="${i.id}">${esc(itemName(i))}${box?" – "+T("{n} in box",{n:fmt(box.stock[i.id]||0)}):""}</option>`).join("")}
+function boxOpts(sel,filter){return S.boxes.filter(b=>!b.archived&&(!filter||filter(b))).map(b=>`<option value="${b.id}" ${sel===b.id?"selected":""}>${esc(b.name)} (${esc(b.cals.join(" + "))}) – ${fmt(b.total)}</option>`).join("")}
+function itemOpts(box){return S.items.filter(i=>box.cals.includes(i.calibre)&&!i.archived).map(i=>`<option value="${i.id}">${esc(box.cals.length>1?i.calibre+(i.name?" "+i.name:""):itemName(i))}${box?" – "+T("{n} in box",{n:fmt(box.stock[i.id]||0)}):""}</option>`).join("")}
 function moveSheet(kind,b){
   const mine=S.boxes.filter(x=>!x.archived&&mayBox(x));
   // Move: from the fullest box that has another box of the same calibre
-  b=b||(kind==="move"&&mine.filter(x=>S.boxes.some(y=>!y.archived&&y.id!==x.id&&y.calibre===x.calibre)).sort((x,y)=>y.total-x.total)[0])||mine[0];if(!b)return;
+  b=b||(kind==="move"&&mine.filter(x=>S.boxes.some(y=>!y.archived&&y.id!==x.id&&y.cals.some(c=>x.cals.includes(c)))).sort((x,y)=>y.total-x.total)[0])||mine[0];if(!b)return;
   const title=T({buy:"Refill a box",move:"Move between boxes",count:"Count a box"}[kind]);
   let cur=b.id;                                  // not read from the DOM: an earlier sheet's fields may still be there
   const html=()=>{const box=boxOf(cur);return`
     <label class="f">${T(kind==="move"?"From box":"Box")}<select id="mBox">${boxOpts(box.id,x=>kind==="move"||mayBox(x))}</select></label>
-    ${kind==="move"?`<label class="f">${T("To box")}<select id="mTo">${boxOpts(null,x=>x.calibre===box.calibre&&x.id!==box.id)}</select></label>`:""}
-    <label class="f">${T("Ammo")}<select id="mItem">${itemOpts(box.calibre,box)}</select></label>
+    ${kind==="move"?`<label class="f">${T("To box")}<select id="mTo">${boxOpts(null,x=>x.id!==box.id&&x.cals.some(c=>box.cals.includes(c)))}</select></label>`:""}
+    <label class="f">${T("Ammo")}<select id="mItem">${itemOpts(box)}</select></label>
     <div class="grid2"><label class="f">${T(kind==="count"?"Counted in the box":kind==="buy"?"Rounds added":"Rounds")}<input type="number" inputmode="numeric" id="mQty" min="0"></label>
       <label class="f">${T("Date")}<input type="date" id="mDate" value="${today()}"></label></div>
     <label class="f">${T("Note (optional)")}<input type="text" id="mNote" maxlength="200"></label>
@@ -312,12 +316,14 @@ function handSheet(b){
     <label class="f">${T("Their diary account (optional – gives rights to this box)")}<input type="text" id="hUser" maxlength="32" value="${esc(b.holder_user||"")}" autocapitalize="none"></label>`,
     async()=>{await api("POST",`c/${SLUG}/boxes`,Object.assign(boxBody(b),{holder_name:v("hName"),holder_user:v("hUser")}));toast(T("Handed over"))});
 }
-function boxBody(b){return{id:b.id,name:b.name,calibre:b.calibre,type:b.type,low:b.low,holder_name:b.holder_name,holder_user:b.holder_user||"",archived:!!b.archived,pay_url:b.pay_url||""}}
+function boxBody(b){return{id:b.id,name:b.name,calibre:b.calibre,cals:(b.cals||[]).slice(1),type:b.type,low:b.low,holder_name:b.holder_name,holder_user:b.holder_user||"",archived:!!b.archived,pay_url:b.pay_url||""}}
 function boxEdit(b){
-  const n=!b;b=b||{name:"",calibre:"",type:"",low:0,holder_name:"",holder_user:"",archived:0,pay_url:""};
+  const n=!b;b=b||{name:"",calibre:"",cals:[],type:"",low:0,holder_name:"",holder_user:"",archived:0,pay_url:""};
   const cals=[...new Set(S.items.map(i=>i.calibre))];
   sheet(n?T("New box"):T("Edit {name}",{name:b.name}),`<div class="grid2"><label class="f">${T("Name")}<input type="text" id="eName" maxlength="40" value="${esc(b.name)}" placeholder="${T("e.g. Alpha")}"></label>
       <label class="f">${T("Calibre")}<input type="text" id="eCal" list="calList" maxlength="40" value="${esc(b.calibre)}"></label></div>
+    <label class="f">${T("More calibres in this box (optional)")}<input type="text" id="eCals" maxlength="200" value="${esc((b.cals||[]).slice(1).join(", "))}" placeholder="${T("e.g. 12/70, 7.62x54R")}"></label>
+    <p class="hint" style="margin:-6px 0 0">${T("hintCals")}</p>
     <datalist id="calList">${cals.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
     <div class="grid2"><label class="f">${T("Firearm type (for the diary)")}<select id="eType"><option value="">—</option>${S.types.map(t=>`<option ${t===b.type?"selected":""}>${t}</option>`).join("")}</select></label>
       <label class="f">${T("Refill below")}<input type="number" inputmode="numeric" id="eLow" min="0" value="${b.low||""}" placeholder="${T("0 = no warning")}"></label></div>
@@ -325,7 +331,7 @@ function boxEdit(b){
     <p class="hint" style="margin:-6px 0 0">${T("hintBoxMp")}</p>
     ${n?`<div class="grid2"><label class="f">${T("Held by")}<input type="text" id="eHold" maxlength="60"></label><label class="f">${T("Their diary account (optional)")}<input type="text" id="eUser" maxlength="32" autocapitalize="none"></label></div>`:""}
     ${n?"":`<label class="check"><input type="checkbox" id="eArch" ${b.archived?"checked":""}> ${T("Archived (hidden, link stops working)")}</label>${delHtml("delBox")}`}`,
-    async()=>{const body=Object.assign(boxBody(b),{name:v("eName"),calibre:v("eCal").trim(),type:v("eType"),low:v("eLow")||0,pay_url:v("ePay").trim()});
+    async()=>{const body=Object.assign(boxBody(b),{name:v("eName"),calibre:v("eCal").trim(),cals:v("eCals").split(",").map(x=>x.trim()).filter(Boolean),type:v("eType"),low:v("eLow")||0,pay_url:v("ePay").trim()});
       if(n){body.holder_name=v("eHold");body.holder_user=v("eUser");delete body.id}else body.archived=$("eArch").checked;
       await api("POST",`c/${SLUG}/boxes`,body);toast(T("Box saved"))});
   if(!n)delButton(`boxes/${b.id}`);
@@ -447,7 +453,7 @@ function renderSetup(){
   const none=`<div class="hint">${T("None yet.")}</div>`,items=shown("items",S.items),boxes=shown("boxes",S.boxes);
   $("items").innerHTML=(items.length?items.map(i=>`<div class="irow"${archRow(i.archived)}><span><b>${esc(i.calibre)}</b> · ${esc(i.name||T("Default"))}${archTag(i.archived)}</span>
     <span><span class="num">${eur(i.price)}</span> <button class="link" type="button" data-item="${i.id}">${T("Edit")}</button></span></div>`).join(""):none)+archToggle("items",S.items);
-  $("boxList").innerHTML=(boxes.length?boxes.map(b=>`<div class="irow"${archRow(b.archived)}><span><b>${esc(b.name)}</b> · ${esc(b.calibre)}${archTag(b.archived)}<br><small class="hint">${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}${b.holder_user?" ("+esc(b.holder_user)+")":""}</small></span>
+  $("boxList").innerHTML=(boxes.length?boxes.map(b=>`<div class="irow"${archRow(b.archived)}><span><b>${esc(b.name)}</b> · ${esc(b.cals.join(" + "))}${archTag(b.archived)}<br><small class="hint">${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}${b.holder_user?" ("+esc(b.holder_user)+")":""}</small></span>
     <button class="link" type="button" data-editbox="${b.id}">${T("Edit")}</button></div>`).join(""):none)+archToggle("boxes",S.boxes);
   const KN={season:T("Season fee"),single:T("One-time fee"),merch:T("Merch")},prods=shown("prods",S.products||[]);
   $("prodList").innerHTML=(prods.length?prods.map(p=>`<div class="irow"${archRow(p.archived)}><span><b>${esc(p.name)}</b> · ${KN[p.kind]}${archTag(p.archived)}
@@ -461,7 +467,7 @@ $("tSetup").addEventListener("click",e=>{const b=e.target.closest("[data-arch]")
 $("clubForm").addEventListener("submit",async e=>{e.preventDefault();try{await api("PUT","c/"+SLUG,{name:$("cName").value,mobilepay:$("cMp").value,pay_msg:$("cMsg").value});toast(T("Saved"));load()}catch(err){toast(err.message)}});
 function itemSheet(i){
   const n=!i;i=i||{calibre:"",name:"",price:"",archived:0};
-  const cals=[...new Set(S.items.map(x=>x.calibre).concat(S.boxes.map(b=>b.calibre)))];
+  const cals=[...new Set(S.items.map(x=>x.calibre).concat(S.boxes.flatMap(b=>b.cals)))];
   sheet(n?T("New ammo"):T("Edit ammo"),`<label class="f">${T("Calibre")}<input type="text" id="iCal" list="calList2" maxlength="40" value="${esc(i.calibre)}" placeholder="${T("e.g. 9 mm Luger")}"></label>
     <datalist id="calList2">${cals.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
     <div class="grid2"><label class="f">${T("Ammo brand / load")}<input type="text" id="iName" maxlength="60" value="${esc(i.name)}" placeholder="${T("empty = Default")}"></label>

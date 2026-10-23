@@ -42,7 +42,6 @@ header.top{align-items:flex-start}
       <label class="f"><span data-t="date">Date</span><input type="date" id="fDate" required></label>
     </div>
     <div id="lines" style="display:flex;flex-direction:column;gap:10px"></div>
-    <button type="button" class="chip add" id="addLine" hidden data-t="another">+ another ammo</button>
 
     <div class="total"><span class="hint" id="totalTxt">Total</span><b id="total">0.00 €</b></div>
 
@@ -185,14 +184,13 @@ async function load(){
   const remembered=lsGet("ammo:name");
   $("fName").value=(info.me&&info.me.name)||remembered||"";
   $("fDate").value=today();$("fDate").max=today();
-  if(!S.lines.length)S.lines=[{item:info.items[0].id,qty:""}];
-  S.lines.forEach(l=>{if(!info.items.some(i=>i.id===l.item))l.item=info.items[0].id});
+  if(S.lines.length!==info.items.length||S.lines.some((l,i)=>l.item!==info.items[i].id))S.lines=freshLines();
   paidLabel();
   $("diaryRow").hidden=!info.me;$("loginHint").hidden=!!info.me;
   if(info.me){$("diaryUser").textContent="("+info.me.user+")";const d=lsGet("ammo:diary");$("fDiary").checked=d===null?true:!!d}
   $("form").hidden=false;renderLines();
   const last=lsGet(LAST);
-  if(last&&Date.now()-last.t<LAST_MIN*60000){S.lines=last.lines||S.lines;showDone(last.r,last.q)}
+  if(last&&Date.now()-last.t<LAST_MIN*60000){showDone(last.r,last.q)}
   else{if(last)lsSet(LAST,null);loadMine()}
 }
 function note(s){$("note").textContent=s;$("note").hidden=!s}
@@ -201,20 +199,19 @@ function paidLabel(){const mp=S.info.club.mobilepay;
 
 /* ---- ammo lines ---- */
 function itemOf(id){return S.info.items.find(i=>i.id===id)}
+// Every ammo in the box has its own line: fill in only what you shot (a box can hold several calibres)
+const freshLines=()=>S.info.items.map(i=>({item:i.id,qty:""}));
+function itemLabel(it){const multi=(S.info.box.cals||[]).length>1;
+  return multi||!it.name?`${it.calibre||S.info.box.calibre}${it.name?" "+it.name:""}`:it.name}
 function renderLines(){
-  const its=S.info.items,many=its.length>1;
-  $("lines").innerHTML=S.lines.map((l,i)=>`<div class="line" data-i="${i}">
-    ${many||S.lines.length>1?`<div class="line-top">${many?`<label class="f" style="flex:1">${t("ammo")}<select data-k="item">${its.map(it=>
-      `<option value="${it.id}" ${it.id===l.item?"selected":""}>${esc(it.name||S.info.box.calibre)} – ${eur(it.price).replace(" €","")} ${t("perRound")}</option>`).join("")}</select></label>`
-      :`<span class="hint">${esc(itemOf(l.item).name||S.info.box.calibre)}</span>`}
-      ${S.lines.length>1?`<button type="button" class="rm" data-rm="${i}" aria-label="${t("remove")}">✕</button>`:""}</div>`
-      :`<div class="hint">${esc(its[0].name||S.info.box.calibre)} · ${eur(its[0].price).replace(" €","")} ${t("perRound")}</div>`}
+  const many=S.lines.length>1;
+  $("lines").innerHTML=S.lines.map((l,i)=>{const it=itemOf(l.item);return`<div class="line" data-i="${i}">
+    <div class="line-top"><span${many?' style="font-weight:600"':' class="hint"'}>${esc(itemLabel(it))}</span><span class="hint">${eur(it.price).replace(" €","")} ${t("perRound")}</span></div>
     <label class="f">${t("rounds")}<div class="step"><button type="button" data-d="-1" aria-label="${t("fewer")}">−</button>
-      <input type="number" inputmode="numeric" min="1" max="5000" step="1" data-k="qty" value="${esc(l.qty)}" placeholder="0">
+      <input type="number" inputmode="numeric" min="0" max="5000" step="1" data-k="qty" value="${esc(l.qty)}" placeholder="0">
       <button type="button" data-d="1" aria-label="${t("more")}">+</button></div></label>
     <div class="chips">${QUICK.map(q=>`<button type="button" class="chip" data-q="${q}" aria-pressed="${+l.qty===q}">${q}</button>`).join("")}</div>
-  </div>`).join("");
-  $("addLine").hidden=!(many&&S.lines.length<its.length);
+  </div>`}).join("");
   total();
 }
 function total(){
@@ -223,14 +220,9 @@ function total(){
 }
 $("lines").addEventListener("input",e=>{const el=e.target,i=+el.closest(".line").dataset.i;
   if(el.dataset.k==="qty"){S.lines[i].qty=el.value.replace(/\D/g,"");el.closest(".line").querySelectorAll("[data-q]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.q===+S.lines[i].qty));total()}});
-$("lines").addEventListener("change",e=>{const el=e.target,i=+el.closest(".line").dataset.i;
-  if(el.dataset.k==="item"){S.lines[i].item=+el.value;total()}});
 $("lines").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const i=+b.closest(".line").dataset.i,l=S.lines[i];
   if(b.dataset.q){l.qty=b.dataset.q;renderLines()}
-  else if(b.dataset.d){l.qty=String(Math.max(0,(+l.qty||0)+ +b.dataset.d)||"");renderLines()}
-  else if(b.dataset.rm){S.lines.splice(i,1);renderLines()}});
-$("addLine").addEventListener("click",()=>{const used=new Set(S.lines.map(l=>l.item));const it=S.info.items.find(i=>!used.has(i.id))||S.info.items[0];
-  S.lines.push({item:it.id,qty:""});renderLines()});
+  else if(b.dataset.d){l.qty=String(Math.max(0,(+l.qty||0)+ +b.dataset.d)||"");renderLines()}});
 $("fDiary").addEventListener("change",()=>lsSet("ammo:diary",$("fDiary").checked));
 
 /* ---- save (or keep on the phone when offline) ---- */
@@ -255,7 +247,7 @@ function showDone(r,queued,again){
   S.done={r,q:queued};
   const mp=S.info.club.mobilepay,url=S.info.box.pay_url;
   const msg=r?((S.info.club.pay_msg?S.info.club.pay_msg+" ":"")+r.ref):"";      // e.g. HARRASTEMAKSU A7K3
-  const amt=r?r.total:S.lines.reduce((a,l)=>a+(+l.qty||0)*(+itemOf(l.item).price||0),0);
+  const amt=r?r.total:queued.lines.reduce((a,l)=>a+(+l.qty||0)*(+((itemOf(l.item)||{}).price)||0),0);
   const paying=r?r.paid:queued.paid;
   const C=t("copy");
   $("pay").innerHTML=(r?`<div class="ok">${t("saved")}</div>`:`<div class="ok">${t("savedPhone")}</div><div class="hint">${t("sentLater")}</div>`)+
@@ -268,13 +260,13 @@ function showDone(r,queued,again){
     (r&&r.diary?`<div class="hint">${t("diaryOk")}</div>`:r&&r.diary===false?`<div class="msg">${t("diaryFail")}</div>`:"");
   if(again)return;
   // Kept for 30 min: if the phone reloads the tab while the shooter is in MobilePay, this screen comes back
-  lsSet(LAST,{r,q:queued,lines:S.lines,t:Date.now()});
+  lsSet(LAST,{r,q:queued,t:Date.now()});
   $("form").hidden=true;$("done").hidden=false;window.scrollTo(0,0);
   loadMine();
 }
 $("pay").addEventListener("click",async e=>{const b=e.target.closest("[data-copy]");if(!b)return;
   try{await navigator.clipboard.writeText(b.dataset.copy);toast(t("copied"))}catch(err){toast(b.dataset.copy)}});
-$("again").addEventListener("click",()=>{S.done=null;lsSet(LAST,null);S.lines=[{item:S.info.items[0].id,qty:""}];$("fDate").value=today();$("done").hidden=true;$("form").hidden=false;renderLines()});
+$("again").addEventListener("click",()=>{S.done=null;lsSet(LAST,null);S.lines=freshLines();$("fDate").value=today();$("done").hidden=true;$("form").hidden=false;renderLines()});
 
 async function flush(){
   const q=lsGet(QK)||[];if(!q.length)return;
@@ -302,7 +294,7 @@ async function loadMine(){
 $("mine").addEventListener("click",async e=>{const b=e.target.closest("[data-wd]");if(!b)return;
   if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=t("tapAgain");return}
   try{await api("POST","b/"+CODE+"/withdraw/"+b.dataset.wd,{device:DEVICE});toast(t("takenToast"));
-    const last=lsGet(LAST);if(last&&last.r&&last.r.grp===b.dataset.wd){lsSet(LAST,null);S.done=null;$("done").hidden=true;$("form").hidden=false;S.lines=[{item:S.info.items[0].id,qty:""}];renderLines()}
+    const last=lsGet(LAST);if(last&&last.r&&last.r.grp===b.dataset.wd){lsSet(LAST,null);S.done=null;$("done").hidden=true;$("form").hidden=false;S.lines=freshLines();renderLines()}
     loadMine()}
   catch(err){toast(err.message)}});
 

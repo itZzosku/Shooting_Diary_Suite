@@ -24,6 +24,7 @@ const ADMIN_EN={
   delProd:"Only if it was never paid for or stocked – otherwise archive it.",
   inUse:"It has history in the log, so it can't be deleted – archive it instead.",
   ref:"code",
+  hintCals:"Separated by commas. The shooter sees each ammo on its own line in the form and fills in only what they shot.",
   hintExport:"Ammo and payments, voided entries left out. PDF for printing, Excel (entries + summary) and CSV for the books."
 };
 const ADMIN_FI={
@@ -103,6 +104,8 @@ const ADMIN_FI={
   "{n} season fees in {year}":"{n} kausimaksua vuonna {year}","Names are as people typed them.":"Nimet ovat sellaisina kuin ihmiset ne kirjoittivat.",
   "✓ paid":"✓ maksettu","No season fee under that name – a one-time fee then.":"Tällä nimellä ei ole kausimaksua – siis kertamaksu.",
   "Not allowed.":"Ei sallittu.",
+  "More calibres in this box (optional)":"Muut kaliiperit samassa laatikossa (valinnainen)","e.g. 12/70, 7.62x54R":"esim. 12/70, 7.62x54R",
+  hintCals:"Pilkuilla erotettuna. Ampuja näkee lomakkeella jokaisen patruunan omalla rivillään ja kirjaa vain sen, mitä ampui.",
   "Export for the treasurer…":"Vie rahastonhoitajalle…","Export for the treasurer":"Vienti rahastonhoitajalle","Period":"Aikaväli",
   "This month":"Tämä kuukausi","Last month":"Edellinen kuukausi","This year":"Tämä vuosi","Last year":"Edellinen vuosi","Dates…":"Päivämäärät…",
   "From":"Alkaen","To":"Asti","Only not paid":"Vain maksamattomat","Check the dates.":"Tarkista päivämäärät.",
