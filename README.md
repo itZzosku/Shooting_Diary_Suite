@@ -329,7 +329,8 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
 
 - **Boxes**, not just calibres: each physical box has a name, one calibre, a holder and a refill level. Every
   box has its own secret link; print it as a QR code on the lid. *New link* replaces a leaked one.
-- **Shooter form** (scan the box): name (remembered on the phone; filled in from the diary profile when logged
+- **Shooter form** (scan the box), in Finnish, Swedish or English (FI · SV · EN at the top, remembered on the phone;
+  Finnish by default, Swedish if the phone is in Swedish): name (remembered on the phone; filled in from the diary profile when logged
   in), date, ammo – only what's in that box – and rounds with 25/50/100/200 buttons. It shows the total and,
   after Save, an *Open MobilePay* button (the box's MobilePay link – paste the address from your MobilePay QR code
   into Edit box, so the number and payment category are right) or else the club's MobilePay number, with a
