@@ -472,9 +472,12 @@ function calField(l,i){
   if(!known||l.calOther)return`<input type="text" data-ln="${i}" data-k="cal" value="${esc(l.cal)}" placeholder="e.g. 7.62x39" list="dlPrCal">`;
   return`<select data-ln="${i}" data-k="calSel"><option value="">— calibre —</option>${opts.map(c=>`<option ${calKey(c)===calKey(l.cal)?"selected":""}>${esc(c)}</option>`).join("")}<option value="__other">Other…</option></select>`;
 }
+// Always shown: the calibre's ammo from Ammo prices; one without a brand / load name reads "Default"
 function ammoField(l,i){
-  const es=pricesFor(l.cal);if(es.length<2)return"";
-  return`<label class="f">Ammo<select data-ln="${i}" data-k="ammo">${es.map(e=>`<option value="${esc(e.ammo)}" ${e.ammo===(l.ammo||"")?"selected":""}>${esc(e.ammo||"Standard")} – ${e.price.toFixed(2)} €</option>`).join("")}</select></label>`;
+  const es=pricesFor(l.cal);
+  const opts=es.length?es.map(e=>`<option value="${esc(e.ammo)}" ${e.ammo===(l.ammo||"")?"selected":""}>${esc(e.ammo||"Default")} – ${e.price.toFixed(2)} €</option>`).join("")
+    :`<option value="">Default</option>`;
+  return`<label class="f">Ammo<select data-ln="${i}" data-k="ammo" ${es.length<2?"disabled":""}>${opts}</select></label>`;
 }
 function renderLnLines(){
   $("lnLines").innerHTML=LN.lines.map((l,i)=>`<div class="lnline">
@@ -485,7 +488,7 @@ function renderLnLines(){
     <label class="f">Shots<input type="number" inputmode="numeric" min="0" step="1" data-ln="${i}" data-k="rounds" value="${l.rounds||""}" placeholder="0"></label>
     <span></span>
     ${ammoField(l,i)}<label class="f">€ / round<input type="text" inputmode="decimal" data-ln="${i}" data-k="price" value="${l.price===""||l.price==null?"":l.price}" placeholder="0.00"></label>
-    ${pricesFor(l.cal).length>1?"<span></span>":"<span></span><span></span>"}
+    <span></span>
     <span class="sub">${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}</span></div>`).join("");
   renderLnWho();
 }
