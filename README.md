@@ -353,9 +353,9 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   10 € each but 3 for 25 € → 1 = 10, 2 = 20, 3 = 25, 4 = 35 …; stock counts single items).
   Each has its own price, MobilePay link (its category) and message template – `{pvm}` date, `{vuosi}` year,
   `{kpl}` count, `{koodi}` the code (else added at the end): "SRA KERTAMAKSU {pvm}" → SRA KERTAMAKSU 27.10.2026 A7K3. One **payments page** per club
-  (Setup → *Payments page*: link, *Print sticker*, *New link*): name, tick the fees / pick how many items, Save → one
-  MobilePay payment per category ("Maksu 1/2 … 2/2"), each with *Avaa MobilePay*, the amount and the message +
-  code. Same languages, offline queue and *Take back* as the box form; also works for the organiser at the desk
+  (Setup → *Payments page*: link, *Print sticker*, *New link*): name, pick **one** fee or item (and how many),
+  Save → *Avaa MobilePay*, the amount and the message + code. One per entry, so every MobilePay payment carries its
+  own right message; the next one with *New entry*. Same languages, offline queue and *Take back* as the box form; also works for the organiser at the desk
   (one shooter after another with *New entry*). Admins: **Season fees** tab – who has paid in a year, search by name
   (names as typed) – and the fees in *Log & payments* (filter *Fees & merch*, Mark paid, Void). Box holders don't
   see fees.

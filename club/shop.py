@@ -203,8 +203,10 @@ def api_pay(code):
         return _err("Check the date.")
     prods = {p["id"]: p for p in _products(conn, club["id"], public=True)}
     lines = body.get("lines")
-    if not isinstance(lines, list) or not 1 <= len(lines) <= 10:
+    if not isinstance(lines, list) or not lines:
         return _err("Pick what you pay for.")
+    if len(lines) > 1:                         # one fee / item per entry: one MobilePay payment, one right message
+        return _err("One at a time.")
     rows = []
     try:
         for ln in lines:

@@ -203,13 +203,14 @@ def test_fees_and_merch(setup):
     assert {p["name"] for p in anon.get(f"/ammo/api/p/{code}").json["products"]} == {"Kausimaksu", "Kertamaksu"}
     a.post("/ammo/api/c/testclub/pmoves", json={"kind": "refill", "product": patch, "qty": 5})
     assert "Hihamerkki" in {p["name"] for p in anon.get(f"/ammo/api/p/{code}").json["products"]}
+    assert anon.post(f"/ammo/api/p/{code}/pay", json={"name": "Matti M", "date": _today(),
+                                                      "lines": [{"product": season}, {"product": single}]}).status_code == 400
     r = anon.post(f"/ammo/api/p/{code}/pay", json={"name": "Matti M", "date": _today(), "device": "d1", "client_id": "p1",
-                                                   "lines": [{"product": season}, {"product": single},
-                                                             {"product": patch, "qty": 3}]}).json
-    assert r["total"] == 74.0
-    pays = {p["pay_url"]: p for p in r["pays"]}         # one MobilePay payment per category
-    assert pays["https://qr.mobilepay.fi/vp/season"]["total"] == 40 and pays["https://qr.mobilepay.fi/vp/season"]["msg"] == "KAUSIMAKSU " + r["ref"]
-    assert pays["https://qr.mobilepay.fi/vp/single"]["total"] == 34
+                                                   "lines": [{"product": season}]}).json
+    assert r["total"] == 40.0 and r["pays"][0]["msg"] == "KAUSIMAKSU " + r["ref"]
+    r2 = anon.post(f"/ammo/api/p/{code}/pay", json={"name": "Matti M", "date": _today(), "device": "d1",
+                                                    "lines": [{"product": patch, "qty": 3}]}).json
+    assert r2["total"] == 24.0
     # Resent from the offline queue: no double; can't buy more patches than there are
     assert anon.post(f"/ammo/api/p/{code}/pay", json={"name": "Matti M", "date": _today(), "client_id": "p1",
                                                       "lines": [{"product": single}]}).json["ref"] == r["ref"]

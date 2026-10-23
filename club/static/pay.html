@@ -50,6 +50,7 @@ header.top{align-items:flex-start}
       <label class="f"><span data-t="name"></span><input type="text" id="fName" name="name" autocomplete="name" maxlength="60" required></label>
       <label class="f"><span data-t="date"></span><input type="date" id="fDate" required></label>
     </div>
+    <p class="hint" style="margin:0" data-t="oneHint"></p>
     <div id="prods" style="display:flex;flex-direction:column;gap:8px"></div>
     <div class="total"><span class="hint" data-t="total"></span><b id="total">0,00 €</b></div>
     <label class="check"><input type="checkbox" id="fPaid" checked> <span data-t="payNow"></span></label>
@@ -93,7 +94,7 @@ fi:{title:"Maksut",name:"Nimesi",date:"Päivämäärä",total:"Yhteensä",payNow
   season:"Kausimaksu – kerran vuodessa",single:"Kertamaksu",merch:"Tuote",left:"{n} jäljellä",deal:"{n} kpl {amt}",
   offline:"Ei yhteyttä – kirjaukset säilyvät puhelimessa ja lähetetään, kun yhteys palaa.",
   badLink:"Tämä linkki ei enää toimi. Skannaa QR-koodi uudelleen tai kysy seuran ylläpitäjältä.",noConn:"Ei yhteyttä. Avaa sivu kerran verkossa, niin se toimii sen jälkeen myös ilman yhteyttä.",
-  noProds:"Ei vielä maksettavaa – kysy seuran ylläpitäjältä.",errName:"Kirjoita nimesi.",errPick:"Valitse, mitä maksat.",errDate:"Tarkista päivämäärä.",
+  noProds:"Ei vielä maksettavaa – kysy seuran ylläpitäjältä.",errName:"Kirjoita nimesi.",errPick:"Valitse, mitä maksat.",errOne:"Yksi maksu kerrallaan.",oneHint:"Valitse yksi maksu tai tuote kerrallaan – jokainen maksetaan omalla viestillään. Seuraava: Uusi kirjaus.",errDate:"Tarkista päivämäärä.",
   errGone:"Tätä ei enää myydä – lataa sivu uudelleen.",errBusy:"Liian monta kirjausta – yritä myöhemmin uudelleen.",errOld:"Yli 30 minuuttia vanha – pyydä seuran ylläpitäjää korjaamaan.",
   errLeft:"Ei riitä:",saved:"✓ Tallennettu",savedPhone:"✓ Tallennettu puhelimeen",sentLater:"Lähetetään, kun yhteys palaa.",copy:"Kopioi",copied:"Kopioitu",
   openMp:"Avaa MobilePay",payN:"Maksu {i}/{n}",payWith:"Maksa {amt} viestillä",payTo:"MobilePay numeroon",message:"Viesti",
@@ -105,7 +106,7 @@ sv:{title:"Avgifter",name:"Ditt namn",date:"Datum",total:"Totalt",payNow:"Jag be
   season:"Säsongsavgift – en gång per år",single:"Engångsavgift",merch:"Produkt",left:"{n} kvar",deal:"{n} st {amt}",
   offline:"Ingen anslutning – registreringarna sparas i telefonen och skickas när anslutningen är tillbaka.",
   badLink:"Länken fungerar inte längre. Skanna QR-koden igen eller fråga en administratör.",noConn:"Ingen anslutning. Öppna sidan en gång med nätverk så fungerar den sedan även utan.",
-  noProds:"Inget att betala ännu – fråga en administratör.",errName:"Skriv ditt namn.",errPick:"Välj vad du betalar.",errDate:"Kontrollera datumet.",
+  noProds:"Inget att betala ännu – fråga en administratör.",errName:"Skriv ditt namn.",errPick:"Välj vad du betalar.",errOne:"En betalning åt gången.",oneHint:"Välj en avgift eller produkt åt gången – var och en betalas med sitt eget meddelande. Nästa: Ny registrering.",errDate:"Kontrollera datumet.",
   errGone:"Det säljs inte längre – ladda om sidan.",errBusy:"För många registreringar – försök igen senare.",errOld:"Äldre än 30 minuter – be en administratör rätta den.",
   errLeft:"Räcker inte:",saved:"✓ Sparat",savedPhone:"✓ Sparat i telefonen",sentLater:"Skickas när anslutningen är tillbaka.",copy:"Kopiera",copied:"Kopierat",
   openMp:"Öppna MobilePay",payN:"Betalning {i}/{n}",payWith:"Betala {amt} med meddelandet",payTo:"MobilePay till",message:"Meddelande",
@@ -117,7 +118,7 @@ en:{title:"Payments",name:"Your name",date:"Date",total:"Total",payNow:"I'm payi
   season:"Season fee – once a year",single:"One-time fee",merch:"Item",left:"{n} left",deal:"{n} for {amt}",
   offline:"Offline – entries are kept on this phone and sent when there's a connection.",
   badLink:"This link doesn't work any more. Scan the QR code again, or ask a club admin.",noConn:"No connection. Open this page once while online and it works offline after that.",
-  noProds:"Nothing to pay yet – ask a club admin.",errName:"Write your name.",errPick:"Pick what you pay for.",errDate:"Check the date.",
+  noProds:"Nothing to pay yet – ask a club admin.",errName:"Write your name.",errPick:"Pick what you pay for.",errOne:"One payment at a time.",oneHint:"Pick one fee or item at a time – each is paid with its own message. Next one: New entry.",errDate:"Check the date.",
   errGone:"That isn't for sale any more – reload the page.",errBusy:"Too many entries from here – try again later.",errOld:"Older than 30 minutes – ask a club admin to fix it.",
   errLeft:"Not enough left:",saved:"✓ Saved",savedPhone:"✓ Saved on this phone",sentLater:"It's sent when there's a connection.",copy:"Copy",copied:"Copied",
   openMp:"Open MobilePay",payN:"Payment {i}/{n}",payWith:"Pay {amt} with the message",payTo:"MobilePay to",message:"Message",
@@ -128,7 +129,7 @@ let LANG=lsGet("ammo:lang")||((navigator.language||"").toLowerCase().startsWith(
 if(!L[LANG])LANG="fi";
 const t=(k,v)=>{let s=L[LANG][k]||L.en[k]||k;if(v)for(const x in v)s=s.replace("{"+x+"}",v[x]);return s};
 const eur=n=>{const s=(Math.round((+n||0)*100)/100).toFixed(2);return(LANG!=="en"?s.replace(".",","):s)+" €"};
-const SERVER_ERR=[["Write your name","errName"],["Check the date","errDate"],["Pick what","errPick"],["That isn't","errGone"],
+const SERVER_ERR=[["One at a time","errOne"],["Write your name","errName"],["Check the date","errDate"],["Pick what","errPick"],["That isn't","errGone"],
   ["Too many","errBusy"],["Older than","errOld"],["not_found","badLink"]];
 const tErr=m=>{if(String(m).startsWith("Only "))return t("errLeft")+" "+String(m).replace(/^Only \d+ left: /,"");
   const hit=SERVER_ERR.find(([p])=>String(m).startsWith(p));return hit?t(hit[1]):m};
@@ -187,10 +188,11 @@ function renderProds(){
   total();
 }
 function total(){$("total").textContent=eur(Object.entries(S.sel).reduce((a,[id,n])=>a+(prod(+id)?linePrice(prod(+id),n):0),0))}
+// One fee or item per entry, so each MobilePay payment gets its own, right message: picking one clears the others
 $("prods").addEventListener("change",e=>{const el=e.target.closest("[data-p]");if(!el||e.target.type!=="checkbox")return;
-  S.sel[el.dataset.p]=e.target.checked?1:0;el.classList.toggle("on",e.target.checked);total()});
+  S.sel=e.target.checked?{[el.dataset.p]:1}:{};renderProds()});
 $("prods").addEventListener("click",e=>{const b=e.target.closest("[data-d]");if(!b)return;const id=+b.closest("[data-p]").dataset.p,p=prod(id);
-  const max=p.stock!=null?p.stock:100;S.sel[id]=Math.max(0,Math.min(max,(S.sel[id]||0)+ +b.dataset.d));renderProds()});
+  const max=p.stock!=null?p.stock:100,n=Math.max(0,Math.min(max,(S.sel[id]||0)+ +b.dataset.d));S.sel=n?{[id]:n}:{};renderProds()});
 
 /* ---- save; offline it waits on the phone ---- */
 $("form").addEventListener("submit",async e=>{
