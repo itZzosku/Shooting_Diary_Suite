@@ -122,7 +122,7 @@
 const $=id=>document.getElementById(id);
 const SLUG=location.pathname.split("/")[2];
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fmt=n=>(+n||0).toLocaleString("fi-FI");
+const fmt=n=>String(Math.round(+n||0));          // plain digits: 1130, -40
 const eur=n=>(Math.round((+n||0)*100)/100).toFixed(2)+" €";
 const fiDate=s=>{const[y,m,d]=String(s).split("-");return +d+"."+ +m+"."+y};
 const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
