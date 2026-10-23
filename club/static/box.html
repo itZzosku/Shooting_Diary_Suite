@@ -191,7 +191,9 @@ async function load(){
   $("diaryRow").hidden=!info.me;$("loginHint").hidden=!!info.me;
   if(info.me){$("diaryUser").textContent="("+info.me.user+")";const d=lsGet("ammo:diary");$("fDiary").checked=d===null?true:!!d}
   $("form").hidden=false;renderLines();
-  loadMine();
+  const last=lsGet(LAST);
+  if(last&&Date.now()-last.t<LAST_MIN*60000){S.lines=last.lines||S.lines;showDone(last.r,last.q)}
+  else{if(last)lsSet(LAST,null);loadMine()}
 }
 function note(s){$("note").textContent=s;$("note").hidden=!s}
 function paidLabel(){const mp=S.info.club.mobilepay;
@@ -232,7 +234,7 @@ $("addLine").addEventListener("click",()=>{const used=new Set(S.lines.map(l=>l.i
 $("fDiary").addEventListener("change",()=>lsSet("ammo:diary",$("fDiary").checked));
 
 /* ---- save (or keep on the phone when offline) ---- */
-const QK="ammo:queue";
+const QK="ammo:queue",LAST="ammo:last:"+CODE,LAST_MIN=30;
 $("form").addEventListener("submit",async e=>{
   e.preventDefault();$("msg").hidden=true;
   const name=$("fName").value.trim().replace(/\s+/g," ");
@@ -265,12 +267,14 @@ function showDone(r,queued,again){
      !paying?`<div class="hint">${t("notPaidLater")}</div>`:"")+
     (r&&r.diary?`<div class="hint">${t("diaryOk")}</div>`:r&&r.diary===false?`<div class="msg">${t("diaryFail")}</div>`:"");
   if(again)return;
+  // Kept for 30 min: if the phone reloads the tab while the shooter is in MobilePay, this screen comes back
+  lsSet(LAST,{r,q:queued,lines:S.lines,t:Date.now()});
   $("form").hidden=true;$("done").hidden=false;window.scrollTo(0,0);
   loadMine();
 }
 $("pay").addEventListener("click",async e=>{const b=e.target.closest("[data-copy]");if(!b)return;
   try{await navigator.clipboard.writeText(b.dataset.copy);toast(t("copied"))}catch(err){toast(b.dataset.copy)}});
-$("again").addEventListener("click",()=>{S.done=null;S.lines=[{item:S.info.items[0].id,qty:""}];$("fDate").value=today();$("done").hidden=true;$("form").hidden=false;renderLines()});
+$("again").addEventListener("click",()=>{S.done=null;lsSet(LAST,null);S.lines=[{item:S.info.items[0].id,qty:""}];$("fDate").value=today();$("done").hidden=true;$("form").hidden=false;renderLines()});
 
 async function flush(){
   const q=lsGet(QK)||[];if(!q.length)return;
@@ -297,7 +301,9 @@ async function loadMine(){
 }
 $("mine").addEventListener("click",async e=>{const b=e.target.closest("[data-wd]");if(!b)return;
   if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=t("tapAgain");return}
-  try{await api("POST","b/"+CODE+"/withdraw/"+b.dataset.wd,{device:DEVICE});toast(t("takenToast"));loadMine()}
+  try{await api("POST","b/"+CODE+"/withdraw/"+b.dataset.wd,{device:DEVICE});toast(t("takenToast"));
+    const last=lsGet(LAST);if(last&&last.r&&last.r.grp===b.dataset.wd){lsSet(LAST,null);S.done=null;$("done").hidden=true;$("form").hidden=false;S.lines=[{item:S.info.items[0].id,qty:""}];renderLines()}
+    loadMine()}
   catch(err){toast(err.message)}});
 
 window.addEventListener("online",flush);
