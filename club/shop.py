@@ -303,6 +303,21 @@ def api_product(slug):
     return jsonify(ok=True, id=pid)
 
 
+@cbp.post("/api/c/<slug>/products/<int:pid>/delete")
+def api_product_delete(slug, pid):
+    """Delete a fee / item that was never used. One with sales or stock history can only be archived."""
+    club, _u, _r = _club_for(slug)
+    _body()
+    conn = cdb()
+    if not conn.execute("SELECT 1 FROM products WHERE id=? AND club_id=?", (pid, club["id"])).fetchone():
+        return _err("not_found", 404)
+    if conn.execute("SELECT 1 FROM sales WHERE product_id=? LIMIT 1", (pid,)).fetchone():
+        return _err("It has payments or stock in the log, so it stays (archived) – the history needs it.")
+    conn.execute("DELETE FROM products WHERE id=?", (pid,))
+    conn.commit()
+    return jsonify(ok=True)
+
+
 @cbp.post("/api/c/<slug>/pmoves")
 def api_pmove(slug):
     """Merch stock: refill (+ rounds… items) or count (what's really there)."""

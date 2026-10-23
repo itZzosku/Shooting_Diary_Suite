@@ -364,9 +364,11 @@ function renderSetup(){
   $("boxList").innerHTML=S.boxes.length?S.boxes.map(b=>`<div class="irow"${b.archived?' style="opacity:.5"':""}><span><b>${esc(b.name)}</b> · ${esc(b.calibre)}${b.archived?'<span class="tag">archived</span>':""}<br><small class="hint">${b.holder_name?"Held by "+esc(b.holder_name):"No holder"}${b.holder_user?" ("+esc(b.holder_user)+")":""}</small></span>
     <button class="link" type="button" data-editbox="${b.id}">Edit</button></div>`).join(""):`<div class="hint">None yet.</div>`;
   const KN={season:"Season fee",single:"One-time fee",merch:"Merch"};
-  $("prodList").innerHTML=(S.products||[]).length?S.products.map(p=>`<div class="irow"${p.archived?' style="opacity:.5"':""}><span><b>${esc(p.name)}</b> · ${KN[p.kind]}${p.archived?'<span class="tag">archived</span>':""}
+  const prods=(S.products||[]).filter(p=>SHOW_ARCH||!p.archived),nArch=(S.products||[]).filter(p=>p.archived).length;
+  $("prodList").innerHTML=(prods.length?prods.map(p=>`<div class="irow"${p.archived?' style="opacity:.5"':""}><span><b>${esc(p.name)}</b> · ${KN[p.kind]}${p.archived?'<span class="tag">archived</span>':""}
       <br><small class="hint">${p.deal_qty>1?p.deal_qty+" for "+eur(p.deal_price)+" · ":""}${p.pay_url?"MobilePay link set":"No MobilePay link"}${p.pay_msg?" · message "+esc(p.pay_msg)+" + code":""}${p.track?" · stock "+fmt(p.stock):""}</small></span>
-    <span><span class="num">${eur(p.price)}</span> <button class="link" type="button" data-prod="${p.id}">Edit</button></span></div>`).join(""):`<div class="hint">None yet.</div>`;
+    <span><span class="num">${eur(p.price)}</span> <button class="link" type="button" data-prod="${p.id}">Edit</button></span></div>`).join(""):`<div class="hint">None yet.</div>`)+
+    (nArch?`<div style="margin-top:8px"><button class="link quiet" type="button" id="showArch">${SHOW_ARCH?"Hide archived":`Show ${nArch} archived`}</button></div>`:"");
   const pu=location.origin+"/ammo/"+SLUG+"/pay/"+S.pay_code;$("payUrl").textContent=pu;$("payOpen").href=pu;
   $("people").innerHTML=S.people.map(p=>`<div class="irow"><span>${esc(p.username)}${p.username===S.me?' <span class="tag">you</span>':""}</span>
     ${p.username===S.me?"":`<button class="link" type="button" data-rmadmin="${esc(p.username)}">Remove</button>`}</div>`).join("")||`<div class="hint">Only site admins.</div>`;
@@ -384,6 +386,7 @@ function itemSheet(i){
   $("sBody").onclick=null;
 }
 $("addItem").addEventListener("click",()=>itemSheet(null));
+let SHOW_ARCH=false;
 function prodSheet(p){
   const n=!p;p=p||{kind:"single",name:"",price:"",pay_url:"",pay_msg:"",track:0,low:0,archived:0,deal_qty:0,deal_price:0};
   const html=k=>`<div class="grid2"><label class="f">Name<input type="text" id="pName" maxlength="60" value="${esc(v("pName")??p.name)}" placeholder="e.g. Kausimaksu 2026"></label>
@@ -399,7 +402,8 @@ function prodSheet(p){
       <p class="hint" style="margin:-6px 0 0" id="pDeal"></p>
       <label class="check"><input type="checkbox" id="pTrack" ${p.track?"checked":""}> Keep stock (Refill / Count on Stock; hidden when sold out)</label>
       <label class="f">Warn below<input type="number" inputmode="numeric" min="0" id="pLow" value="${p.low||""}" placeholder="0 = no warning"></label>`:""}
-    ${n?"":`<label class="check"><input type="checkbox" id="pArch" ${p.archived?"checked":""}> Archived (no longer offered; history keeps it)</label>`}`;
+    ${n?"":`<label class="check"><input type="checkbox" id="pArch" ${p.archived?"checked":""}> Archived (no longer offered; history keeps it)</label>
+      <div><button type="button" class="danger" id="pDel">Delete…</button> <span class="hint">Only if it was never paid for or stocked – otherwise archive it.</span></div>`}`;
   sheet(n?"New fee / item":"Edit "+p.name,html(p.kind),async()=>{
     await api("POST",`c/${SLUG}/products`,{id:p.id,kind:v("pKind"),name:v("pName"),price:v("pPrice"),pay_url:(v("pPay")||"").trim(),pay_msg:v("pMsg"),
       track:!!($("pTrack")&&$("pTrack").checked),low:v("pLow")||0,deal_qty:v("pDq")||0,deal_price:v("pDp")||0,archived:!n&&$("pArch").checked});toast("Saved")});
@@ -407,7 +411,10 @@ function prodSheet(p){
   const deal=()=>{const el=$("pDeal");if(!el)return;const pr=+v("pPrice")||0,dq=+v("pDq")||0,dp=+v("pDp")||0;
     el.innerHTML=dq>1&&dp>0?[1,2,3,4,5,6].map(q=>`${q} → ${eur(Math.floor(q/dq)*dp+(q%dq)*pr)}`).join(" · ")+". Stock counts single items.":"Optional, e.g. 10 € each but 3 for 25 €."};
   deal();$("sBody").oninput=deal;
-  $("sBody").onclick=null;$("sBody").onchange=e=>{if(e.target.id==="pKind"){$("sBody").innerHTML=html(e.target.value);deal()}};
+  $("sBody").onclick=async e=>{const b=e.target.closest("#pDel");if(!b)return;
+    if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Tap again to delete";return}
+    try{await api("POST",`c/${SLUG}/products/${p.id}/delete`,{});closeSheet();toast("Deleted");load()}
+    catch(err){$("sMsg").textContent=err.message;$("sMsg").hidden=false;b.dataset.armed="";b.textContent="Delete…"}};$("sBody").onchange=e=>{if(e.target.id==="pKind"){$("sBody").innerHTML=html(e.target.value);deal()}};
 }
 function merchSheet(p){
   sheet(p.name,`<div class="card"><div class="row"><b>In stock</b><b class="num">${fmt(p.stock)}</b></div></div>
@@ -418,7 +425,8 @@ function merchSheet(p){
   $("sBody").onclick=null;$("sBody").onchange=null;
 }
 $("addProd").addEventListener("click",()=>prodSheet(null));
-$("prodList").addEventListener("click",e=>{const b=e.target.closest("[data-prod]");if(b)prodSheet(S.products.find(p=>p.id===+b.dataset.prod))});
+$("prodList").addEventListener("click",e=>{if(e.target.id==="showArch"){SHOW_ARCH=!SHOW_ARCH;renderSetup();return}
+  const b=e.target.closest("[data-prod]");if(b)prodSheet(S.products.find(p=>p.id===+b.dataset.prod))});
 $("payCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("payUrl").textContent);toast("Link copied")}catch(err){toast("Select the link and copy it")}});
 $("payNew").addEventListener("click",async e=>{const b=e.target;if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Tap again: the old QR stops working";return}
   b.dataset.armed="";b.textContent="New link…";await api("POST",`c/${SLUG}/paycode`,{});await load();toast("New link – print a new sticker")});

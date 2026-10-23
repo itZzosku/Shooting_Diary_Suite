@@ -260,3 +260,15 @@ def test_merch_quantity_price(setup):
     st = a.get("/ammo/api/c/testclub").json
     assert next(p for p in st["products"] if p["id"] == pid)["stock"] == 6
     assert next(m for m in a.get("/ammo/api/c/testclub/log").json["moves"] if m["kind"] == "sale")["amount"] == 35.0
+
+
+def test_product_delete_only_without_history(setup):
+    app, a, ids, codes = setup
+    P = "/ammo/api/c/testclub/products"
+    unused = a.post(P, json={"kind": "merch", "name": "Old pack", "price": 25, "archived": True}).json["id"]
+    used = a.post(P, json={"kind": "single", "name": "Kertamaksu", "price": 10}).json["id"]
+    code = a.get("/ammo/api/c/testclub").json["pay_code"]
+    app.test_client().post(f"/ammo/api/p/{code}/pay", json={"name": "Matti M", "date": _today(), "lines": [{"product": used}]})
+    assert a.post(f"{P}/{used}/delete", json={}).status_code == 400
+    assert a.post(f"{P}/{unused}/delete", json={}).status_code == 200
+    assert {p["id"] for p in a.get("/ammo/api/c/testclub").json["products"]} == {used}
