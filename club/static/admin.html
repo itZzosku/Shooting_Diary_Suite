@@ -225,6 +225,9 @@ function renderStock(){
   const merchHtml=merch.length?`<div class="cal"><div class="calhead"><h2>${T("Merch")}</h2></div>${merch.map(p=>
     `<button class="box" type="button" data-pm="${p.id}"><span><b>${esc(p.name)}</b>${p.low&&p.stock<p.low?`<span class="tag warn">${T("low")}</span>`:""}<br><small>${eur(p.price)}${p.low?" · "+T("warn below {n}",{n:fmt(p.low)}):""}</small></span><span class="n">${fmt(p.stock)}</span></button>`).join("")}</div>`:"";
   if(!active.length){$("stock").innerHTML=`<div class="card hint">${T("No boxes yet.")}${isAdmin()?" "+T("Add ammo prices and boxes on Setup."):""}</div>`+merchHtml;$("stockActs").innerHTML="";return}
+  // A box is low when any of its calibres is below that calibre's refill level in this box
+  const calN=(b,c)=>S.items.filter(i=>i.calibre===c).reduce((a,i)=>a+(b.stock[i.id]||0),0);
+  const low=b=>Object.entries(b.lows||{}).some(([c,lw])=>calN(b,c)<lw);
   const boxes=active.map(b=>{
     const rows=b.cals.map(c=>{const its=S.items.filter(i=>i.calibre===c&&(b.stock[i.id]||!i.archived)),
         n=its.reduce((a,i)=>a+(b.stock[i.id]||0),0),
@@ -232,7 +235,7 @@ function renderStock(){
       return`<div class="crow"><span>${esc(c)}${parts.length>1||(parts.length===1&&its.find(i=>b.stock[i.id]).name)?` <small>${parts.join(" · ")}</small>`:""}
         ${lw&&n<lw?`<span class="tag warn">${T("refill")}</span>`:""}${lw?` <small>${T("refill below {n}",{n:fmt(lw)})}</small>`:""}</span><span class="num">${fmt(n)}</span></div>`}).join("");
     return`<button class="box bx" type="button" data-box="${b.id}">
-      <span class="bh"><span><b>${esc(b.name)}</b>${b.mine?`<span class="tag">${T("yours")}</span>`:""}
+      <span class="bh"><span><b>${esc(b.name)}</b>${low(b)?`<span class="tag warn">${T("refill")}</span>`:""}${b.mine?`<span class="tag">${T("yours")}</span>`:""}
         <br><small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}</small></span><span class="n">${fmt(b.total)}</span></span>
       <span class="crows">${rows}</span></button>`}).join("");
   const allCals=[...new Set(active.flatMap(b=>b.cals))];
