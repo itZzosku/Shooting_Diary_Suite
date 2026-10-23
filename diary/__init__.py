@@ -64,6 +64,10 @@ def init_app(app):
     if os.getenv("DIARY_BEHIND_PROXY", "1") != "0":
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     app.register_blueprint(bp, url_prefix="/diary")
+    # Club ammo boxes: its own pages and database at /ammo (club.py); the diary login only fills in names
+    from . import club
+    club.init_db()
+    app.register_blueprint(club.cbp, url_prefix="/ammo")
 
 
 PERMANENT_LIFETIME = timedelta(days=int(os.getenv("DIARY_LOGIN_DAYS", "365")))
