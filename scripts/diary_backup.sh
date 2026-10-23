@@ -12,3 +12,6 @@ KEEP="${KEEP:-12}"                                       # copies kept on the se
 echo "== $(date -Is) diary backup"
 cd "$REPO_DIR"
 "$PYTHON" -m diary backup "$BACKUP_DIR" --keep "$KEEP" --mail
+# Club ammo (separate database): a dated copy next to the diary backups; shooters' names older than
+# CLUB_NAMES_YEARS (default 3) are forgotten first, as the privacy page says
+"$PYTHON" -m club backup "$BACKUP_DIR" --keep "$KEEP"

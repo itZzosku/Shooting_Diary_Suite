@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Club ammo</title>
+<meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141714" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="32x32" href="/diary/static/icons/favicon-32.png">
+<link rel="stylesheet" href="/diary/static/fonts/fonts.css">
+<link rel="stylesheet" href="/ammo/static/club.css">
+<style>
+.cal{margin-top:6px}
+.calhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:2px solid var(--fg);padding-bottom:6px;margin-bottom:4px}
+.calhead b{font-family:var(--f-mono);font-size:1.4rem}
+.box{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:12px 2px;color:var(--fg)}
+.box:hover{background:var(--surface-2)}
+.box b{font-weight:600}
+.box .n{font-family:var(--f-mono);font-size:1.3rem;font-weight:600;text-align:right}
+.box small{color:var(--muted);font-size:.82rem}
+.box.arch{opacity:.5}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{background:none;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:.9rem;font-weight:600}
+.tab[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.sheet{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet-in{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.sheet-bar{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);padding-block:12px;border-bottom:1px solid var(--line);z-index:1}
+.acts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.acts button{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;font-weight:600;text-align:center}
+.acts button:hover{border-color:var(--fg)}
+.sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.sum div{padding:10px 4px}
+.sum div+div{border-left:1px solid var(--line);padding-left:12px}
+.sum b{display:block;font-family:var(--f-mono);font-size:1.2rem;font-weight:600;white-space:nowrap}
+.link.quiet{color:var(--muted);font-weight:400;font-size:.82rem}
+.sum small{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em}
+.lnk{font-family:var(--f-mono);font-size:.82rem;overflow-wrap:anywhere;background:var(--surface-2);border-radius:6px;padding:8px}
+.irow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border-top:1px solid var(--line);padding:9px 0}
+.irow:first-child{border-top:0}
+</style>
+</head>
+<body>
+<div class="wrap wide">
+  <header class="top">
+    <div>
+      <div class="kicker">Club ammo<span id="roleTxt"></span></div>
+      <h1 id="clubName">Club</h1>
+    </div>
+    <a class="ghost" href="/diary/">Shooting Diary</a>
+  </header>
+
+  <div id="warn" style="display:flex;flex-direction:column;gap:6px"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" data-tab="stock" aria-pressed="true">Stock</button>
+    <button class="tab" data-tab="log" aria-pressed="false">Log &amp; payments</button>
+    <button class="tab" data-tab="setup" aria-pressed="false" id="setupTab">Setup</button>
+  </div>
+
+  <!-- Stock -->
+  <section id="tStock" style="display:flex;flex-direction:column;gap:18px">
+    <div id="stock"></div>
+    <div class="actions" id="stockActs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </section>
+
+  <!-- Log -->
+  <section id="tLog" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="grid2">
+      <label class="f">Month<select id="lMonth"></select></label>
+      <label class="f">Show<select id="lKind"><option value="">Everything</option><option value="use">Shooters' entries</option><option value="unpaid">Not paid</option><option value="stock">Purchases, moves, counts, hand-overs</option></select></label>
+    </div>
+    <div class="sum" id="lSum"></div>
+    <label class="f">Find a name or reference<input type="search" id="lFind" placeholder="e.g. Matti or A7K3"></label>
+    <div class="rows" id="log"></div>
+    <p class="hint" id="logHint"></p>
+  </section>
+
+  <!-- Setup (admins) -->
+  <section id="tSetup" hidden style="display:flex;flex-direction:column;gap:22px">
+    <form id="clubForm" class="card" style="display:flex;flex-direction:column;gap:12px">
+      <h2>Club</h2>
+      <div class="grid2">
+        <label class="f">Name<input type="text" id="cName" maxlength="80"></label>
+        <label class="f">MobilePay number<input type="text" id="cMp" maxlength="40" placeholder="e.g. 12345"></label>
+      </div>
+      <div><button class="primary" type="submit">Save</button></div>
+    </form>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Ammo &amp; prices</h2><button class="ghost" id="addItem" type="button">+ Ammo</button></div>
+      <p class="hint" style="margin:6px 0 4px">What the club sells, per calibre, € per round. A box offers every ammo of its calibre.</p>
+      <div id="items"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Boxes</h2><button class="ghost" id="addBox" type="button">+ Box</button></div>
+      <p class="hint" style="margin:6px 0 4px">Each box has its own secret link: print it as a QR code on the lid. Tap a box on Stock for its link.</p>
+      <div id="boxList"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Admins</h2><button class="ghost" id="addAdmin" type="button">+ Admin</button></div>
+      <p class="hint" style="margin:6px 0 4px">Diary accounts that manage this club. Box holders with a diary account get rights to their own box only.</p>
+      <div id="people"></div>
+    </div>
+  </section>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <form class="sheet-in" id="sForm" novalidate>
+    <div class="sheet-bar"><h2 id="sTitle"></h2><div style="display:flex;gap:8px"><button type="button" class="ghost" id="sClose">Close</button></div></div>
+    <div id="sBody" style="display:flex;flex-direction:column;gap:14px"></div>
+    <div class="msg" id="sMsg" hidden></div>
+    <div id="sFoot"><button class="primary" type="submit" id="sSave" style="width:100%">Save</button></div>
+  </form>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const SLUG=location.pathname.split("/")[2];
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=n=>(+n||0).toLocaleString("fi-FI");
+const eur=n=>(Math.round((+n||0)*100)/100).toFixed(2)+" €";
+const fiDate=s=>{const[y,m,d]=String(s).split("-");return +d+"."+ +m+"."+y};
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2400)}
+async function api(method,path,body){
+  const r=await fetch("/ammo/api/"+path,{method,credentials:"same-origin",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});
+  let j=null;try{j=await r.json()}catch(e){}
+  if(r.status===401){location.href="/diary/login";throw new Error("login")}
+  if(!r.ok)throw new Error((j&&j.error)||(r.status===403?"Not allowed.":"HTTP "+r.status));
+  return j;
+}
+let S={},LOG=null;
+const isAdmin=()=>S.role==="admin";
+const boxOf=id=>S.boxes.find(b=>b.id===id);
+const itemOf=id=>S.items.find(i=>i.id===id);
+const itemName=i=>i?(i.name||i.calibre):"";
+const mayBox=b=>isAdmin()||b.mine;
+const boxUrl=b=>b.code?location.origin+"/ammo/"+SLUG+"/"+b.code:"";
+
+async function load(){
+  S=await api("GET","c/"+SLUG);
+  document.title=S.club.name+" · Club ammo";$("clubName").textContent=S.club.name;
+  $("roleTxt").textContent=isAdmin()?" · admin":" · box holder";
+  $("setupTab").hidden=!isAdmin();
+  renderWarn();renderStock();if(isAdmin())renderSetup();
+}
+
+/* ---- warnings ---- */
+function renderWarn(){
+  $("warn").innerHTML=S.warnings.map(w=>w.kind==="box"
+    ?`<div class="banner">Refill <b>${esc(w.name)}</b>: ${fmt(w.n)} left (refill below ${fmt(w.low)})</div>`
+    :`<div class="banner" style="border:1px solid var(--accent)"><b>Buy more ${esc(w.calibre)}</b>: ${fmt(w.n)} in all boxes (buy below ${fmt(w.low)})</div>`).join("");
+}
+
+/* ---- stock ---- */
+function renderStock(){
+  const cals=[...new Set(S.boxes.filter(b=>!b.archived).map(b=>b.calibre))];
+  if(!cals.length){$("stock").innerHTML=`<div class="card hint">No boxes yet.${isAdmin()?" Add ammo prices and boxes on Setup.":""}</div>`;$("stockActs").innerHTML="";return}
+  $("stock").innerHTML=cals.map(cal=>{
+    const bs=S.boxes.filter(b=>b.calibre===cal&&!b.archived),tot=bs.reduce((a,b)=>a+b.total,0),lv=S.levels[cal];
+    return`<div class="cal"><div class="calhead"><h2>${esc(cal)}</h2><span><b>${fmt(tot)}</b>
+      ${lv?`<span class="tag ${tot<lv?"bad":""}">buy below ${fmt(lv)}</span>`:""}
+      ${isAdmin()?`<button class="link" type="button" data-level="${esc(cal)}" style="margin-left:8px">Level</button>`:""}</span></div>
+      ${bs.map(b=>{const its=Object.entries(b.stock).filter(([,n])=>n).map(([i,n])=>`${esc(itemName(itemOf(+i)))} ${fmt(n)}`).join(" · ");
+        return`<button class="box" type="button" data-box="${b.id}"><span><b>${esc(b.name)}</b>${b.low&&b.total<b.low?'<span class="tag warn">refill</span>':""}${b.mine?'<span class="tag">yours</span>':""}<br>
+          <small>${b.holder_name?"Held by "+esc(b.holder_name):"No holder"}${its&&Object.keys(b.stock).length>1?" · "+its:""}</small></span><span class="n">${fmt(b.total)}</span></button>`}).join("")}
+    </div>`}).join("");
+  const any=S.boxes.some(b=>!b.archived&&mayBox(b));
+  $("stockActs").innerHTML=any?`<button class="ghost" type="button" data-act="buy">+ Purchase</button><button class="ghost" type="button" data-act="move">Refill / move</button><button class="ghost" type="button" data-act="count">Count</button>`:"";
+}
+$("stock").addEventListener("click",e=>{const b=e.target.closest("[data-box]");if(b)return boxSheet(boxOf(+b.dataset.box));
+  const l=e.target.closest("[data-level]");if(l)levelSheet(l.dataset.level)});
+$("stockActs").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b)moveSheet(b.dataset.act,null)});
+
+/* ---- sheet ---- */
+let onSave=null;
+function sheet(title,html,save,label){
+  $("sTitle").textContent=title;$("sBody").innerHTML=html;$("sMsg").hidden=true;onSave=save;
+  $("sFoot").hidden=!save;$("sSave").textContent=label||"Save";$("sheet").hidden=false;document.body.style.overflow="hidden";$("sheet").scrollTop=0;
+}
+function closeSheet(){$("sheet").hidden=true;document.body.style.overflow="";onSave=null}
+$("sClose").addEventListener("click",closeSheet);
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("sheet").hidden)closeSheet()});
+$("sForm").addEventListener("submit",async e=>{e.preventDefault();if(!onSave)return;$("sSave").disabled=true;
+  try{await onSave();closeSheet();await load();if(!$("tLog").hidden)loadLog()}
+  catch(err){$("sMsg").textContent=err.message;$("sMsg").hidden=false}finally{$("sSave").disabled=false}});
+const v=id=>($(id)||{}).value;
+
+function boxSheet(b){
+  const its=Object.entries(b.stock).filter(([,n])=>n);
+  const url=boxUrl(b);
+  sheet(b.name,`<div class="hint">${esc(b.calibre)}${b.type?" · "+esc(b.type):""} · ${b.holder_name?"held by <b>"+esc(b.holder_name)+"</b>":"no holder"}</div>
+    <div class="card"><div class="rows">${its.length?its.map(([i,n])=>`<div class="row"><span>${esc(itemName(itemOf(+i)))}</span><span class="num">${fmt(n)}</span></div>`).join("")
+      :`<div class="hint">Empty.</div>`}<div class="row"><b>In the box</b><b class="num">${fmt(b.total)}</b></div></div>
+      ${b.low?`<div class="hint">Refill below ${fmt(b.low)}</div>`:""}</div>
+    ${mayBox(b)?`<div class="acts"><button type="button" data-a="buy">+ Purchase into box</button><button type="button" data-a="move">Refill / move</button>
+      <button type="button" data-a="count">Count the box</button>${isAdmin()?`<button type="button" data-a="hand">Hand over</button>`:""}
+      ${isAdmin()?`<button type="button" data-a="edit">Edit box</button>`:""}<button type="button" data-a="log">This box's log</button></div>`:""}
+    ${url?`<div><div class="lbl hint" style="margin-bottom:6px">Shooters' link (the QR code on the lid)</div><div class="lnk" id="bUrl">${esc(url)}</div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="ghost" data-a="copy">Copy link</button><a class="ghost" href="${esc(url)}" target="_blank" rel="noopener">Open</a>
+      ${isAdmin()?`<button type="button" class="ghost" data-a="newcode">New link…</button>`:""}</div></div>`:""}`,null);
+  $("sBody").onclick=async e=>{const a=e.target.closest("[data-a]");if(!a)return;const k=a.dataset.a;
+    if(k==="buy"||k==="move"||k==="count")moveSheet(k,b);
+    else if(k==="hand")handSheet(b);
+    else if(k==="edit")boxEdit(b);
+    else if(k==="log"){closeSheet();tab("log");$("lKind").value="";LOG_BOX=b.id;loadLog()}
+    else if(k==="copy"){try{await navigator.clipboard.writeText(url);toast("Link copied")}catch(err){toast("Select the link and copy it")}}
+    else if(k==="newcode"){if(a.dataset.armed!=="1"){a.dataset.armed="1";a.textContent="Tap again: the old QR stops working";return}
+      await api("POST",`c/${SLUG}/boxes/${b.id}/newcode`,{});await load();boxSheet(boxOf(b.id));toast("New link – print a new QR sticker")}};
+}
+
+function boxOpts(sel,filter){return S.boxes.filter(b=>!b.archived&&(!filter||filter(b))).map(b=>`<option value="${b.id}" ${sel===b.id?"selected":""}>${esc(b.name)} (${esc(b.calibre)}) – ${fmt(b.total)}</option>`).join("")}
+function itemOpts(cal,box){return S.items.filter(i=>i.calibre===cal&&!i.archived).map(i=>`<option value="${i.id}">${esc(itemName(i))}${box?" – "+fmt(box.stock[i.id]||0)+" in box":""}</option>`).join("")}
+function moveSheet(kind,b){
+  const mine=S.boxes.filter(x=>!x.archived&&mayBox(x));
+  b=b||mine[0];if(!b)return;
+  const T={buy:"Purchase",move:"Refill / move",count:"Count a box"}[kind];
+  const html=()=>{const box=boxOf(+(v("mBox")||b.id));return`
+    <label class="f">${kind==="move"?"From box":"Box"}<select id="mBox">${boxOpts(box.id,x=>kind==="move"||mayBox(x))}</select></label>
+    ${kind==="move"?`<label class="f">To box<select id="mTo">${boxOpts(null,x=>x.calibre===box.calibre&&x.id!==box.id)}</select></label>`:""}
+    <label class="f">Ammo<select id="mItem">${itemOpts(box.calibre,box)}</select></label>
+    <div class="grid2"><label class="f">${kind==="count"?"Counted in the box":"Rounds"}<input type="number" inputmode="numeric" id="mQty" min="0"></label>
+      ${kind==="buy"?`<label class="f">Paid € / round (optional)<input type="number" inputmode="decimal" step="0.001" id="mPrice" min="0"></label>`:`<label class="f">Date<input type="date" id="mDate" value="${today()}"></label>`}</div>
+    ${kind==="buy"?`<label class="f">Date<input type="date" id="mDate" value="${today()}"></label>`:""}
+    <label class="f">Note (optional)<input type="text" id="mNote" maxlength="200" placeholder="${kind==="buy"?"e.g. shop, invoice no.":""}"></label>
+    ${kind==="count"?`<p class="hint" style="margin:0">The difference to the log is saved as a correction, so you can see which box drifts.</p>`:""}`};
+  sheet(T,html(),async()=>{
+    const body={kind,box:+v("mBox"),item:+v("mItem"),qty:v("mQty"),date:v("mDate"),note:v("mNote")};
+    if(kind==="move")body.to=+v("mTo");if(kind==="buy")body.price=v("mPrice");
+    if(!body.to&&kind==="move")throw new Error("No other box of this calibre.");
+    if(!body.item)throw new Error("Add an ammo price for this calibre first (Setup).");
+    await api("POST",`c/${SLUG}/moves`,body);toast("Saved");
+  });
+  $("sBody").onchange=e=>{if(e.target.id==="mBox"){const keep=v("mQty");$("sBody").innerHTML=html();$("mQty").value=keep}};
+  $("sBody").onclick=null;
+}
+function handSheet(b){
+  sheet("Hand over "+b.name,`<label class="f">New holder<input type="text" id="hName" maxlength="60" value="${esc(b.holder_name)}"></label>
+    <label class="f">Their diary account (optional – gives rights to this box)<input type="text" id="hUser" maxlength="32" value="${esc(b.holder_user||"")}" autocapitalize="none"></label>`,
+    async()=>{await api("POST",`c/${SLUG}/boxes`,Object.assign(boxBody(b),{holder_name:v("hName"),holder_user:v("hUser")}));toast("Handed over")});
+  $("sBody").onclick=null;
+}
+function boxBody(b){return{id:b.id,name:b.name,calibre:b.calibre,type:b.type,low:b.low,holder_name:b.holder_name,holder_user:b.holder_user||"",archived:!!b.archived}}
+function boxEdit(b){
+  const n=!b;b=b||{name:"",calibre:"",type:"",low:0,holder_name:"",holder_user:"",archived:0};
+  const cals=[...new Set(S.items.map(i=>i.calibre))];
+  sheet(n?"New box":"Edit "+b.name,`<div class="grid2"><label class="f">Name<input type="text" id="eName" maxlength="40" value="${esc(b.name)}" placeholder="e.g. 9 mm A"></label>
+      <label class="f">Calibre<input type="text" id="eCal" list="calList" maxlength="40" value="${esc(b.calibre)}"></label></div>
+    <datalist id="calList">${cals.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    <div class="grid2"><label class="f">Firearm type (for the diary)<select id="eType"><option value="">—</option>${S.types.map(t=>`<option ${t===b.type?"selected":""}>${t}</option>`).join("")}</select></label>
+      <label class="f">Refill below<input type="number" inputmode="numeric" id="eLow" min="0" value="${b.low||""}" placeholder="0 = no warning"></label></div>
+    ${n?`<div class="grid2"><label class="f">Held by<input type="text" id="eHold" maxlength="60"></label><label class="f">Their diary account (optional)<input type="text" id="eUser" maxlength="32" autocapitalize="none"></label></div>`:""}
+    ${n?"":`<label class="check"><input type="checkbox" id="eArch" ${b.archived?"checked":""}> Archived (hidden, link stops working)</label>`}`,
+    async()=>{const body=Object.assign(boxBody(b),{name:v("eName"),calibre:v("eCal").trim(),type:v("eType"),low:v("eLow")||0});
+      if(n){body.holder_name=v("eHold");body.holder_user=v("eUser");delete body.id}else body.archived=$("eArch").checked;
+      await api("POST",`c/${SLUG}/boxes`,body);toast("Box saved")});
+  $("sBody").onclick=null;
+}
+function levelSheet(cal){
+  sheet("Buy more "+cal,`<label class="f">Warn when all ${esc(cal)} boxes together are below<input type="number" inputmode="numeric" id="lvLow" min="0" value="${S.levels[cal]||""}" placeholder="0 = no warning"></label>`,
+    async()=>{await api("POST",`c/${SLUG}/levels`,{calibre:cal,low:v("lvLow")||0})});
+  $("sBody").onclick=null;
+}
+
+/* ---- log & payments ---- */
+let LOG_BOX=null;
+async function loadLog(){
+  const m=$("lMonth").value||today().slice(0,7);
+  LOG=await api("GET",`c/${SLUG}/log?month=${m}`+(LOG_BOX?`&box=${LOG_BOX}`:""));
+  const months=[...new Set([today().slice(0,7)].concat(LOG.months))].sort().reverse();
+  $("lMonth").innerHTML=months.map(x=>`<option value="${x}" ${x===LOG.month?"selected":""}>${+x.slice(5)}/${x.slice(0,4)}</option>`).join("");
+  renderLog();
+}
+function renderLog(){
+  const f=$("lKind").value,q=$("lFind").value.trim().toLowerCase();
+  const groups=[];const by={};
+  LOG.moves.forEach(r=>{if(!by[r.grp]){by[r.grp]={...r,rows:[]};groups.push(by[r.grp])}by[r.grp].rows.push(r)});
+  const uses=groups.filter(g=>g.kind==="use"&&!g.voided_at);
+  const amt=g=>g.rows.reduce((a,r)=>a+(-r.qty)*(r.price||0),0);
+  const paid=uses.filter(g=>g.paid).reduce((a,g)=>a+amt(g),0),unpaid=uses.filter(g=>!g.paid).reduce((a,g)=>a+amt(g),0);
+  $("lSum").innerHTML=`<div><b>${fmt(uses.reduce((a,g)=>a+g.rows.reduce((x,r)=>x-r.qty,0),0))}</b><small>rounds shot</small></div>
+    <div><b>${eur(paid)}</b><small>paid (MobilePay)</small></div><div><b style="${unpaid?"color:var(--accent)":""}">${eur(unpaid)}</b><small>not paid</small></div>`;
+  const list=groups.filter(g=>!f||(f==="use"?g.kind==="use":f==="unpaid"?g.kind==="use"&&!g.paid&&!g.voided_at:g.kind!=="use"))
+    .filter(g=>!q||(g.name||"").toLowerCase().includes(q)||(g.ref||"").toLowerCase()===q);
+  const K={use:"",buy:"Purchase",move:"Move",count:"Count",handover:"Hand-over"};
+  $("log").innerHTML=list.length?list.map(g=>{
+    const v=!!g.voided_at,r0=g.rows[0];let what,right;
+    if(g.kind==="use"){const n=g.rows.reduce((a,r)=>a-r.qty,0);
+      what=`<b>${esc(g.name||"Shooter")}</b> · ${fmt(n)} × ${esc(g.rows.map(r=>r.iname||r.ical).join(", "))}${g.paid?"":'<span class="tag warn">not paid</span>'}
+        <br><small>${fiDate(g.date)} · ${esc(g.bname)} · ref <b class="num">${esc(g.ref)}</b></small>`;right=eur(amt(g))}
+    else if(g.kind==="move"){const out=g.rows.find(r=>r.qty<0),inn=g.rows.find(r=>r.qty>0);
+      what=`Move ${fmt(inn.qty)} ${esc(inn.iname||inn.ical)} · ${esc(out.bname)} → ${esc(inn.bname)}<br><small>${fiDate(g.date)}${g.by?" · "+esc(g.by):""}${g.note?" · "+esc(g.note):""}</small>`;right=""}
+    else if(g.kind==="handover"){what=`${esc(r0.bname)} handed to <b>${esc(g.name)}</b><br><small>${fiDate(g.date)}${g.note?" · "+esc(g.note):""}${g.by?" · "+esc(g.by):""}</small>`;right=""}
+    else{what=`${K[g.kind]} · ${esc(r0.bname)} · ${esc(r0.iname||r0.ical)}<br><small>${fiDate(g.date)}${g.by?" · "+esc(g.by):""}${g.note?" · "+esc(g.note):""}</small>`;
+      right=(r0.qty>0?"+":"")+fmt(r0.qty)}
+    return`<div class="row${v?" void":""}"><div class="what">${what}${v?`<br><small>Voided${g.voided_by_name?" by "+esc(g.voided_by_name):""}${g.note&&g.kind==="use"?" · "+esc(g.note):""}</small>`:""}</div>
+      <div class="r"><div class="num">${right}</div>${isAdmin()&&g.kind!=="handover"?`<button class="link" type="button" data-void="${g.grp}" data-undo="${v?1:""}">${v?"Restore":"Void"}</button>`:""}
+      ${isAdmin()&&g.kind==="use"&&!v?`<br><button class="link${g.paid?" quiet":""}" type="button" data-paid="${g.grp}" data-to="${g.paid?"":1}">${g.paid?"Not paid?":"Mark paid"}</button>`:""}</div></div>`}).join("")
+    :`<div class="hint">Nothing here.</div>`;
+  $("logHint").innerHTML=(LOG_BOX?`Only box <b>${esc((boxOf(LOG_BOX)||{}).name)}</b> · <button class="link" type="button" id="allBoxes">all boxes</button>. `:"")+
+    (isAdmin()?"Match the references with the club's MobilePay payments. A voided entry stays in the log, crossed out.":"Shooters' names are shown to club admins only.");
+  const ab=$("allBoxes");if(ab)ab.onclick=()=>{LOG_BOX=null;loadLog()};
+}
+$("lMonth").addEventListener("change",loadLog);
+$("lKind").addEventListener("change",renderLog);$("lFind").addEventListener("input",renderLog);
+$("log").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-void],[data-paid]");if(!b)return;
+  if(b.dataset.void){if(!b.dataset.undo&&b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Tap again to void";return}
+    await api("POST",`c/${SLUG}/void/${b.dataset.void}`,{undo:!!b.dataset.undo});}
+  else await api("POST",`c/${SLUG}/paid/${b.dataset.paid}`,{paid:!!b.dataset.to});
+  await load();await loadLog();
+});
+
+/* ---- setup ---- */
+function renderSetup(){
+  $("cName").value=S.club.name;$("cMp").value=S.club.mobilepay;
+  $("items").innerHTML=S.items.length?S.items.map(i=>`<div class="irow"${i.archived?' style="opacity:.5"':""}><span><b>${esc(i.calibre)}</b> · ${esc(i.name||"Default")}${i.archived?'<span class="tag">archived</span>':""}</span>
+    <span><span class="num">${(+i.price).toFixed(2)} €</span> <button class="link" type="button" data-item="${i.id}">Edit</button></span></div>`).join(""):`<div class="hint">None yet.</div>`;
+  $("boxList").innerHTML=S.boxes.length?S.boxes.map(b=>`<div class="irow"${b.archived?' style="opacity:.5"':""}><span><b>${esc(b.name)}</b> · ${esc(b.calibre)}${b.archived?'<span class="tag">archived</span>':""}<br><small class="hint">${b.holder_name?"Held by "+esc(b.holder_name):"No holder"}${b.holder_user?" ("+esc(b.holder_user)+")":""}</small></span>
+    <button class="link" type="button" data-editbox="${b.id}">Edit</button></div>`).join(""):`<div class="hint">None yet.</div>`;
+  $("people").innerHTML=S.people.map(p=>`<div class="irow"><span>${esc(p.username)}${p.username===S.me?' <span class="tag">you</span>':""}</span>
+    ${p.username===S.me?"":`<button class="link" type="button" data-rmadmin="${esc(p.username)}">Remove</button>`}</div>`).join("")||`<div class="hint">Only site admins.</div>`;
+}
+$("clubForm").addEventListener("submit",async e=>{e.preventDefault();try{await api("PUT","c/"+SLUG,{name:$("cName").value,mobilepay:$("cMp").value});toast("Saved");load()}catch(err){toast(err.message)}});
+function itemSheet(i){
+  const n=!i;i=i||{calibre:"",name:"",price:"",archived:0};
+  const cals=[...new Set(S.items.map(x=>x.calibre).concat(S.boxes.map(b=>b.calibre)))];
+  sheet(n?"New ammo":"Edit ammo",`<label class="f">Calibre<input type="text" id="iCal" list="calList2" maxlength="40" value="${esc(i.calibre)}" placeholder="e.g. 9 mm Luger"></label>
+    <datalist id="calList2">${cals.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    <div class="grid2"><label class="f">Ammo brand / load<input type="text" id="iName" maxlength="60" value="${esc(i.name)}" placeholder="empty = Default"></label>
+      <label class="f">€ / round<input type="number" inputmode="decimal" step="0.001" min="0" id="iPrice" value="${i.price}"></label></div>
+    ${n?"":`<label class="check"><input type="checkbox" id="iArch" ${i.archived?"checked":""}> Archived (no longer offered; history keeps it)</label>`}`,
+    async()=>{await api("POST",`c/${SLUG}/items`,{id:i.id,calibre:v("iCal"),name:v("iName"),price:v("iPrice"),archived:!n&&$("iArch").checked});toast("Saved")});
+  $("sBody").onclick=null;
+}
+$("addItem").addEventListener("click",()=>itemSheet(null));
+$("items").addEventListener("click",e=>{const b=e.target.closest("[data-item]");if(b)itemSheet(itemOf(+b.dataset.item))});
+$("addBox").addEventListener("click",()=>boxEdit(null));
+$("boxList").addEventListener("click",e=>{const b=e.target.closest("[data-editbox]");if(b)boxEdit(boxOf(+b.dataset.editbox))});
+$("addAdmin").addEventListener("click",()=>{sheet("New admin",`<label class="f">Diary username<input type="text" id="pUser" maxlength="32" autocapitalize="none"></label>`,
+  async()=>{await api("POST",`c/${SLUG}/people`,{username:v("pUser"),role:"admin"});toast("Added")});$("sBody").onclick=null});
+$("people").addEventListener("click",async e=>{const b=e.target.closest("[data-rmadmin]");if(!b)return;
+  if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Tap again to remove";return}
+  try{await api("POST",`c/${SLUG}/people`,{username:b.dataset.rmadmin,role:""});load()}catch(err){toast(err.message)}});
+
+/* ---- tabs ---- */
+function tab(t){document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tab===t));
+  $("tStock").hidden=t!=="stock";$("tLog").hidden=t!=="log";$("tSetup").hidden=t!=="setup";
+  if(t==="log"&&!LOG)loadLog();try{sessionStorage.setItem("ammo:tab",t)}catch(e){}}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="log")LOG_BOX=null,LOG=null;tab(b.dataset.tab)}));
+load().then(()=>{let t="stock";try{t=sessionStorage.getItem("ammo:tab")||"stock"}catch(e){}if(t==="setup"&&!isAdmin())t="stock";tab(t)}).catch(e=>{$("warn").innerHTML=`<div class="msg">${esc(e.message)}</div>`});
+</script>
+</body>
+</html>

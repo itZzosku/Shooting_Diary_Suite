@@ -1,6 +1,7 @@
 """Club ammo – shooters log rounds taken from the club's ammo boxes; admins keep track of stock.
 
-Separate from the diary: its own blueprint at /ammo and its own database (DATA_DIR/clubs.db). Shooters need no
+Separate from the diary: its own package, pages at /ammo and database (DATA_DIR/clubs.db); everything it needs
+from the diary goes through bridge.py. Shooters need no
 account – each physical box has a secret link (printed as a QR code on its lid) that opens the form for that box.
 Someone logged into the diary gets their name filled in and can add the rounds to their own diary too.
 
@@ -24,9 +25,13 @@ from datetime import date as _date, datetime, timedelta, timezone
 
 from flask import Blueprint, abort, g, jsonify, redirect, request, send_from_directory
 
-from . import DATA_DIR, DATE_RE, HERE, current_user
+from . import bridge
+from .bridge import current_user
 
-cbp = Blueprint("club", __name__, static_folder="club_static", static_url_path="/static")
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+cbp = Blueprint("club", __name__, static_folder="static", static_url_path="/static")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,30}$")
 CODE_RE = re.compile(r"^[A-Za-z0-9_-]{8,40}$")
 REF_CHARS = "ACDEFHJKMNPRTUVWXY34679"        # payment reference: no 0/O, 1/I/L, 5/S, 8/B
@@ -104,8 +109,14 @@ CREATE INDEX IF NOT EXISTS moves_grp ON moves(grp);
 
 
 # ------------------------------------------------------------------ database
+def init_app(app):
+    """Register at /ammo. Uses the app's session cookie (the diary login) through bridge.py."""
+    init_db()
+    app.register_blueprint(cbp, url_prefix="/ammo")
+
+
 def db_path():
-    return os.path.join(DATA_DIR, "clubs.db")
+    return os.path.join(bridge.data_dir(), "clubs.db")
 
 
 def connect():
@@ -115,7 +126,7 @@ def connect():
 
 
 def init_db():
-    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(bridge.data_dir(), exist_ok=True)
     conn = connect()
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
@@ -283,7 +294,7 @@ def warnings(conn, club_id):
 
 # ------------------------------------------------------------------ pages
 def _page(name):
-    resp = send_from_directory(os.path.join(HERE, "club_static"), name, max_age=0)
+    resp = send_from_directory(os.path.join(HERE, "static"), name, max_age=0)
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
@@ -292,7 +303,7 @@ def _page(name):
 def index():
     u = current_user()
     if not u:
-        return redirect("/diary/login")
+        return redirect(bridge.login_url())
     clubs = my_clubs(u)
     if len(clubs) == 1:
         return redirect(f"/ammo/{clubs[0]['slug']}/admin")
@@ -301,7 +312,7 @@ def index():
 
 @cbp.get("/sw.js")
 def service_worker():
-    resp = send_from_directory(os.path.join(HERE, "club_static"), "sw.js", mimetype="application/javascript", max_age=0)
+    resp = send_from_directory(os.path.join(HERE, "static"), "sw.js", mimetype="application/javascript", max_age=0)
     resp.headers["Cache-Control"] = "no-cache"
     return resp
 
@@ -310,7 +321,7 @@ def service_worker():
 def admin_page(slug):
     u = current_user()
     if not u:
-        return redirect("/diary/login")
+        return redirect(bridge.login_url())
     club = club_by_slug(slug)
     if not club or not role_of(club, u):
         abort(404)
@@ -379,20 +390,12 @@ def _items_for(conn, club_id, calibre):
         (club_id, calibre))]
 
 
-def _me_name(u):
-    """Name from the diary profile, else the username."""
-    if not u:
-        return ""
-    from . import connect as dconnect, kv_get, users
-    try:
-        conn = dconnect(users.db_path(u))
-        try:
-            p = json.loads(kv_get("profile", conn) or "{}") or {}
-        finally:
-            conn.close()
-        return (p.get("name") or "").strip() or u["username"]
-    except sqlite3.Error:
-        return u["username"]
+def _box_items(conn, club, box):
+    """What the shooter can pick: the ammo that's in this box (by the log); every ammo of the calibre if none is."""
+    items = _items_for(conn, club["id"], box["calibre"])
+    st = stock(conn, club["id"])
+    have = [i for i in items if st.get((box["id"], i["id"]), 0) > 0]
+    return have or items
 
 
 @cbp.get("/api/b/<code>")
@@ -404,8 +407,8 @@ def api_box(code):
     u = current_user()
     return jsonify(club={"name": club["name"], "slug": club["slug"], "mobilepay": club["mobilepay"]},
                    box={"name": box["name"], "calibre": box["calibre"]},
-                   items=_items_for(conn, club["id"], box["calibre"]),
-                   me={"name": _me_name(u), "user": u["username"]} if u else None,
+                   items=_box_items(conn, club, box),
+                   me={"name": bridge.display_name(u), "user": u["username"]} if u else None,
                    withdraw_min=WITHDRAW_MIN)
 
 
@@ -520,56 +523,13 @@ def api_withdraw(code, grp):
                  (_now(), grp))
     conn.commit()
     if r["uid"]:
-        remove_from_diary(r["uid"], grp)
+        bridge.remove_rounds(r["uid"], grp)
     return jsonify(ok=True)
 
 
-# ------------------------------------------------------------------ the shooter's own diary
-def _diary_conn(user):
-    from . import connect as dconnect, users
-    return dconnect(users.db_path(user))
-
-
 def add_to_diary(user, club, box, grp, d, rounds):
-    """Add the rounds to the user's own diary: onto that day's visit if there is one, else a new visit."""
-    from . import upsert_session
-    conn = _diary_conn(user)
-    try:
-        line = {"type": box["type"] or "", "cal": box["calibre"], "mode": "", "rounds": rounds,
-                "info": f"{club['name']} ammo · {box['name']}", "club": grp}
-        r = conn.execute("SELECT id, data FROM sessions WHERE date=? ORDER BY id DESC LIMIT 1", (d,)).fetchone()
-        if r:
-            s, sid = json.loads(r["data"]), r["id"]
-        else:
-            s, sid = {"date": d, "start": "", "end": "", "place": "", "org": club["name"], "lines": []}, \
-                "c" + secrets.token_hex(6)
-        s.setdefault("lines", []).append(line)
-        upsert_session(conn, sid, s)
-        conn.commit()
-        return True
-    finally:
-        conn.close()
-
-
-def remove_from_diary(uid, grp):
-    from . import upsert_session, users
-    u = users.get(uid)
-    if not u:
-        return
-    conn = _diary_conn(u)
-    try:
-        for r in conn.execute("SELECT id, data FROM sessions").fetchall():
-            s = json.loads(r["data"])
-            keep = [ln for ln in s.get("lines", []) if ln.get("club") != grp]
-            if len(keep) != len(s.get("lines", [])):
-                if not keep and r["id"].startswith("c") and not (s.get("place") or s.get("start")):
-                    conn.execute("DELETE FROM sessions WHERE id=?", (r["id"],))
-                else:
-                    s["lines"] = keep
-                    upsert_session(conn, r["id"], s)
-        conn.commit()
-    finally:
-        conn.close()
+    return bridge.add_rounds(user, d, rounds, box["calibre"], box["type"], f"{club['name']} ammo · {box['name']}",
+                             club["name"], grp)
 
 
 # ------------------------------------------------------------------ admin API (diary login + a role in the club)
@@ -614,10 +574,9 @@ def api_new_club():
 
 
 def _user_names(ids):
-    from . import users
     out = {}
     for i in ids:
-        u = users.get(i)
+        u = bridge.get_user(i)
         if u:
             out[i] = u["username"]
     return out
@@ -695,12 +654,11 @@ def api_item(slug):
 
 def _holder(b):
     """holder: free text name; holder_user: optional diary username (gets holder rights for the box)."""
-    from . import users
     hn = _clean(b.get("holder_name"), 60)
     hu = str(b.get("holder_user") or "").strip().lower()
     uid = None
     if hu:
-        u = users.by_name(hu)
+        u = bridge.user_by_name(hu)
         if not u:
             raise ValueError(f"No diary account called {hu}")
         uid = u["id"]
@@ -884,13 +842,22 @@ def api_void(slug, grp):
     return jsonify(ok=True)
 
 
+@cbp.post("/api/c/<slug>/paid/<grp>")
+def api_paid(slug, grp):
+    club, _u, _r = _club_for(slug)
+    b, conn = _body(), cdb()
+    n = conn.execute("UPDATE moves SET paid=? WHERE grp=? AND club_id=? AND kind='use'",
+                     (1 if b.get("paid") else 0, grp, club["id"])).rowcount
+    conn.commit()
+    return jsonify(ok=bool(n))
+
+
 @cbp.post("/api/c/<slug>/people")
 def api_people(slug):
     """Make a diary account an admin of the club (role "admin"), or remove it (role "")."""
-    from . import users
     club, me, _r = _club_for(slug)
     b = _body()
-    u = users.by_name(str(b.get("username") or "").strip().lower())
+    u = bridge.user_by_name(str(b.get("username") or "").strip().lower())
     if not u:
         return _err("No diary account with that name.")
     if u["id"] == me["id"] and not b.get("role"):

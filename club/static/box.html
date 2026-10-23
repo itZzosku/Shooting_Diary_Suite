@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Club ammo</title>
+<meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141714" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="32x32" href="/diary/static/icons/favicon-32.png">
+<link rel="preload" href="/diary/static/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/diary/static/fonts/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/diary/static/fonts/fonts.css">
+<link rel="stylesheet" href="/ammo/static/club.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="kicker" id="clubName">Club ammo</div>
+      <h1 id="boxName">Ammo box</h1>
+      <div class="hint" id="boxCal"></div>
+    </div>
+  </header>
+
+  <div class="banner" id="note" hidden></div>
+  <div class="msg" id="loadMsg" hidden></div>
+
+  <!-- The form -->
+  <form id="form" class="wrap" style="gap:16px" autocomplete="on" novalidate hidden>
+    <div class="grid2">
+      <label class="f">Your name<input type="text" id="fName" name="name" autocomplete="name" maxlength="60" required></label>
+      <label class="f">Date<input type="date" id="fDate" required></label>
+    </div>
+    <div id="lines" style="display:flex;flex-direction:column;gap:10px"></div>
+    <button type="button" class="chip add" id="addLine" hidden>+ another ammo</button>
+
+    <div class="total"><span class="hint" id="totalTxt">Total</span><b id="total">0.00 €</b></div>
+
+    <label class="check" id="paidRow"><input type="checkbox" id="fPaid" checked> <span id="paidTxt">I'm paying now with MobilePay</span></label>
+    <label class="check" id="diaryRow" hidden><input type="checkbox" id="fDiary" checked> <span>Also add to my diary <span class="hint" id="diaryUser"></span></span></label>
+    <input class="hp" type="text" id="fWebsite" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <div class="msg" id="msg" hidden></div>
+    <button type="submit" class="primary big" id="saveBtn">Save</button>
+    <p class="hint" style="margin:0" id="loginHint" hidden>Have a <a href="/diary/login">Shooting Diary</a> account? Log in and your name fills in by itself.</p>
+  </form>
+
+  <!-- After saving -->
+  <section id="done" class="wrap" style="gap:14px" hidden>
+    <div class="pay" id="pay"></div>
+    <button type="button" class="primary big" id="again">New entry</button>
+  </section>
+
+  <section id="mineBox" hidden>
+    <h2 style="margin-bottom:6px">On this phone</h2>
+    <div class="rows" id="mine"></div>
+  </section>
+
+  <p class="hint" style="margin:0"><a href="/diary/privacy#club">Privacy</a> · Your name, the rounds and the date go to the club's ammo log. Admins of the club see them.</p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const CODE=location.pathname.replace(/\/+$/,"").split("/").pop();
+const lsGet=k=>{try{return JSON.parse(localStorage.getItem(k)||"null")}catch(e){return null}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const eur=n=>(Math.round((+n||0)*100)/100).toFixed(2)+" €";
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const fiDate=s=>{const[y,m,d]=s.split("-");return +d+"."+ +m+"."+y};
+const rid=()=>Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,"0")).join("");
+function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2600)}
+const DEVICE=lsGet("ammo:device")||(()=>{const d=rid();lsSet("ammo:device",d);return d})();
+const QUICK=[25,50,100,200];
+const S={info:null,lines:[]};
+
+async function api(method,path,body){
+  const r=await fetch("/ammo/api/"+path,{method,credentials:"same-origin",
+    headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});
+  let j=null;try{j=await r.json()}catch(e){}
+  if(r.headers.get("X-Offline"))note("Offline – entries are kept on this phone and sent when there's a connection.");
+  if(!r.ok){const e=new Error((j&&j.error)||("HTTP "+r.status));if(!(j&&j.error==="offline"))e.status=r.status;throw e}   // offline (service worker) = no status
+  return j;
+}
+
+/* ---- load the box ---- */
+async function load(){
+  let info=null;
+  try{info=await api("GET","b/"+CODE);lsSet("ammo:box:"+CODE,info)}
+  catch(e){
+    if(e.status===404){$("loadMsg").textContent="This box link doesn't work any more. Scan the QR code on the box again, or ask a club admin.";$("loadMsg").hidden=false;$("boxName").textContent="Unknown box";return}
+    info=lsGet("ammo:box:"+CODE);
+    if(!info){$("loadMsg").textContent="No connection. Open this page once while online and it works offline after that.";$("loadMsg").hidden=false;return}
+    note("Offline – entries are kept on this phone and sent when there's a connection.");
+  }
+  S.info=info;
+  document.title=info.box.name+" · "+info.club.name;
+  $("clubName").textContent=info.club.name;$("boxName").textContent=info.box.name;$("boxCal").textContent=info.box.calibre;
+  if(!info.items.length){$("loadMsg").textContent="No ammo with a price in this box yet – ask a club admin.";$("loadMsg").hidden=false;return}
+  const remembered=lsGet("ammo:name");
+  $("fName").value=(info.me&&info.me.name)||remembered||"";
+  $("fDate").value=today();$("fDate").max=today();
+  if(!S.lines.length)S.lines=[{item:info.items[0].id,qty:""}];
+  S.lines.forEach(l=>{if(!info.items.some(i=>i.id===l.item))l.item=info.items[0].id});
+  const mp=info.club.mobilepay;
+  $("paidTxt").innerHTML=mp?`I'm paying now with MobilePay <span class="hint">(${esc(mp)})</span>`:"Paid";
+  $("diaryRow").hidden=!info.me;$("loginHint").hidden=!!info.me;
+  if(info.me){$("diaryUser").textContent="("+info.me.user+")";const d=lsGet("ammo:diary");$("fDiary").checked=d===null?true:!!d}
+  $("form").hidden=false;renderLines();
+  loadMine();
+}
+function note(t){$("note").textContent=t;$("note").hidden=!t}
+
+/* ---- ammo lines ---- */
+function itemOf(id){return S.info.items.find(i=>i.id===id)}
+function renderLines(){
+  const its=S.info.items,many=its.length>1;
+  $("lines").innerHTML=S.lines.map((l,i)=>`<div class="line" data-i="${i}">
+    ${many||S.lines.length>1?`<div class="line-top">${many?`<label class="f" style="flex:1">Ammo<select data-k="item">${its.map(it=>
+      `<option value="${it.id}" ${it.id===l.item?"selected":""}>${esc(it.name||S.info.box.calibre)} – ${(+it.price).toFixed(2)} € / round</option>`).join("")}</select></label>`
+      :`<span class="hint">${esc(itemOf(l.item).name||S.info.box.calibre)}</span>`}
+      ${S.lines.length>1?`<button type="button" class="rm" data-rm="${i}" aria-label="Remove">✕</button>`:""}</div>`
+      :`<div class="hint">${esc(its[0].name||S.info.box.calibre)} · ${(+its[0].price).toFixed(2)} € / round</div>`}
+    <label class="f">Rounds<div class="step"><button type="button" data-d="-1" aria-label="Fewer">−</button>
+      <input type="number" inputmode="numeric" min="1" max="5000" step="1" data-k="qty" value="${esc(l.qty)}" placeholder="0">
+      <button type="button" data-d="1" aria-label="More">+</button></div></label>
+    <div class="chips">${QUICK.map(q=>`<button type="button" class="chip" data-q="${q}" aria-pressed="${+l.qty===q}">${q}</button>`).join("")}</div>
+  </div>`).join("");
+  $("addLine").hidden=!(many&&S.lines.length<its.length);
+  total();
+}
+function total(){
+  const t=S.lines.reduce((a,l)=>a+(+l.qty||0)*(+((itemOf(l.item)||{}).price)||0),0),n=S.lines.reduce((a,l)=>a+(+l.qty||0),0);
+  $("total").textContent=eur(t);$("totalTxt").textContent=n?`Total · ${n} rounds`:"Total";
+}
+$("lines").addEventListener("input",e=>{const t=e.target,i=+t.closest(".line").dataset.i;
+  if(t.dataset.k==="qty"){S.lines[i].qty=t.value.replace(/\D/g,"");t.closest(".line").querySelectorAll("[data-q]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.q===+S.lines[i].qty));total()}});
+$("lines").addEventListener("change",e=>{const t=e.target,i=+t.closest(".line").dataset.i;
+  if(t.dataset.k==="item"){S.lines[i].item=+t.value;total()}});
+$("lines").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const i=+b.closest(".line").dataset.i,l=S.lines[i];
+  if(b.dataset.q){l.qty=b.dataset.q;renderLines()}
+  else if(b.dataset.d){l.qty=String(Math.max(0,(+l.qty||0)+ +b.dataset.d)||"");renderLines()}
+  else if(b.dataset.rm){S.lines.splice(i,1);renderLines()}});
+$("addLine").addEventListener("click",()=>{const used=new Set(S.lines.map(l=>l.item));const it=S.info.items.find(i=>!used.has(i.id))||S.info.items[0];
+  S.lines.push({item:it.id,qty:""});renderLines()});
+$("fDiary").addEventListener("change",()=>lsSet("ammo:diary",$("fDiary").checked));
+
+/* ---- save (or keep on the phone when offline) ---- */
+const QK="ammo:queue";
+$("form").addEventListener("submit",async e=>{
+  e.preventDefault();$("msg").hidden=true;
+  const name=$("fName").value.trim().replace(/\s+/g," ");
+  const lines=S.lines.filter(l=>+l.qty>0).map(l=>({item:l.item,qty:+l.qty}));
+  const err=name.length<2?"Write your name.":!lines.length?"Add the rounds.":lines.some(l=>l.qty>5000)?"Rounds: at most 5000 per line.":"";
+  if(err){$("msg").textContent=err;$("msg").hidden=false;return}
+  lsSet("ammo:name",name);
+  const body={name,date:$("fDate").value||today(),lines,paid:$("fPaid").checked,diary:!!(S.info.me&&$("fDiary").checked),
+    device:DEVICE,client_id:rid(),website:$("fWebsite").value};
+  $("saveBtn").disabled=true;
+  try{showDone(await api("POST","b/"+CODE+"/use",body))}
+  catch(err){
+    if(err.status){$("msg").textContent=err.message;$("msg").hidden=false}
+    else{const q=lsGet(QK)||[];q.push({code:CODE,body});lsSet(QK,q);showDone(null,body)}
+  }finally{$("saveBtn").disabled=false}
+});
+function showDone(r,queued){
+  const mp=S.info.club.mobilepay;
+  const amt=r?r.total:S.lines.reduce((a,l)=>a+(+l.qty||0)*(+itemOf(l.item).price||0),0);
+  const paying=r?r.paid:queued.paid;
+  $("pay").innerHTML=(r?`<div class="ok">✓ Saved</div>`:`<div class="ok">✓ Saved on this phone</div><div class="hint">It's sent when there's a connection.</div>`)+
+    `<div class="amt">${eur(amt)}</div>`+
+    (paying&&mp?`<div class="to">MobilePay to <b>${esc(mp)}</b> <button type="button" class="copy" data-copy="${esc(mp)}">Copy</button></div>`+
+      (r?`<div class="ref">Message: <b>${esc(r.ref)}</b> <button type="button" class="copy" data-copy="${esc(r.ref)}">Copy</button></div>`:""):
+     !paying?`<div class="hint">Marked as not paid yet – pay a club admin later.</div>`:"")+
+    (r&&r.diary?`<div class="hint">Added to your diary.</div>`:r&&r.diary===false?`<div class="msg">Couldn't add it to your diary.</div>`:"");
+  $("form").hidden=true;$("done").hidden=false;window.scrollTo(0,0);
+  loadMine();
+}
+$("pay").addEventListener("click",async e=>{const b=e.target.closest("[data-copy]");if(!b)return;
+  try{await navigator.clipboard.writeText(b.dataset.copy);toast("Copied")}catch(err){toast(b.dataset.copy)}});
+$("again").addEventListener("click",()=>{S.lines=[{item:S.info.items[0].id,qty:""}];$("fDate").value=today();$("done").hidden=true;$("form").hidden=false;renderLines()});
+
+async function flush(){
+  const q=lsGet(QK)||[];if(!q.length)return;
+  const left=[];
+  for(const x of q){
+    try{await api("POST","b/"+x.code+"/use",x.body)}
+    catch(e){if(!e.status)left.push(x);else if(e.status===429)left.push(x)}     // a rejected entry (bad link) is dropped
+  }
+  lsSet(QK,left);
+  if(left.length<q.length){toast(`Sent ${q.length-left.length} saved entr${q.length-left.length===1?"y":"ies"}`);note("");loadMine()}
+}
+
+/* ---- this phone's entries; take one back within the time limit ---- */
+async function loadMine(){
+  let r;try{r=await api("POST","b/"+CODE+"/mine",{device:DEVICE})}catch(e){return}
+  const q=(lsGet(QK)||[]).filter(x=>x.code===CODE);
+  const lim=(S.info&&S.info.withdraw_min||30)*60000;
+  $("mineBox").hidden=!(r.entries.length||q.length);
+  $("mine").innerHTML=q.map(x=>`<div class="row"><div class="what">${fiDate(x.body.date)} · ${x.body.lines.reduce((a,l)=>a+l.qty,0)} rounds<br><small>${esc(x.body.name)} · waiting to be sent</small></div><div class="r num">…</div></div>`).join("")+
+    r.entries.map(x=>{const n=x.lines.reduce((a,l)=>a+l.qty,0),open=!x.voided&&Date.now()-Date.parse(x.at)<lim;
+      return`<div class="row${x.voided?" void":""}"><div class="what">${fiDate(x.date)} · ${n} rounds${x.paid?"":'<span class="tag warn">not paid</span>'}${x.voided?'<span class="tag">taken back</span>':""}<br>
+        <small>${esc(x.lines.map(l=>l.item).filter(Boolean).join(", "))} · ref <b class="num">${esc(x.ref)}</b></small></div>
+        <div class="r"><div class="num">${eur(x.total)}</div>${open?`<button type="button" class="link" data-wd="${x.grp}">Take back</button>`:""}</div></div>`}).join("");
+}
+$("mine").addEventListener("click",async e=>{const b=e.target.closest("[data-wd]");if(!b)return;
+  if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Tap again to take back";return}
+  try{await api("POST","b/"+CODE+"/withdraw/"+b.dataset.wd,{device:DEVICE});toast("Taken back");loadMine()}
+  catch(err){toast(err.message)}});
+
+window.addEventListener("online",flush);
+if("serviceWorker" in navigator)navigator.serviceWorker.register("/ammo/sw.js",{scope:"/ammo/"}).catch(()=>{});
+load().then(flush);
+</script>
+</body>
+</html>

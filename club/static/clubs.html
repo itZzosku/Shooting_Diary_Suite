@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Club ammo</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/diary/static/icons/favicon-32.png">
+<link rel="stylesheet" href="/diary/static/fonts/fonts.css">
+<link rel="stylesheet" href="/ammo/static/club.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top"><div><div class="kicker">Shooting Diary</div><h1>Club <span>ammo</span></h1></div><a class="ghost" href="/diary/">Home</a></header>
+  <div class="card"><div class="rows" id="list"><div class="hint">Loading…</div></div></div>
+  <form id="new" class="card" style="display:flex;flex-direction:column;gap:12px" hidden>
+    <h2>New club</h2>
+    <div class="grid2">
+      <label class="f">Name<input type="text" id="nName" maxlength="80" placeholder="e.g. Esimerkin Ampujat"></label>
+      <label class="f">Id in links<input type="text" id="nSlug" maxlength="31" placeholder="e.g. esimerkki" autocapitalize="none"></label>
+    </div>
+    <div class="msg" id="msg" hidden></div>
+    <div><button class="primary" type="submit">Create</button></div>
+  </form>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function load(){
+  const r=await fetch("/ammo/api/clubs",{credentials:"same-origin"});if(r.status===401){location.href="/diary/login";return}
+  const j=await r.json();
+  $("list").innerHTML=j.clubs.length?j.clubs.map(c=>`<a class="row" style="color:inherit;text-decoration:none" href="/ammo/${esc(c.slug)}/admin">
+    <span><b>${esc(c.name)}</b><br><small>${c.role==="admin"?"Admin":"Box holder"}</small></span><span class="r">${c.low?`<span class="tag warn">${c.low} low</span>`:""} ›</span></a>`).join("")
+    :`<div class="hint">You don't manage any club's ammo.${j.site_admin?" Create one below.":""}</div>`;
+  $("new").hidden=!j.site_admin;
+}
+$("nName").addEventListener("input",()=>{if(!$("nSlug").dataset.touched)$("nSlug").value=$("nName").value.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,31)});
+$("nSlug").addEventListener("input",()=>$("nSlug").dataset.touched="1");
+$("new").addEventListener("submit",async e=>{e.preventDefault();$("msg").hidden=true;
+  const r=await fetch("/ammo/api/clubs",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:$("nName").value,slug:$("nSlug").value})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){$("msg").textContent=j.error||"Couldn't create it.";$("msg").hidden=false;return}
+  location.href="/ammo/"+j.slug+"/admin";
+});
+load();
+</script>
+</body>
+</html>

@@ -21,15 +21,17 @@ New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the
 | `/diary/loans` | **Guns loaned** – friends' shots with your guns/ammo and what they owe (tile only) |
 | `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
 | `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |
+| `/ammo/<club>/<code>` | **Club ammo** – a box's shooter form, public (the code is the box's secret, printed as a QR code) |
+| `/ammo/<club>/admin` | **Club ammo** – stock, purchases, refills, counts, payments (diary login + a role in the club) |
 
 Diary, Velocity and Zeroes have a switcher at the top (Home · Diary · Velocity · Zeroes); Guns loaned and the
 click calculator are opened from their tiles. The old `/diary/chrono`, `/diary/zero` and `/diary/lent`
 addresses redirect. Long-press the installed app icon for shortcuts.
 
-Code lives in `diary/`; `main.py` only calls `diary.init_app(app)` and redirects `/`.
+Code lives in `diary/` and `club/`; `main.py` calls `diary.init_app(app)` and `club.init_app(app)` and redirects `/`.
 
 Data is stored outside git in `diary_data/`: `users.db` (accounts), one SQLite file per account (`diary.db` for
-the first one, `users/<name>.db` for the rest), `deleted/` (final copies of deleted accounts, 30 days) and the
+the first one, `users/<name>.db` for the rest), `clubs.db` (club ammo), `deleted/` (final copies of deleted accounts, 30 days) and the
 cookie key. `diary_data/`, `diary_backups/`, `.env`, `diary_seed*.json` and `*.xls(x)` are in `.gitignore` –
 this repo is public, never commit them. Tests use synthetic data only.
 
@@ -103,6 +105,9 @@ DIARY_SMTP_PASSWORD=abcdefghijklmnop     # Gmail app password, myaccount.google.
 ./scripts/diary_backup.sh   # test once – check your inbox
 crontab -e                  # 17 3 * * 0  /root/Shooting_Diary_Suite/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
 ```
+
+The same script also copies the club ammo database (`python -m club backup`): `clubs-YYYY-MM-DD.db`, newest 12
+(not e-mailed). Before that, shooters' names on club entries older than `CLUB_NAMES_YEARS` (default 3) are blanked.
 
 Backups contain everyone's data, licence numbers included – the privacy page says they go to the admin's
 mailbox. Restore one account: `python -m diary import --user NAME diary_backups/diary-NAME-YYYY-MM-DD.json --replace`
@@ -312,6 +317,38 @@ account edits its own).
 The Scope Adjustment Calculator app as a page: distance (m / yd / ft) and where the group hit (high/low,
 left/right in mm / cm / in) → the correction in clicks, plus MRAD and MOA, for your scopes' own click values or
 ¼, ½, 1 MOA, 0.1 / 0.05 MRAD, 0.1 mil. *Reset* clears the offsets. Inputs are remembered; works offline.
+
+## Club ammo (`/ammo`, package `club/`)
+
+For a shooting club's ammo boxes: shooters log what they take with their own phone, no account needed; the
+club's admins see stock and payments and know when to buy more. Separate from the diary – its own package,
+pages and database (`diary_data/clubs.db`) – and talks to the diary only through `club/bridge.py` (who's logged
+in, their name, "add to my diary"). Moving it to its own repository means rewriting that one file.
+
+- **Boxes**, not just calibres: each physical box has a name, one calibre, a holder and a refill level. Every
+  box has its own secret link; print it as a QR code on the lid. *New link* replaces a leaked one.
+- **Shooter form** (scan the box): name (remembered on the phone; filled in from the diary profile when logged
+  in), date, ammo – only what's in that box – and rounds with 25/50/100/200 buttons. It shows the total and,
+  after Save, the club's MobilePay number with a 4-character reference for the payment message. *I'm paying now*
+  is ticked by default; unticked entries show as not paid. Logged-in shooters can tick *Also add to my diary*
+  (the rounds go onto that day's visit, or a new one, with the box's firearm type). Works offline: entries wait
+  on the phone and are sent later. The same phone can *Take back* an entry for 30 minutes.
+- **Admin page**: stock per calibre and per box; *Purchase* (into a box), *Refill / move* (box → box), *Count*
+  (the difference to the log is saved as a correction), *Hand over* (new holder, logged). Warnings when a box is
+  below its refill level and when all boxes of a calibre are below its *buy more* level. *Log & payments* per
+  month: rounds shot, paid / not paid totals, search by name or reference, *Mark paid*, *Void* (stays in the
+  log, crossed out). *Setup*: club name, MobilePay number, ammo & prices, boxes, admins.
+- **Roles per club**: admins (diary accounts) do everything; a box's holder, if given a diary account, can buy,
+  move and count for that box and sees stock but not shooters' names. Site admins act as admin of every club.
+  Stock is never stored – it's the sum of all moves, so the log is the audit trail.
+- Abuse: a hidden field for bots, 30 entries / hour per address, resent offline entries aren't doubled.
+- Command line: `python -m club club-add SLUG "Name" --admin USERNAME`, `python -m club admin SLUG USERNAME`,
+  `python -m club list` (stock and warnings), `python -m club backup DIR`. A site admin can also create a club
+  from `/ammo/`. The diary home page shows a *Club ammo* tile to admins and box holders.
+
+Getting started: `python -m club club-add myclub "My Club" --admin osku`, then on `/ammo/myclub/admin` → Setup:
+MobilePay number, ammo & prices, boxes (holder, refill level); *Purchase* the starting stock into each box; tap
+a box for its link and print the QR code.
 
 ## Language
 
