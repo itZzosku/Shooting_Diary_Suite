@@ -172,3 +172,13 @@ def test_club_id_from_name_and_delete():
     main(["club-delete", "vaares-sra-2"])
     assert club.club_by_slug("vaares-sra-2", club.connect()) is None
     assert club.club_by_slug("vaares-sra", club.connect())
+
+
+def test_box_mobilepay_link(setup):
+    app, a, ids, codes = setup
+    st = a.get("/ammo/api/c/testclub").json
+    b = next(x for x in st["boxes"] if x["name"] == "7.62 A")
+    body = {k: b[k] for k in ("id", "name", "calibre", "type", "low", "holder_name")}
+    assert a.post("/ammo/api/c/testclub/boxes", json=dict(body, pay_url="javascript:alert(1)")).status_code == 400
+    assert a.post("/ammo/api/c/testclub/boxes", json=dict(body, pay_url="https://qr.mobilepay.fi/example")).status_code == 200
+    assert app.test_client().get(f"/ammo/api/b/{codes['7.62 A']}").json["box"]["pay_url"] == "https://qr.mobilepay.fi/example"

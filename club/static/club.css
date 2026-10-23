@@ -77,6 +77,8 @@ input:disabled,select:disabled{opacity:1;background:var(--surface-2)}
 .pay .to b,.pay .ref b{font-family:var(--f-mono);font-size:1.3rem;letter-spacing:.06em}
 .pay .ok{color:var(--ok);font-weight:600}
 .copy{font-family:var(--f-mono);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.pay .amt .copy{font-size:.85rem;vertical-align:middle;font-weight:400}
+.ghost.wide{width:100%;justify-content:center;padding:13px;font-size:1rem;font-weight:600}
 
 /* Lists */
 .rows{display:flex;flex-direction:column}

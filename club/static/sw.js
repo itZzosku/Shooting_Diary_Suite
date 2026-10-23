@@ -1,7 +1,7 @@
 /* Club ammo service worker (scope /ammo/): the box form opens at the range without signal.
    - Box pages and box info (GET /ammo/api/b/...): network first, last good copy when offline.
    - Styles and fonts: cache first. Entries are queued by the page itself, never here. */
-const VERSION = "a2";
+const VERSION = "a4";
 const PAGE = "ammo-page", ASSETS = "ammo-assets-" + VERSION;
 
 self.addEventListener("install", e => e.waitUntil(self.skipWaiting()));

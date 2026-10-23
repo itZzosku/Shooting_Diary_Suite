@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS boxes (            -- a physical ammo box, one calibr
     holder_name TEXT NOT NULL DEFAULT '',
     holder_uid INTEGER,
     low INTEGER NOT NULL DEFAULT 0,           -- refill this box below this many rounds (0 = no warning)
+    pay_url TEXT NOT NULL DEFAULT '',         -- MobilePay link (number + category) opened after Save
     archived INTEGER NOT NULL DEFAULT 0,
     created TEXT NOT NULL
 );
@@ -130,6 +131,8 @@ def init_db():
     conn = connect()
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    if "pay_url" not in {r[1] for r in conn.execute("PRAGMA table_info(boxes)")}:
+        conn.execute("ALTER TABLE boxes ADD COLUMN pay_url TEXT NOT NULL DEFAULT ''")   # MobilePay link of the box
     conn.commit()
     conn.close()
 
@@ -449,7 +452,7 @@ def api_box(code):
         return _err("not_found", 404)
     u = current_user()
     return jsonify(club={"name": club["name"], "slug": club["slug"], "mobilepay": club["mobilepay"]},
-                   box={"name": box["name"], "calibre": box["calibre"]},
+                   box={"name": box["name"], "calibre": box["calibre"], "pay_url": box["pay_url"]},
                    items=_box_items(conn, club, box),
                    me={"name": bridge.display_name(u), "user": u["username"]} if u else None,
                    withdraw_min=WITHDRAW_MIN)
@@ -717,6 +720,9 @@ def api_boxes(slug):
     typ = b.get("type") if b.get("type") in TYPES else ""
     if not name or not cal:
         return _err("Name and calibre are needed.")
+    pay = str(b.get("pay_url") or "").strip()
+    if pay and (len(pay) > 400 or not re.match(r"^(https://|mobilepay://)\S+$", pay)):
+        return _err("MobilePay link: paste the address from the MobilePay QR code (https://… or mobilepay://…).")
     try:
         low = _int(b.get("low") or 0, 0, 100000)
         hn, huid = _holder(b)
@@ -731,12 +737,12 @@ def api_boxes(slug):
             return _err("Empty the box (move or count it to 0) before changing its calibre.")
         if (r["holder_name"], r["holder_uid"]) != (hn, huid):
             _handover_row(conn, club, r["id"], hn, u, r["holder_name"])
-        conn.execute("UPDATE boxes SET name=?, calibre=?, type=?, low=?, holder_name=?, holder_uid=?, archived=? "
-                     "WHERE id=?", (name, cal, typ, low, hn, huid, 1 if b.get("archived") else 0, bid))
+        conn.execute("UPDATE boxes SET name=?, calibre=?, type=?, low=?, holder_name=?, holder_uid=?, archived=?, "
+                     "pay_url=? WHERE id=?", (name, cal, typ, low, hn, huid, 1 if b.get("archived") else 0, pay, bid))
     else:
-        bid = conn.execute("INSERT INTO boxes(club_id,name,calibre,type,code,holder_name,holder_uid,low,created) "
-                           "VALUES(?,?,?,?,?,?,?,?,?)",
-                           (club["id"], name, cal, typ, new_code(conn), hn, huid, low, _now())).lastrowid
+        bid = conn.execute("INSERT INTO boxes(club_id,name,calibre,type,code,holder_name,holder_uid,low,created,pay_url) "
+                           "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                           (club["id"], name, cal, typ, new_code(conn), hn, huid, low, _now(), pay)).lastrowid
         if hn:
             _handover_row(conn, club, bid, hn, u, "")
     conn.commit()

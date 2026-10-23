@@ -48,7 +48,7 @@
   <!-- After saving -->
   <section id="done" class="wrap" style="gap:14px" hidden>
     <div class="pay" id="pay"></div>
-    <button type="button" class="primary big" id="again">New entry</button>
+    <button type="button" class="ghost wide" id="again">New entry</button>
   </section>
 
   <section id="mineBox" hidden>
@@ -105,7 +105,7 @@ async function load(){
   if(!S.lines.length)S.lines=[{item:info.items[0].id,qty:""}];
   S.lines.forEach(l=>{if(!info.items.some(i=>i.id===l.item))l.item=info.items[0].id});
   const mp=info.club.mobilepay;
-  $("paidTxt").innerHTML=mp?`I'm paying now with MobilePay <span class="hint">(${esc(mp)})</span>`:"Paid";
+  $("paidTxt").innerHTML=info.box.pay_url?"I'm paying now with MobilePay":mp?`I'm paying now with MobilePay <span class="hint">(${esc(mp)})</span>`:"Paid";
   $("diaryRow").hidden=!info.me;$("loginHint").hidden=!!info.me;
   if(info.me){$("diaryUser").textContent="("+info.me.user+")";const d=lsGet("ammo:diary");$("fDiary").checked=d===null?true:!!d}
   $("form").hidden=false;renderLines();
@@ -166,12 +166,14 @@ $("form").addEventListener("submit",async e=>{
   }finally{$("saveBtn").disabled=false}
 });
 function showDone(r,queued){
-  const mp=S.info.club.mobilepay;
+  const mp=S.info.club.mobilepay,url=S.info.box.pay_url;
   const amt=r?r.total:S.lines.reduce((a,l)=>a+(+l.qty||0)*(+itemOf(l.item).price||0),0);
   const paying=r?r.paid:queued.paid;
   $("pay").innerHTML=(r?`<div class="ok">✓ Saved</div>`:`<div class="ok">✓ Saved on this phone</div><div class="hint">It's sent when there's a connection.</div>`)+
-    `<div class="amt">${eur(amt)}</div>`+
-    (paying&&mp?`<div class="to">MobilePay to <b>${esc(mp)}</b> <button type="button" class="copy" data-copy="${esc(mp)}">Copy</button></div>`+
+    `<div class="amt">${eur(amt)} <button type="button" class="copy" data-copy="${(Math.round(amt*100)/100).toFixed(2).replace(".",",")}">Copy</button></div>`+
+    (paying&&url?`<a class="primary big" style="text-decoration:none;display:block" href="${esc(url)}">Open MobilePay</a>`+
+      `<div class="hint">Pay ${eur(amt)}${r?` with the message <b class="num">${esc(r.ref)}</b> <button type="button" class="copy" data-copy="${esc(r.ref)}">Copy</button>`:""}</div>`:
+     paying&&mp?`<div class="to">MobilePay to <b>${esc(mp)}</b> <button type="button" class="copy" data-copy="${esc(mp)}">Copy</button></div>`+
       (r?`<div class="ref">Message: <b>${esc(r.ref)}</b> <button type="button" class="copy" data-copy="${esc(r.ref)}">Copy</button></div>`:""):
      !paying?`<div class="hint">Marked as not paid yet – pay a club admin later.</div>`:"")+
     (r&&r.diary?`<div class="hint">Added to your diary.</div>`:r&&r.diary===false?`<div class="msg">Couldn't add it to your diary.</div>`:"");

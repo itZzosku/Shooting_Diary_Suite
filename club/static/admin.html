@@ -195,7 +195,8 @@ function boxSheet(b){
   sheet(b.name,`<div class="hint">${esc(b.calibre)}${b.type?" · "+esc(b.type):""} · ${b.holder_name?"held by <b>"+esc(b.holder_name)+"</b>":"no holder"}</div>
     <div class="card"><div class="rows">${its.length?its.map(([i,n])=>`<div class="row"><span>${esc(itemName(itemOf(+i)))}</span><span class="num">${fmt(n)}</span></div>`).join("")
       :`<div class="hint">Empty.</div>`}<div class="row"><b>In the box</b><b class="num">${fmt(b.total)}</b></div></div>
-      ${b.low?`<div class="hint">Refill below ${fmt(b.low)}</div>`:""}</div>
+      ${b.low?`<div class="hint">Refill below ${fmt(b.low)}</div>`:""}
+      <div class="hint">${b.pay_url?"MobilePay link set":"No MobilePay link – shooters see the club's number only (Edit box)"}</div></div>
     ${mayBox(b)?`<div class="acts"><button type="button" data-a="buy">+ Purchase into box</button><button type="button" data-a="move">Refill / move</button>
       <button type="button" data-a="count">Count the box</button>${isAdmin()?`<button type="button" data-a="hand">Hand over</button>`:""}
       ${isAdmin()?`<button type="button" data-a="edit">Edit box</button>`:""}<button type="button" data-a="log">This box's log</button></div>`:""}
@@ -243,18 +244,20 @@ function handSheet(b){
     async()=>{await api("POST",`c/${SLUG}/boxes`,Object.assign(boxBody(b),{holder_name:v("hName"),holder_user:v("hUser")}));toast("Handed over")});
   $("sBody").onclick=null;
 }
-function boxBody(b){return{id:b.id,name:b.name,calibre:b.calibre,type:b.type,low:b.low,holder_name:b.holder_name,holder_user:b.holder_user||"",archived:!!b.archived}}
+function boxBody(b){return{id:b.id,name:b.name,calibre:b.calibre,type:b.type,low:b.low,holder_name:b.holder_name,holder_user:b.holder_user||"",archived:!!b.archived,pay_url:b.pay_url||""}}
 function boxEdit(b){
-  const n=!b;b=b||{name:"",calibre:"",type:"",low:0,holder_name:"",holder_user:"",archived:0};
+  const n=!b;b=b||{name:"",calibre:"",type:"",low:0,holder_name:"",holder_user:"",archived:0,pay_url:""};
   const cals=[...new Set(S.items.map(i=>i.calibre))];
   sheet(n?"New box":"Edit "+b.name,`<div class="grid2"><label class="f">Name<input type="text" id="eName" maxlength="40" value="${esc(b.name)}" placeholder="e.g. 9 mm A"></label>
       <label class="f">Calibre<input type="text" id="eCal" list="calList" maxlength="40" value="${esc(b.calibre)}"></label></div>
     <datalist id="calList">${cals.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
     <div class="grid2"><label class="f">Firearm type (for the diary)<select id="eType"><option value="">—</option>${S.types.map(t=>`<option ${t===b.type?"selected":""}>${t}</option>`).join("")}</select></label>
       <label class="f">Refill below<input type="number" inputmode="numeric" id="eLow" min="0" value="${b.low||""}" placeholder="0 = no warning"></label></div>
+    <label class="f">MobilePay link (optional)<input type="text" id="ePay" maxlength="400" inputmode="url" autocapitalize="none" value="${esc(b.pay_url||"")}" placeholder="https://… from the box's MobilePay QR"></label>
+    <p class="hint" style="margin:-6px 0 0">Scan the MobilePay QR code with the phone camera and copy the address it shows. After Save the form gets an <b>Open MobilePay</b> button to it (your number and payment category), so the box needs only the ammo form's QR code.</p>
     ${n?`<div class="grid2"><label class="f">Held by<input type="text" id="eHold" maxlength="60"></label><label class="f">Their diary account (optional)<input type="text" id="eUser" maxlength="32" autocapitalize="none"></label></div>`:""}
     ${n?"":`<label class="check"><input type="checkbox" id="eArch" ${b.archived?"checked":""}> Archived (hidden, link stops working)</label>`}`,
-    async()=>{const body=Object.assign(boxBody(b),{name:v("eName"),calibre:v("eCal").trim(),type:v("eType"),low:v("eLow")||0});
+    async()=>{const body=Object.assign(boxBody(b),{name:v("eName"),calibre:v("eCal").trim(),type:v("eType"),low:v("eLow")||0,pay_url:v("ePay").trim()});
       if(n){body.holder_name=v("eHold");body.holder_user=v("eUser");delete body.id}else body.archived=$("eArch").checked;
       await api("POST",`c/${SLUG}/boxes`,body);toast("Box saved")});
   $("sBody").onclick=null;
