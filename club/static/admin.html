@@ -69,7 +69,7 @@
   <section id="tLog" hidden style="display:flex;flex-direction:column;gap:14px">
     <div class="grid2">
       <label class="f">Month<select id="lMonth"></select></label>
-      <label class="f">Show<select id="lKind"><option value="">Everything</option><option value="use">Shooters' entries</option><option value="unpaid">Not paid</option><option value="stock">Purchases, moves, counts, hand-overs</option></select></label>
+      <label class="f">Show<select id="lKind"><option value="">Everything</option><option value="use">Shooters' entries</option><option value="unpaid">Not paid</option><option value="stock">Refills, moves, counts, hand-overs</option></select></label>
     </div>
     <div class="sum" id="lSum"></div>
     <label class="f">Find a name or reference<input type="search" id="lFind" placeholder="e.g. Matti or A7K3"></label>
@@ -169,7 +169,7 @@ function renderStock(){
           <small>${b.holder_name?"Held by "+esc(b.holder_name):"No holder"}${its&&Object.keys(b.stock).length>1?" · "+its:""}</small></span><span class="n">${fmt(b.total)}</span></button>`}).join("")}
     </div>`}).join("");
   const any=S.boxes.some(b=>!b.archived&&mayBox(b));
-  $("stockActs").innerHTML=any?`<button class="ghost" type="button" data-act="buy">+ Purchase</button><button class="ghost" type="button" data-act="move">Refill / move</button><button class="ghost" type="button" data-act="count">Count</button>`:"";
+  $("stockActs").innerHTML=any?`<button class="ghost" type="button" data-act="buy">+ Refill</button><button class="ghost" type="button" data-act="move">Move</button><button class="ghost" type="button" data-act="count">Count</button>`:"";
 }
 $("stock").addEventListener("click",e=>{const b=e.target.closest("[data-box]");if(b)return boxSheet(boxOf(+b.dataset.box));
   const l=e.target.closest("[data-level]");if(l)levelSheet(l.dataset.level)});
@@ -181,7 +181,7 @@ function sheet(title,html,save,label){
   $("sTitle").textContent=title;$("sBody").innerHTML=html;$("sMsg").hidden=true;onSave=save;
   $("sFoot").hidden=!save;$("sSave").textContent=label||"Save";$("sheet").hidden=false;document.body.style.overflow="hidden";$("sheet").scrollTop=0;
 }
-function closeSheet(){$("sheet").hidden=true;document.body.style.overflow="";onSave=null}
+function closeSheet(){$("sheet").hidden=true;document.body.style.overflow="";onSave=null;$("sBody").innerHTML=""}
 $("sClose").addEventListener("click",closeSheet);
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("sheet").hidden)closeSheet()});
 $("sForm").addEventListener("submit",async e=>{e.preventDefault();if(!onSave)return;$("sSave").disabled=true;
@@ -197,8 +197,8 @@ function boxSheet(b){
       :`<div class="hint">Empty.</div>`}<div class="row"><b>In the box</b><b class="num">${fmt(b.total)}</b></div></div>
       ${b.low?`<div class="hint">Refill below ${fmt(b.low)}</div>`:""}
       <div class="hint">${b.pay_url?"MobilePay link set":"No MobilePay link – shooters see the club's number only (Edit box)"}</div></div>
-    ${mayBox(b)?`<div class="acts"><button type="button" data-a="buy">+ Purchase into box</button><button type="button" data-a="move">Refill / move</button>
-      <button type="button" data-a="count">Count the box</button>${isAdmin()?`<button type="button" data-a="hand">Hand over</button>`:""}
+    ${mayBox(b)?`<div class="acts"><button type="button" data-a="buy">+ Refill</button><button type="button" data-a="move">Move to another box</button>
+      <button type="button" data-a="count">Count</button>${isAdmin()?`<button type="button" data-a="hand">Hand over</button>`:""}
       ${isAdmin()?`<button type="button" data-a="edit">Edit box</button>`:""}<button type="button" data-a="log">This box's log</button></div>`:""}
     ${url?`<div><div class="lbl hint" style="margin-bottom:6px">Shooters' link (the QR code on the lid)</div><div class="lnk" id="bUrl">${esc(url)}</div>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="ghost" data-a="copy">Copy link</button><a class="ghost" href="${esc(url)}" target="_blank" rel="noopener">Open</a>
@@ -217,25 +217,27 @@ function boxOpts(sel,filter){return S.boxes.filter(b=>!b.archived&&(!filter||fil
 function itemOpts(cal,box){return S.items.filter(i=>i.calibre===cal&&!i.archived).map(i=>`<option value="${i.id}">${esc(itemName(i))}${box?" – "+fmt(box.stock[i.id]||0)+" in box":""}</option>`).join("")}
 function moveSheet(kind,b){
   const mine=S.boxes.filter(x=>!x.archived&&mayBox(x));
-  b=b||mine[0];if(!b)return;
-  const T={buy:"Purchase",move:"Refill / move",count:"Count a box"}[kind];
-  const html=()=>{const box=boxOf(+(v("mBox")||b.id));return`
+  // Move: from the fullest box that has another box of the same calibre
+  b=b||(kind==="move"&&mine.filter(x=>S.boxes.some(y=>!y.archived&&y.id!==x.id&&y.calibre===x.calibre)).sort((x,y)=>y.total-x.total)[0])||mine[0];if(!b)return;
+  const T={buy:"Refill a box",move:"Move between boxes",count:"Count a box"}[kind];
+  let cur=b.id;                                  // not read from the DOM: an earlier sheet's fields may still be there
+  const html=()=>{const box=boxOf(cur);return`
     <label class="f">${kind==="move"?"From box":"Box"}<select id="mBox">${boxOpts(box.id,x=>kind==="move"||mayBox(x))}</select></label>
     ${kind==="move"?`<label class="f">To box<select id="mTo">${boxOpts(null,x=>x.calibre===box.calibre&&x.id!==box.id)}</select></label>`:""}
     <label class="f">Ammo<select id="mItem">${itemOpts(box.calibre,box)}</select></label>
-    <div class="grid2"><label class="f">${kind==="count"?"Counted in the box":"Rounds"}<input type="number" inputmode="numeric" id="mQty" min="0"></label>
-      ${kind==="buy"?`<label class="f">Paid € / round (optional)<input type="number" inputmode="decimal" step="0.001" id="mPrice" min="0"></label>`:`<label class="f">Date<input type="date" id="mDate" value="${today()}"></label>`}</div>
-    ${kind==="buy"?`<label class="f">Date<input type="date" id="mDate" value="${today()}"></label>`:""}
-    <label class="f">Note (optional)<input type="text" id="mNote" maxlength="200" placeholder="${kind==="buy"?"e.g. shop, invoice no.":""}"></label>
+    <div class="grid2"><label class="f">${kind==="count"?"Counted in the box":kind==="buy"?"Rounds added":"Rounds"}<input type="number" inputmode="numeric" id="mQty" min="0"></label>
+      <label class="f">Date<input type="date" id="mDate" value="${today()}"></label></div>
+    <label class="f">Note (optional)<input type="text" id="mNote" maxlength="200"></label>
+    ${kind==="buy"?`<p class="hint" style="margin:0">New ammo into the box. To take rounds from another box, use Move.</p>`:""}
     ${kind==="count"?`<p class="hint" style="margin:0">The difference to the log is saved as a correction, so you can see which box drifts.</p>`:""}`};
   sheet(T,html(),async()=>{
     const body={kind,box:+v("mBox"),item:+v("mItem"),qty:v("mQty"),date:v("mDate"),note:v("mNote")};
-    if(kind==="move")body.to=+v("mTo");if(kind==="buy")body.price=v("mPrice");
+    if(kind==="move")body.to=+v("mTo");
     if(!body.to&&kind==="move")throw new Error("No other box of this calibre.");
     if(!body.item)throw new Error("Add an ammo price for this calibre first (Setup).");
     await api("POST",`c/${SLUG}/moves`,body);toast("Saved");
   });
-  $("sBody").onchange=e=>{if(e.target.id==="mBox"){const keep=v("mQty");$("sBody").innerHTML=html();$("mQty").value=keep}};
+  $("sBody").onchange=e=>{if(e.target.id==="mBox"){cur=+e.target.value;const keep=v("mQty");$("sBody").innerHTML=html();$("mQty").value=keep}};
   $("sBody").onclick=null;
 }
 function handSheet(b){
@@ -288,7 +290,7 @@ function renderLog(){
     <div><b>${eur(paid)}</b><small>paid (MobilePay)</small></div><div><b style="${unpaid?"color:var(--accent)":""}">${eur(unpaid)}</b><small>not paid</small></div>`;
   const list=groups.filter(g=>!f||(f==="use"?g.kind==="use":f==="unpaid"?g.kind==="use"&&!g.paid&&!g.voided_at:g.kind!=="use"))
     .filter(g=>!q||(g.name||"").toLowerCase().includes(q)||(g.ref||"").toLowerCase()===q);
-  const K={use:"",buy:"Purchase",move:"Move",count:"Count",handover:"Hand-over"};
+  const K={use:"",buy:"Refill",move:"Move",count:"Count",handover:"Hand-over"};
   $("log").innerHTML=list.length?list.map(g=>{
     const v=!!g.voided_at,r0=g.rows[0];let what,right;
     if(g.kind==="use"){const n=g.rows.reduce((a,r)=>a-r.qty,0);

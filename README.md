@@ -22,7 +22,7 @@ New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the
 | `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
 | `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |
 | `/ammo/<club>/<code>` | **Club ammo** – a box's shooter form, public (the code is the box's secret, printed as a QR code) |
-| `/ammo/<club>/admin` | **Club ammo** – stock, purchases, refills, counts, payments (diary login + a role in the club) |
+| `/ammo/<club>/admin` | **Club ammo** – stock, refills, moves, counts, payments (diary login + a role in the club) |
 
 Diary, Velocity and Zeroes have a switcher at the top (Home · Diary · Velocity · Zeroes); Guns loaned and the
 click calculator are opened from their tiles. The old `/diary/chrono`, `/diary/zero` and `/diary/lent`
@@ -335,7 +335,7 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   is ticked by default; unticked entries show as not paid. Logged-in shooters can tick *Also add to my diary*
   (the rounds go onto that day's visit, or a new one, with the box's firearm type). Works offline: entries wait
   on the phone and are sent later. The same phone can *Take back* an entry for 30 minutes.
-- **Admin page**: stock per calibre and per box; *Purchase* (into a box), *Refill / move* (box → box), *Count*
+- **Admin page**: stock per calibre and per box; *Refill* (new rounds into a box), *Move* (box → box), *Count*
   (the difference to the log is saved as a correction), *Hand over* (new holder, logged). Warnings when a box is
   below its refill level and when all boxes of a calibre are below its *buy more* level. *Log & payments* per
   month: rounds shot, paid / not paid totals, search by name or reference, *Mark paid*, *Void* (stays in the
@@ -350,7 +350,7 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   from `/ammo/`. The diary home page shows a *Club ammo* tile to admins and box holders.
 
 Getting started: `venv/bin/python -m club club-add "My Club" --admin osku`, then on `/ammo/my-club/admin` → Setup:
-MobilePay number, ammo & prices, boxes (holder, refill level); *Purchase* the starting stock into each box; tap
+MobilePay number, ammo & prices, boxes (holder, refill level); *Refill* each box with its starting rounds; tap
 a box for its link and print the QR code.
 
 ## Language
