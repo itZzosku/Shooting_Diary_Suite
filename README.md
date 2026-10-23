@@ -209,7 +209,7 @@ The phone's Back button closes the open sheet instead of leaving the page.
   round count, including shots of friends it was loaned to.
 - **Firing mode** is a fixed list (1 single shot, 2 magazine-fed single shot, 3 semi-automatic, 4 automatic),
   stored in the Finnish legal wording so the licence export matches.
-- **Export**: PDF or CSV, in Finnish (the shooting-activity record for a licence application) or English, for
+- **Export**: *Preview* shows the PDF page by page before anything is downloaded. PDF or CSV, in Finnish (the shooting-activity record for a licence application) or English, for
   the last 2 years, a year, custom dates (from – to) or the whole diary. Exports drop gun names and merge rows of
   the same type, calibre, firing mode and notes within a visit.
 - **My details**: name and licence numbers for the export (optional; the row is hidden while empty).
@@ -313,4 +313,4 @@ be Finnish or English.
 ## Third-party files
 
 `diary/static/fonts/` – Barlow Condensed, IBM Plex Sans, IBM Plex Mono (SIL Open Font License 1.1, licences
-alongside). `diary/static/vendor/` – jsPDF 2.5.1 and jsPDF-AutoTable 3.8.2 (MIT, licences alongside).
+alongside). `diary/static/vendor/` – jsPDF 2.5.1 and jsPDF-AutoTable 3.8.2 (MIT), and pdf.js 3.11.174 in `vendor/pdfjs/` for the export preview (Apache 2.0); licences alongside.

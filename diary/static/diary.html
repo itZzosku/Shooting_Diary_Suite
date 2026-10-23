@@ -117,6 +117,8 @@ h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
   padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
 .sheet-in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.pvpages{display:flex;flex-direction:column;gap:14px;padding-bottom:24px}
+.pvpages canvas{width:100%;height:auto;background:#fff;border-radius:4px;box-shadow:0 1px 6px rgba(0,0,0,.25)}
 .sheet-bar{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);padding-block:12px;z-index:1;border-bottom:1px solid var(--line)}
 .sheet-bar .bar-btns{display:flex;gap:8px;align-items:center}
 .sheet-bar .primary.sm{padding:9px 18px;font-size:.92rem;flex:0 0 auto}
@@ -349,6 +351,13 @@ header.top{padding-top:6px!important}
   </form>
 </div>
 
+<div class="sheet" id="pvSheet" hidden role="dialog" aria-modal="true" aria-labelledby="pvTitle" style="z-index:12">
+  <div class="sheet-in">
+    <div class="sheet-bar"><h2 id="pvTitle">Preview</h2><div class="bar-btns"><button class="primary sm" type="button" id="pvSave">Download</button><button class="ghost" type="button" id="pvClose">Close</button></div></div>
+    <p class="hint" id="pvInfo" style="margin:0"></p>
+    <div id="pvPages" class="pvpages"></div>
+  </div>
+</div>
 <div class="sheet" id="xSheet" hidden role="dialog" aria-modal="true" aria-labelledby="xTitle">
   <form class="sheet-in" id="xForm">
     <div class="sheet-bar"><h2 id="xTitle">Export</h2><button class="ghost" type="button" id="xClose">Close</button></div>
@@ -379,7 +388,7 @@ header.top{padding-top:6px!important}
       </div>
     </div>
     <div class="opt"><label class="r"><input type="radio" name="xr" value="all" id="xrAll">Whole diary</label></div>
-    <div class="actions"><button class="primary" type="submit" id="pdfGo">Create PDF</button></div>
+    <div class="actions"><button class="primary" type="submit" id="pdfGo">Create PDF</button><button class="ghost" type="button" id="pdfPrev">Preview</button></div>
   </form>
 </div>
 
@@ -702,7 +711,7 @@ function openForm(id){
   const dn=$("form").querySelector(".draftnote");if(dn)dn.hidden=true;
   if(restored)Draft.note($("form"),drT,()=>{Draft.clear("visit",id);lsDel(DRAFT_KEY);openForm(id)});
 }
-function closeSheets(){["gSheet","sheet","pSheet","xSheet","sigFull"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null}
+function closeSheets(){["gSheet","sheet","pSheet","xSheet","pvSheet","sigFull"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null}
 function presets(){
   const c=new Map();
   S.sessions.slice(0,120).forEach(s=>(s.lines||[]).forEach(l=>{if(!l.type)return;const k=[l.type,l.cal,l.mode].join("|");c.set(k,(c.get(k)||0)+1)}));
@@ -967,7 +976,7 @@ const X=Object.assign({fmt:"pdf",lang:"fi"},lsGet(XPREF)||{});
 function xRender(){
   $("xForm").querySelectorAll("[data-xfmt]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.xfmt===X.fmt));
   $("xForm").querySelectorAll("[data-xlang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.xlang===X.lang));
-  $("pdfGo").textContent=X.fmt==="pdf"?"Create PDF":"Create CSV";
+  $("pdfGo").textContent=X.fmt==="pdf"?"Create PDF":"Create CSV";$("pdfPrev").hidden=X.fmt!=="pdf";
   $("xLangHint").textContent=X.lang==="fi"?"Finnish: the format of the shooting-activity record for a licence application.":"English: labels, firearm types and firing modes translated.";
 }
 $("xForm").addEventListener("click",e=>{const b=e.target.closest("[data-xfmt],[data-xlang]");if(!b)return;
@@ -1031,7 +1040,12 @@ $("xForm").addEventListener("submit",async e=>{e.preventDefault();
   const L=XL[X.lang];
   if(X.fmt==="csv"){exportCsv(getRange(L),L);closeSheets();return}
   const btn=$("pdfGo"),label=btn.textContent;btn.disabled=true;btn.textContent="Creating PDF…";
-  try{
+  try{const out=await buildPdf(L);closeSheets();saveFile(out.name,out.buf,"application/pdf")}
+  catch(e){toast(e&&e.message==="load"?"Could not load the PDF library, check the connection":"PDF export failed")}
+  finally{btn.disabled=false;btn.textContent=label}
+});
+// The PDF exactly as Export would make it → {name, buf (ArrayBuffer)}
+async function buildPdf(L){
     await loadScript("static/vendor/jspdf.umd.min.js");
     await loadScript("static/vendor/jspdf.plugin.autotable.min.js");
     const R=getRange(L);
@@ -1078,11 +1092,33 @@ $("xForm").addEventListener("submit",async e=>{e.preventDefault();
       headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
       columnStyles:{0:{cellWidth:44},1:{cellWidth:46},7:{halign:"right",cellWidth:40},9:{cellWidth:72}},
       didDrawPage:d=>{doc.setFontSize(7);doc.setTextColor(120);doc.text((p.name?p.name+" · ":"")+L.title,M,doc.internal.pageSize.getHeight()-20);doc.text(L.page+" "+d.pageNumber,W-M,doc.internal.pageSize.getHeight()-20,{align:"right"});doc.setTextColor(0)}});
-    closeSheets();
-    saveFile(L.file+"-"+R.slug+".pdf",doc.output("arraybuffer"),"application/pdf");
-  }catch(e){toast(e&&e.message==="load"?"Could not load the PDF library, check the connection":"PDF export failed")}
-  finally{btn.disabled=false;btn.textContent=label}
+    return{name:L.file+"-"+R.slug+".pdf",buf:doc.output("arraybuffer")};
+}
+
+/* Preview: the same PDF drawn page by page (pdf.js) inside the app; nothing is downloaded until Download */
+const PV={out:null};
+$("pdfPrev").addEventListener("click",async()=>{
+  const b=$("pdfPrev"),label=b.textContent;b.disabled=true;b.textContent="Preparing…";
+  try{
+    PV.out=await buildPdf(XL[X.lang]);
+    await loadScript("static/vendor/pdfjs/pdf.min.js");
+    const lib=window.pdfjsLib;lib.GlobalWorkerOptions.workerSrc="static/vendor/pdfjs/pdf.worker.min.js";
+    $("pvPages").innerHTML="";$("pvInfo").textContent="";$("pvSheet").hidden=false;$("pvSheet").scrollTop=0;
+    const pdf=await lib.getDocument({data:PV.out.buf.slice(0)}).promise,MAX=20;
+    $("pvInfo").textContent=`${PV.out.name} · ${pdf.numPages} page${pdf.numPages===1?"":"s"}`+(pdf.numPages>MAX?` (first ${MAX} shown)`:"");
+    const width=Math.min($("pvPages").clientWidth||600,640),dpr=Math.min(2,window.devicePixelRatio||1);
+    for(let i=1;i<=Math.min(pdf.numPages,MAX);i++){
+      if($("pvSheet").hidden)break;
+      const page=await pdf.getPage(i),vp0=page.getViewport({scale:1}),vp=page.getViewport({scale:width/vp0.width*dpr});
+      const c=document.createElement("canvas");c.width=Math.floor(vp.width);c.height=Math.floor(vp.height);
+      c.setAttribute("aria-label","Page "+i);$("pvPages").appendChild(c);
+      await page.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+    }
+  }catch(e){$("pvSheet").hidden=true;toast(e&&e.message==="load"?"Could not load the PDF tools, check the connection":"Preview failed")}
+  finally{b.disabled=false;b.textContent=label}
 });
+$("pvClose").addEventListener("click",()=>{$("pvSheet").hidden=true;$("pvPages").innerHTML=""});
+$("pvSave").addEventListener("click",()=>{if(!PV.out)return;saveFile(PV.out.name,PV.out.buf,"application/pdf");$("pvSheet").hidden=true;$("pvPages").innerHTML="";closeSheets()});
 
 /* ---------- service worker (installing the app is offered on the landing page) ---------- */
 if("serviceWorker" in navigator){
