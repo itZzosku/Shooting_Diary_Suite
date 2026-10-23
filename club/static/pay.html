@@ -90,7 +90,7 @@ const S={info:null,sel:{},done:null};
 const L={
 fi:{title:"Maksut",name:"Nimesi",date:"Päivämäärä",total:"Yhteensä",payNow:"Maksan nyt MobilePaylla",save:"Tallenna",again:"Uusi kirjaus",
   mine:"Tällä puhelimella",privacy:"Tietosuoja",privacyTxt:"Nimesi, maksut ja päivä tallentuvat seuran kirjanpitoon. Seuran ylläpitäjät näkevät ne.",
-  season:"Kausimaksu – kerran vuodessa",single:"Kertamaksu",merch:"Tuote",left:"{n} jäljellä",
+  season:"Kausimaksu – kerran vuodessa",single:"Kertamaksu",merch:"Tuote",left:"{n} jäljellä",deal:"{n} kpl {amt}",
   offline:"Ei yhteyttä – kirjaukset säilyvät puhelimessa ja lähetetään, kun yhteys palaa.",
   badLink:"Tämä linkki ei enää toimi. Skannaa QR-koodi uudelleen tai kysy seuran ylläpitäjältä.",noConn:"Ei yhteyttä. Avaa sivu kerran verkossa, niin se toimii sen jälkeen myös ilman yhteyttä.",
   noProds:"Ei vielä maksettavaa – kysy seuran ylläpitäjältä.",errName:"Kirjoita nimesi.",errPick:"Valitse, mitä maksat.",errDate:"Tarkista päivämäärä.",
@@ -102,7 +102,7 @@ fi:{title:"Maksut",name:"Nimesi",date:"Päivämäärä",total:"Yhteensä",payNow
   tapAgain:"Napauta uudelleen perutaksesi",takenToast:"Peruttu",fewer:"Vähemmän",more:"Enemmän"},
 sv:{title:"Avgifter",name:"Ditt namn",date:"Datum",total:"Totalt",payNow:"Jag betalar nu med MobilePay",save:"Spara",again:"Ny registrering",
   mine:"På den här telefonen",privacy:"Dataskydd",privacyTxt:"Ditt namn, avgifterna och datumet sparas i föreningens bokföring. Föreningens administratörer ser dem.",
-  season:"Säsongsavgift – en gång per år",single:"Engångsavgift",merch:"Produkt",left:"{n} kvar",
+  season:"Säsongsavgift – en gång per år",single:"Engångsavgift",merch:"Produkt",left:"{n} kvar",deal:"{n} st {amt}",
   offline:"Ingen anslutning – registreringarna sparas i telefonen och skickas när anslutningen är tillbaka.",
   badLink:"Länken fungerar inte längre. Skanna QR-koden igen eller fråga en administratör.",noConn:"Ingen anslutning. Öppna sidan en gång med nätverk så fungerar den sedan även utan.",
   noProds:"Inget att betala ännu – fråga en administratör.",errName:"Skriv ditt namn.",errPick:"Välj vad du betalar.",errDate:"Kontrollera datumet.",
@@ -114,7 +114,7 @@ sv:{title:"Avgifter",name:"Ditt namn",date:"Datum",total:"Totalt",payNow:"Jag be
   tapAgain:"Tryck igen för att ångra",takenToast:"Ångrad",fewer:"Färre",more:"Fler"},
 en:{title:"Payments",name:"Your name",date:"Date",total:"Total",payNow:"I'm paying now with MobilePay",save:"Save",again:"New entry",
   mine:"On this phone",privacy:"Privacy",privacyTxt:"Your name, what you paid for and the date go to the club's books. Admins of the club see them.",
-  season:"Season fee – once a year",single:"One-time fee",merch:"Item",left:"{n} left",
+  season:"Season fee – once a year",single:"One-time fee",merch:"Item",left:"{n} left",deal:"{n} for {amt}",
   offline:"Offline – entries are kept on this phone and sent when there's a connection.",
   badLink:"This link doesn't work any more. Scan the QR code again, or ask a club admin.",noConn:"No connection. Open this page once while online and it works offline after that.",
   noProds:"Nothing to pay yet – ask a club admin.",errName:"Write your name.",errPick:"Pick what you pay for.",errDate:"Check the date.",
@@ -173,9 +173,11 @@ async function load(){
 
 /* ---- what is paid for: season / one-time fees are ticked, merch has a count ---- */
 const prod=id=>S.info.products.find(p=>p.id===id);
+// € for n of a product: every full deal_qty costs deal_price, the rest the single price (same rule as the server)
+const linePrice=(p,n)=>p.deal_qty>1&&p.deal_price>0?Math.floor(n/p.deal_qty)*p.deal_price+(n%p.deal_qty)*p.price:n*p.price;
 function renderProds(){
   $("prods").innerHTML=S.info.products.map(p=>{const n=S.sel[p.id]||0,
-    sub=p.kind==="merch"?(p.stock!=null?t("left",{n:p.stock}):t("merch")):t(p.kind);
+    sub=p.kind==="merch"?[p.deal_qty>1&&p.deal_price>0?t("deal",{n:p.deal_qty,amt:eur(p.deal_price)}):"",p.stock!=null?t("left",{n:p.stock}):""].filter(Boolean).join(" · ")||t("merch"):t(p.kind);
     return p.kind==="merch"
       ?`<div class="prod${n?" on":""}" data-p="${p.id}"><b>${esc(p.name)} <span class="pr">${eur(p.price)}</span></b>
           <div class="qty"><button type="button" data-d="-1" aria-label="${t("fewer")}">−</button><span>${n}</span><button type="button" data-d="1" aria-label="${t("more")}">+</button></div>
@@ -184,7 +186,7 @@ function renderProds(){
           <span class="pr">${eur(p.price)}</span><small style="padding-left:34px">${esc(sub)}</small></label>`}).join("");
   total();
 }
-function total(){$("total").textContent=eur(Object.entries(S.sel).reduce((a,[id,n])=>a+n*((prod(+id)||{}).price||0),0))}
+function total(){$("total").textContent=eur(Object.entries(S.sel).reduce((a,[id,n])=>a+(prod(+id)?linePrice(prod(+id),n):0),0))}
 $("prods").addEventListener("change",e=>{const el=e.target.closest("[data-p]");if(!el||e.target.type!=="checkbox")return;
   S.sel[el.dataset.p]=e.target.checked?1:0;el.classList.toggle("on",e.target.checked);total()});
 $("prods").addEventListener("click",e=>{const b=e.target.closest("[data-d]");if(!b)return;const id=+b.closest("[data-p]").dataset.p,p=prod(id);
@@ -212,7 +214,7 @@ function showDone(r,queued,again){
   const C=t("copy"),mp=S.info.club.mobilepay,paying=r?r.paid:queued.paid;
   let html;
   if(!r){
-    const amt=queued.lines.reduce((a,l)=>a+l.qty*((prod(l.product)||{}).price||0),0);
+    const amt=queued.lines.reduce((a,l)=>a+(prod(l.product)?linePrice(prod(l.product),l.qty):0),0);
     html=`<div class="pay"><div class="ok">${t("savedPhone")}</div><div class="hint">${t("sentLater")}</div><div class="amt">${eur(amt)}</div></div>`;
   }else{
     const n=r.pays.length;

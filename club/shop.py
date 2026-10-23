@@ -58,6 +58,25 @@ def init_db(conn):
     conn.executescript(SCHEMA)
     if "pay_code" not in {r[1] for r in conn.execute("PRAGMA table_info(clubs)")}:
         conn.execute("ALTER TABLE clubs ADD COLUMN pay_code TEXT")          # secret of the payments page
+    pcols = {r[1] for r in conn.execute("PRAGMA table_info(products)")}
+    if "deal_qty" not in pcols:                                             # quantity price: e.g. 3 for 25 €
+        conn.execute("ALTER TABLE products ADD COLUMN deal_qty INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE products ADD COLUMN deal_price REAL NOT NULL DEFAULT 0")
+    if "amount" not in {r[1] for r in conn.execute("PRAGMA table_info(sales)")}:
+        conn.execute("ALTER TABLE sales ADD COLUMN amount REAL")            # the line's € (with the quantity price)
+
+
+def line_price(p, qty):
+    """€ for qty of a product: every full deal_qty costs deal_price, the rest the single price.
+    10 € each, 3 for 25 €: 1 → 10, 2 → 20, 3 → 25, 4 → 35, 6 → 50."""
+    dq, dp = int(p.get("deal_qty") or 0), float(p.get("deal_price") or 0)
+    if dq > 1 and dp > 0:
+        return round((qty // dq) * dp + (qty % dq) * p["price"], 2)
+    return round(qty * p["price"], 2)
+
+
+def _amount(r):
+    return r["amount"] if r["amount"] is not None else round(r["qty"] * (r["price"] or 0), 2)
 
 
 def pay_code(conn, club):
@@ -97,7 +116,7 @@ def _products(conn, club_id, public=False):
     for p in rows:
         p["stock"] = st.get(p["id"], 0) if p["track"] else None
     if public:
-        rows = [{k: p[k] for k in ("id", "kind", "name", "price", "stock")} for p in rows
+        rows = [{k: p[k] for k in ("id", "kind", "name", "price", "stock", "deal_qty", "deal_price")} for p in rows
                 if not p["archived"] and not (p["track"] and p["stock"] <= 0)]
     return rows
 
@@ -151,11 +170,12 @@ def _sale_out(conn, grp):
     for r in rows:
         msg = pay_message(r["pay_msg"], r["date"], r["qty"], r["ref"])
         g = pays.setdefault((r["pay_url"], msg), {"pay_url": r["pay_url"], "msg": msg, "total": 0, "names": []})
-        g["total"] = round(g["total"] + r["qty"] * (r["price"] or 0), 2)
+        g["total"] = round(g["total"] + _amount(r), 2)
         g["names"].append(r["pname"] + (f" × {r['qty']}" if r["qty"] > 1 else ""))
     return {"grp": grp, "ref": rows[0]["ref"], "date": rows[0]["date"], "at": rows[0]["at"], "paid": bool(rows[0]["paid"]),
-            "voided": bool(rows[0]["voided_at"]), "total": round(sum(r["qty"] * (r["price"] or 0) for r in rows), 2),
-            "lines": [{"name": r["pname"], "kind": r["pkind"], "qty": r["qty"], "price": r["price"]} for r in rows],
+            "voided": bool(rows[0]["voided_at"]), "total": round(sum(_amount(r) for r in rows), 2),
+            "lines": [{"name": r["pname"], "kind": r["pkind"], "qty": r["qty"], "price": r["price"], "amount": _amount(r)}
+                      for r in rows],
             "pays": list(pays.values())}
 
 
@@ -202,10 +222,10 @@ def api_pay(code):
     paid = 1 if body.get("paid", True) else 0
     device = _clean(body.get("device"), 40) or None
     for i, (p, q) in enumerate(rows):
-        conn.execute("INSERT INTO sales(club_id,grp,kind,product_id,qty,price,name,uid,date,at,paid,ref,device,client_id) "
-                     "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                     (club["id"], grp, "sale", p["id"], q, p["price"], name, u["id"] if u else None, d, at, paid, ref,
-                      device, cid if i == 0 else None))
+        conn.execute("INSERT INTO sales(club_id,grp,kind,product_id,qty,price,amount,name,uid,date,at,paid,ref,device,"
+                     "client_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     (club["id"], grp, "sale", p["id"], q, p["price"], line_price(p, q), name, u["id"] if u else None, d,
+                      at, paid, ref, device, cid if i == 0 else None))
     conn.commit()
     return jsonify(ok=True, **_sale_out(conn, grp))
 
@@ -262,16 +282,23 @@ def api_product(slug):
         return _err("MobilePay link: paste the address from the MobilePay QR code (https://… or mobilepay://…).")
     msg = _clean(b.get("pay_msg"), 50)
     track = 1 if kind == "merch" and b.get("track") else 0
+    try:
+        dq = _int(b.get("deal_qty") or 0, 0, 1000) if kind == "merch" else 0
+        dp = _price(b.get("deal_price") or 0) if dq > 1 else 0
+    except ValueError:
+        return _err("Quantity price: how many (2 or more) and their € together, e.g. 3 for 25.")
+    if dq > 1 and not dp:
+        dq = 0
     pid = b.get("id")
-    vals = (kind, name, price, pay, msg, track, low if track else 0, 1 if b.get("archived") else 0)
+    vals = (kind, name, price, pay, msg, track, low if track else 0, 1 if b.get("archived") else 0, dq, dp)
     if pid:
-        n = conn.execute("UPDATE products SET kind=?, name=?, price=?, pay_url=?, pay_msg=?, track=?, low=?, archived=? "
-                         "WHERE id=? AND club_id=?", vals + (pid, club["id"])).rowcount
+        n = conn.execute("UPDATE products SET kind=?, name=?, price=?, pay_url=?, pay_msg=?, track=?, low=?, archived=?, "
+                         "deal_qty=?, deal_price=? WHERE id=? AND club_id=?", vals + (pid, club["id"])).rowcount
         if not n:
             return _err("not_found", 404)
     else:
-        pid = conn.execute("INSERT INTO products(kind,name,price,pay_url,pay_msg,track,low,archived,club_id) "
-                           "VALUES(?,?,?,?,?,?,?,?,?)", vals + (club["id"],)).lastrowid
+        pid = conn.execute("INSERT INTO products(kind,name,price,pay_url,pay_msg,track,low,archived,deal_qty,deal_price,"
+                           "club_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)", vals + (club["id"],)).lastrowid
     conn.commit()
     return jsonify(ok=True, id=pid)
 
@@ -322,7 +349,7 @@ def api_season(slug):
         abort(400)
     conn = cdb()
     rows = [dict(r) for r in conn.execute(
-        "SELECT s.grp, s.name, s.date, s.paid, s.ref, s.price, p.name AS pname FROM sales s "
+        "SELECT s.grp, s.name, s.date, s.paid, s.ref, COALESCE(s.amount, s.price) AS price, p.name AS pname FROM sales s "
         "JOIN products p ON p.id=s.product_id WHERE s.club_id=? AND s.kind='sale' AND p.kind='season' "
         "AND s.voided_at IS NULL AND s.date LIKE ? ORDER BY lower(s.name), s.date", (club["id"], year + "-%"))]
     years = [r[0] for r in conn.execute(

@@ -242,3 +242,21 @@ def test_pay_message_template():
     assert pay_message("SRA Hihamerkki {kpl} kpl", "2026-10-27", 2, "A7K3") == "SRA Hihamerkki 2 kpl A7K3"
     assert pay_message("{koodi} SRA", "2026-10-27", 1, "A7K3") == "A7K3 SRA"
     assert pay_message("", "2026-10-27", 1, "A7K3") == "A7K3"
+
+
+def test_merch_quantity_price(setup):
+    app, a, ids, codes = setup
+    from club.shop import line_price
+    p = {"price": 10, "deal_qty": 3, "deal_price": 25}
+    assert [line_price(p, q) for q in range(1, 7)] == [10, 20, 25, 35, 45, 50]
+    pid = a.post("/ammo/api/c/testclub/products", json={"kind": "merch", "name": "SRA Hihamerkki", "price": 10, "deal_qty": 3,
+                                                        "deal_price": 25, "pay_msg": "SRA Hihamerkki {kpl} kpl",
+                                                        "track": True}).json["id"]
+    a.post("/ammo/api/c/testclub/pmoves", json={"kind": "refill", "product": pid, "qty": 10})
+    code = a.get("/ammo/api/c/testclub").json["pay_code"]
+    r = app.test_client().post(f"/ammo/api/p/{code}/pay", json={"name": "Matti M", "date": _today(),
+                                                                "lines": [{"product": pid, "qty": 4}]}).json
+    assert r["total"] == 35.0 and r["pays"][0]["msg"] == f"SRA Hihamerkki 4 kpl {r['ref']}"
+    st = a.get("/ammo/api/c/testclub").json
+    assert next(p for p in st["products"] if p["id"] == pid)["stock"] == 6
+    assert next(m for m in a.get("/ammo/api/c/testclub/log").json["moves"] if m["kind"] == "sale")["amount"] == 35.0

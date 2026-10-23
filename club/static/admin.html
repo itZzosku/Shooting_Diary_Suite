@@ -313,7 +313,7 @@ function renderLog(){
   const groups=[];const by={};
   LOG.moves.forEach(r=>{if(!by[r.grp]){by[r.grp]={...r,rows:[]};groups.push(by[r.grp])}by[r.grp].rows.push(r)});
   const uses=groups.filter(g=>g.kind==="use"&&!g.voided_at),pays=groups.filter(g=>(g.kind==="use"||g.kind==="sale")&&!g.voided_at);
-  const amt=g=>g.rows.reduce((a,r)=>a+(g.kind==="sale"?r.qty:-r.qty)*(r.price||0),0);
+  const amt=g=>g.rows.reduce((a,r)=>a+(g.kind==="sale"?(r.amount!=null?r.amount:r.qty*(r.price||0)):-r.qty*(r.price||0)),0);
   const paid=pays.filter(g=>g.paid).reduce((a,g)=>a+amt(g),0),unpaid=pays.filter(g=>!g.paid).reduce((a,g)=>a+amt(g),0);
   $("lSum").innerHTML=`<div><b>${fmt(uses.reduce((a,g)=>a+g.rows.reduce((x,r)=>x-r.qty,0),0))}</b><small>rounds shot</small></div>
     <div><b>${eur(paid)}</b><small>paid (MobilePay)</small></div><div><b style="${unpaid?"color:var(--accent)":""}">${eur(unpaid)}</b><small>not paid</small></div>`;
@@ -365,7 +365,7 @@ function renderSetup(){
     <button class="link" type="button" data-editbox="${b.id}">Edit</button></div>`).join(""):`<div class="hint">None yet.</div>`;
   const KN={season:"Season fee",single:"One-time fee",merch:"Merch"};
   $("prodList").innerHTML=(S.products||[]).length?S.products.map(p=>`<div class="irow"${p.archived?' style="opacity:.5"':""}><span><b>${esc(p.name)}</b> · ${KN[p.kind]}${p.archived?'<span class="tag">archived</span>':""}
-      <br><small class="hint">${p.pay_url?"MobilePay link set":"No MobilePay link"}${p.pay_msg?" · message "+esc(p.pay_msg)+" + code":""}${p.track?" · stock "+fmt(p.stock):""}</small></span>
+      <br><small class="hint">${p.deal_qty>1?p.deal_qty+" for "+eur(p.deal_price)+" · ":""}${p.pay_url?"MobilePay link set":"No MobilePay link"}${p.pay_msg?" · message "+esc(p.pay_msg)+" + code":""}${p.track?" · stock "+fmt(p.stock):""}</small></span>
     <span><span class="num">${eur(p.price)}</span> <button class="link" type="button" data-prod="${p.id}">Edit</button></span></div>`).join(""):`<div class="hint">None yet.</div>`;
   const pu=location.origin+"/ammo/"+SLUG+"/pay/"+S.pay_code;$("payUrl").textContent=pu;$("payOpen").href=pu;
   $("people").innerHTML=S.people.map(p=>`<div class="irow"><span>${esc(p.username)}${p.username===S.me?' <span class="tag">you</span>':""}</span>
@@ -385,7 +385,7 @@ function itemSheet(i){
 }
 $("addItem").addEventListener("click",()=>itemSheet(null));
 function prodSheet(p){
-  const n=!p;p=p||{kind:"single",name:"",price:"",pay_url:"",pay_msg:"",track:0,low:0,archived:0};
+  const n=!p;p=p||{kind:"single",name:"",price:"",pay_url:"",pay_msg:"",track:0,low:0,archived:0,deal_qty:0,deal_price:0};
   const html=k=>`<div class="grid2"><label class="f">Name<input type="text" id="pName" maxlength="60" value="${esc(v("pName")??p.name)}" placeholder="e.g. Kausimaksu 2026"></label>
       <label class="f">Type<select id="pKind">${[["season","Season fee – once a year"],["single","One-time fee"],["merch","Merch"]].map(([x,l])=>`<option value="${x}" ${x===k?"selected":""}>${l}</option>`).join("")}</select></label></div>
     <label class="f">Price €<input type="number" inputmode="decimal" step="0.01" min="0" id="pPrice" value="${esc(v("pPrice")??p.price)}"></label>
@@ -394,13 +394,20 @@ function prodSheet(p){
     <p class="hint" style="margin:-6px 0 0">Filled in for the payer: <b>{pvm}</b> → the date (24.10.2026), <b>{vuosi}</b> → the year, <b>{kpl}</b> → how many;
       the entry's code goes at the end (or where <b>{koodi}</b> is). E.g. <b>SRA KERTAMAKSU {pvm}</b> → SRA KERTAMAKSU 24.10.2026 A7K3,
       <b>SRA Hihamerkki {kpl} kpl</b> → SRA Hihamerkki 2 kpl A7K3. Each different message is its own MobilePay payment.</p>
-    ${k==="merch"?`<label class="check"><input type="checkbox" id="pTrack" ${p.track?"checked":""}> Keep stock (Refill / Count on Stock; hidden when sold out)</label>
+    ${k==="merch"?`<div class="grid2"><label class="f">Quantity price: how many<input type="number" inputmode="numeric" min="0" id="pDq" value="${p.deal_qty||""}" placeholder="e.g. 3"></label>
+        <label class="f">…for € together<input type="number" inputmode="decimal" step="0.01" min="0" id="pDp" value="${p.deal_price||""}" placeholder="e.g. 25"></label></div>
+      <p class="hint" style="margin:-6px 0 0" id="pDeal"></p>
+      <label class="check"><input type="checkbox" id="pTrack" ${p.track?"checked":""}> Keep stock (Refill / Count on Stock; hidden when sold out)</label>
       <label class="f">Warn below<input type="number" inputmode="numeric" min="0" id="pLow" value="${p.low||""}" placeholder="0 = no warning"></label>`:""}
     ${n?"":`<label class="check"><input type="checkbox" id="pArch" ${p.archived?"checked":""}> Archived (no longer offered; history keeps it)</label>`}`;
   sheet(n?"New fee / item":"Edit "+p.name,html(p.kind),async()=>{
     await api("POST",`c/${SLUG}/products`,{id:p.id,kind:v("pKind"),name:v("pName"),price:v("pPrice"),pay_url:(v("pPay")||"").trim(),pay_msg:v("pMsg"),
-      track:!!($("pTrack")&&$("pTrack").checked),low:v("pLow")||0,archived:!n&&$("pArch").checked});toast("Saved")});
-  $("sBody").onclick=null;$("sBody").onchange=e=>{if(e.target.id==="pKind")$("sBody").innerHTML=html(e.target.value)};
+      track:!!($("pTrack")&&$("pTrack").checked),low:v("pLow")||0,deal_qty:v("pDq")||0,deal_price:v("pDp")||0,archived:!n&&$("pArch").checked});toast("Saved")});
+  // Example prices for 1–6 with the quantity price, so it's easy to check
+  const deal=()=>{const el=$("pDeal");if(!el)return;const pr=+v("pPrice")||0,dq=+v("pDq")||0,dp=+v("pDp")||0;
+    el.innerHTML=dq>1&&dp>0?[1,2,3,4,5,6].map(q=>`${q} → ${eur(Math.floor(q/dq)*dp+(q%dq)*pr)}`).join(" · ")+". Stock counts single items.":"Optional, e.g. 10 € each but 3 for 25 €."};
+  deal();$("sBody").oninput=deal;
+  $("sBody").onclick=null;$("sBody").onchange=e=>{if(e.target.id==="pKind"){$("sBody").innerHTML=html(e.target.value);deal()}};
 }
 function merchSheet(p){
   sheet(p.name,`<div class="card"><div class="row"><b>In stock</b><b class="num">${fmt(p.stock)}</b></div></div>

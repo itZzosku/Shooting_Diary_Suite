@@ -106,7 +106,8 @@ function sticker(b){
 function paySticker(){
   const t=T[opt.lang],url=location.origin+"/ammo/"+SLUG+"/pay/"+S.pay_code;
   const ps=(S.products||[]).filter(p=>!p.archived);
-  const price=opt.prices&&ps.length?`<div class="price">${ps.map(p=>`${esc(p.name)} ${(+p.price).toFixed(2).replace(".",opt.lang==="fi"?",":".")} €`).join("<br>")}</div>`:"";
+  const price=opt.prices&&ps.length?`<div class="price">${ps.map(p=>{const f=x=>(+x).toFixed(2).replace(".",opt.lang==="fi"?",":".")+" €";
+    return `${esc(p.name)} ${f(p.price)}`+(p.deal_qty>1&&p.deal_price>0?` · ${p.deal_qty} ${opt.lang==="fi"?"kpl":"for"} ${f(p.deal_price)}`:"")}).join("<br>")}</div>`:"";
   const head=`<div class="club">${esc(S.club.name)}</div><div><div class="box">${t.payTitle}</div><div class="cal">${ps.map(p=>t.kinds[p.kind]).filter((x,i,a)=>x&&a.indexOf(x)===i).join(" · ")}</div></div>`;
   const steps=`<ol>${t.paySteps.map(x=>`<li>${x}</li>`).join("")}</ol>`,tail=`${price}<div class="url">${esc(url)}</div>`;
   return opt.size==="2"

@@ -349,7 +349,8 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   English, with the club, box, calibre, the steps (scan → name and rounds → MobilePay with the message) and the
   prices. Print or save as PDF at 100 %. The QR codes are made in the browser (`club/static/vendor/qrcode.js`).
 - **Fees & merch** (`club/shop.py`): Setup → *Fees & merch* – season fee (*kausimaksu*, once a year), one-time fee
-  (*kertamaksu*, e.g. per SRA match) and merch (patches …, optional stock with *Refill* / *Count* and a low warning).
+  (*kertamaksu*, e.g. per SRA match) and merch (patches …, optional stock with *Refill* / *Count* and a low warning, and an optional quantity price:
+  10 € each but 3 for 25 € → 1 = 10, 2 = 20, 3 = 25, 4 = 35 …; stock counts single items).
   Each has its own price, MobilePay link (its category) and message template – `{pvm}` date, `{vuosi}` year,
   `{kpl}` count, `{koodi}` the code (else added at the end): "SRA KERTAMAKSU {pvm}" → SRA KERTAMAKSU 27.10.2026 A7K3. One **payments page** per club
   (Setup → *Payments page*: link, *Print sticker*, *New link*): name, tick the fees / pick how many items, Save → one
