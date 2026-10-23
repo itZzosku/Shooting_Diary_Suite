@@ -135,6 +135,7 @@ def test_roles(setup):
     anon.post(f"/ammo/api/b/{codes['9 mm B']}/use", json={"name": "Secret Name", "date": _today(), "lines": [{"item": ids["S&B"], "qty": 10}]})
     assert all(m["name"] != "Secret Name" for m in h.get("/ammo/api/c/testclub/log").json["moves"])
     assert h.get("/ammo/testclub/admin").status_code == 200 and s.get("/ammo/testclub/admin").status_code == 404
+    assert a.get("/ammo/testclub/qr").status_code == 200 and h.get("/ammo/testclub/qr").status_code == 404
 
 
 def test_logged_in_fills_name_and_adds_to_diary(setup):

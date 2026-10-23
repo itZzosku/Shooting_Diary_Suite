@@ -95,7 +95,7 @@
       <div id="items"></div>
     </div>
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Boxes</h2><button class="ghost" id="addBox" type="button">+ Box</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2>Boxes</h2><span style="display:flex;gap:8px"><a class="ghost" href="qr">Print QR stickers</a><button class="ghost" id="addBox" type="button">+ Box</button></span></div>
       <p class="hint" style="margin:6px 0 4px">Each box has its own secret link: print it as a QR code on the lid. Tap a box on Stock for its link.</p>
       <div id="boxList"></div>
     </div>
@@ -203,7 +203,7 @@ function boxSheet(b){
       <button type="button" data-a="count">Count</button>${isAdmin()?`<button type="button" data-a="hand">Hand over</button>`:""}
       ${isAdmin()?`<button type="button" data-a="edit">Edit box</button>`:""}<button type="button" data-a="log">This box's log</button></div>`:""}
     ${url?`<div><div class="lbl hint" style="margin-bottom:6px">Shooters' link (the QR code on the lid)</div><div class="lnk" id="bUrl">${esc(url)}</div>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="ghost" data-a="copy">Copy link</button><a class="ghost" href="${esc(url)}" target="_blank" rel="noopener">Open</a>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="ghost" data-a="copy">Copy link</button><a class="ghost" href="${esc(url)}" target="_blank" rel="noopener">Open</a>${isAdmin()?`<a class="ghost" href="qr?box=${b.id}">Print sticker</a>`:""}
       ${isAdmin()?`<button type="button" class="ghost" data-a="newcode">New link…</button>`:""}</div></div>`:""}`,null);
   $("sBody").onclick=async e=>{const a=e.target.closest("[data-a]");if(!a)return;const k=a.dataset.a;
     if(k==="buy"||k==="move"||k==="count")moveSheet(k,b);

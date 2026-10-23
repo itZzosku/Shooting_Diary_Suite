@@ -377,6 +377,18 @@ def admin_page(slug):
     return _page("admin.html")
 
 
+@cbp.get("/<slug>/qr")
+def qr_page(slug):
+    """Printable QR stickers for the boxes (admins)."""
+    u = current_user()
+    if not u:
+        return redirect(bridge.login_url())
+    club = club_by_slug(slug)
+    if not club or role_of(club, u) != "admin":
+        abort(404)
+    return _page("qr.html")
+
+
 @cbp.get("/<slug>/<code>")
 def box_page(slug, code):
     if not SLUG_RE.match(slug) or not CODE_RE.match(code):

@@ -22,6 +22,7 @@ New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the
 | `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
 | `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |
 | `/ammo/<club>/<code>` | **Club ammo** – a box's shooter form, public (the code is the box's secret, printed as a QR code) |
+| `/ammo/<club>/qr` | **Club ammo** – printable QR stickers for the boxes (admins) |
 | `/ammo/<club>/admin` | **Club ammo** – stock, refills, moves, counts, payments (diary login + a role in the club) |
 
 Diary, Velocity and Zeroes have a switcher at the top (Home · Diary · Velocity · Zeroes); Guns loaned and the
@@ -341,7 +342,10 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   (the difference to the log is saved as a correction), *Hand over* (new holder, logged). Warnings when a box is
   below its refill level and when all boxes of a calibre are below its *buy more* level. *Log & payments* per
   month: rounds shot, paid / not paid totals, search by name or reference, *Mark paid*, *Void* (stays in the
-  log, crossed out). *Setup*: club name, MobilePay number, ammo & prices, boxes, admins.
+  log, crossed out). *Setup*: club name, MobilePay number, payment message, ammo & prices, boxes, admins.
+- **QR stickers** (Setup → Boxes → *Print QR stickers*, or *Print sticker* on a box): 1, 2 or 4 per A4, Finnish or
+  English, with the club, box, calibre, the steps (scan → name and rounds → MobilePay with the message) and the
+  prices. Print or save as PDF at 100 %. The QR codes are made in the browser (`club/static/vendor/qrcode.js`).
 - **Roles per club**: admins (diary accounts) do everything; a box's holder, if given a diary account, can buy,
   move and count for that box and sees stock but not shooters' names. Site admins act as admin of every club.
   Stock is never stored – it's the sum of all moves, so the log is the audit trail.
@@ -353,7 +357,7 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
 
 Getting started: `venv/bin/python -m club club-add "My Club" --admin osku`, then on `/ammo/my-club/admin` → Setup:
 MobilePay number, ammo & prices, boxes (holder, refill level); *Refill* each box with its starting rounds; tap
-a box for its link and print the QR code.
+*Print QR stickers* for the lids.
 
 ## Language
 
@@ -365,3 +369,4 @@ be Finnish or English.
 
 `diary/static/fonts/` – Barlow Condensed, IBM Plex Sans, IBM Plex Mono (SIL Open Font License 1.1, licences
 alongside). `diary/static/vendor/` – jsPDF 2.5.1 and jsPDF-AutoTable 3.8.2 (MIT), and pdf.js 3.11.174 in `vendor/pdfjs/` for the export preview (Apache 2.0); licences alongside.
+`club/static/vendor/qrcode.js` – qrcode-generator 1.4.4 by Kazuhiko Arase (MIT), licence alongside.

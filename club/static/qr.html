@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>QR stickers</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/diary/static/icons/favicon-32.png">
+<link rel="stylesheet" href="/diary/static/fonts/fonts.css">
+<link rel="stylesheet" href="/ammo/static/club.css">
+<style>
+/* Screen: settings on top, the sheet below as it will print. Print: only the stickers, on A4. */
+.ctl{display:flex;flex-direction:column;gap:14px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:.9rem}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.boxes{display:flex;flex-direction:column;gap:6px}
+.sheet-preview{background:#888;padding:12px;border-radius:var(--r);overflow-x:auto}
+.page{width:210mm;min-height:297mm;background:#fff;margin:0 auto 12px;padding:10mm;display:grid;gap:6mm;box-sizing:border-box;
+  transform-origin:top left}
+.page.s1{grid-template-columns:1fr;grid-template-rows:1fr}
+.page.s2{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+.page.s4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.stk{border:0.4mm dashed #999;border-radius:3mm;padding:7mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  text-align:center;color:#111;font-family:"IBM Plex Sans",Arial,sans-serif;overflow:hidden;break-inside:avoid}
+.stk .club{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.03em;line-height:1.05}
+.stk .box{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;text-transform:uppercase;line-height:1}
+.stk .cal{color:#444}
+.stk svg{display:block}
+.stk ol{text-align:left;margin:0;padding-left:1.3em;line-height:1.35}
+.stk .price{font-family:"IBM Plex Mono",monospace;font-weight:600}
+.stk .url{font-family:"IBM Plex Mono",monospace;color:#555;overflow-wrap:anywhere}
+/* sizes per layout */
+.s1 .club{font-size:13mm}.s1 .box{font-size:20mm}.s1 .cal{font-size:7mm}.s1 svg{width:120mm;height:120mm}.s1 ol{font-size:5.6mm}.s1 .price{font-size:6mm}.s1 .url{font-size:3.2mm}
+.s2 .club{font-size:8mm}.s2 .box{font-size:12mm}.s2 .cal{font-size:4.6mm}.s2 svg{width:62mm;height:62mm}.s2 ol{font-size:3.9mm}.s2 .price{font-size:4.2mm}.s2 .url{font-size:2.6mm}
+.s2 .stk{flex-direction:row;gap:8mm;text-align:left}.s2 .stk .col{display:flex;flex-direction:column;gap:3mm;flex:1;min-width:0;height:100%;justify-content:space-between}
+.s4 .club{font-size:5.6mm}.s4 .box{font-size:9mm}.s4 .cal{font-size:3.6mm}.s4 svg{width:52mm;height:52mm}.s4 ol{font-size:2.9mm}.s4 .price{font-size:3.2mm}.s4 .url{font-size:2mm}
+.s4 .stk{padding:5mm}
+@media print{
+  @page{size:A4 portrait;margin:0}
+  html,body{background:#fff!important;padding:0!important;margin:0}
+  .noprint{display:none!important}
+  .sheet-preview{background:none;padding:0;border-radius:0;overflow:visible}
+  .page{margin:0;transform:none!important;page-break-after:always;break-after:page}
+  .page:last-child{page-break-after:auto;break-after:auto}
+}
+</style>
+</head>
+<body>
+<div class="wrap wide noprint" style="padding-bottom:16px">
+  <header class="top">
+    <div><div class="kicker" id="clubName">Club ammo</div><h1>QR <span>stickers</span></h1></div>
+    <a class="ghost" id="back" href="admin">Back</a>
+  </header>
+  <div class="ctl card">
+    <div><div class="kicker" style="margin-bottom:6px">Boxes</div><div class="boxes" id="boxes"></div></div>
+    <div><div class="kicker" style="margin-bottom:6px">Size</div><div class="seg" id="size">
+      <button type="button" data-v="1">1 per A4</button><button type="button" data-v="2">2 per A4</button><button type="button" data-v="4">4 per A4</button></div></div>
+    <div><div class="kicker" style="margin-bottom:6px">Language</div><div class="seg" id="lang">
+      <button type="button" data-v="fi">Suomi</button><button type="button" data-v="en">English</button></div></div>
+    <label class="check"><input type="checkbox" id="prices" checked> Show prices</label>
+    <button class="primary" type="button" id="print">Print / save as PDF</button>
+    <p class="hint" style="margin:0">Print at 100 % (no "fit to page"). Scan one sticker with a phone before taping it on. A box's
+      <i>New link</i> makes its old sticker stop working – print a new one then.</p>
+  </div>
+</div>
+<div class="sheet-preview" id="sheet"></div>
+
+<script src="/ammo/static/vendor/qrcode.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const SLUG=location.pathname.split("/")[2];
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ls={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const T={
+  fi:{title:"Seuran patruunat",steps:["Skannaa QR-koodi puhelimen kameralla.","Kirjoita nimesi ja ammutut patruunat ja paina <b>Tallenna</b>.",
+      "Maksa MobilePaylla: sivu näyttää summan ja viestin <b>{msg}</b>."],msgRef:"+ koodi",ref:"koodi",perRound:"€ / kpl",price:"Hinta",noAcc:"Tunnuksia ei tarvita."},
+  en:{title:"Club ammo",steps:["Scan the QR code with your phone's camera.","Write your name and the rounds you shot, tap <b>Save</b>.",
+      "Pay with MobilePay: the page shows the amount and the message <b>{msg}</b>."],msgRef:"+ code",ref:"code",perRound:"€ / round",price:"Price",noAcc:"No account needed."}};
+let S=null;
+const opt={size:ls.get("qr:size","2"),lang:ls.get("qr:lang","fi"),prices:ls.get("qr:prices",true),sel:null};
+
+function qrSvg(text){
+  const q=qrcode(0,"M");q.addData(text,"Byte");q.make();
+  const n=q.getModuleCount(),m=4,N=n+2*m;let d="";
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(q.isDark(r,c))d+=`M${c+m} ${r+m}h1v1h-1z`;
+  return `<svg viewBox="0 0 ${N} ${N}" shape-rendering="crispEdges" role="img" aria-label="QR"><rect width="${N}" height="${N}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+function sticker(b){
+  const t=T[opt.lang],url=location.origin+"/ammo/"+SLUG+"/"+b.code;
+  const msg=S.club.pay_msg?`${esc(S.club.pay_msg)} ${t.msgRef}`:t.ref;
+  const items=S.items.filter(i=>i.calibre===b.calibre&&!i.archived);
+  const price=opt.prices&&items.length?`<div class="price">${items.map(i=>`${esc(i.name||b.calibre)} ${(+i.price).toFixed(2).replace(".",opt.lang==="fi"?",":".")} ${t.perRound}`).join("<br>")}</div>`:"";
+  const head=`<div class="club">${esc(S.club.name)}</div><div><div class="box">${esc(b.name)}</div><div class="cal">${esc(b.calibre)} · ${t.title}</div></div>`;
+  const steps=`<ol>${t.steps.map(s=>`<li>${s.replace("{msg}",msg)}</li>`).join("")}</ol>`;
+  const tail=`${price}<div class="url">${esc(url)}</div>`;
+  return opt.size==="2"
+    ?`<div class="stk"><div class="col" style="flex:0 0 auto;justify-content:center">${qrSvg(url)}</div><div class="col">${head}${steps}${tail}</div></div>`
+    :`<div class="stk">${head}${qrSvg(url)}${steps}${tail}</div>`;
+}
+function render(){
+  document.querySelectorAll("#size button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===opt.size));
+  document.querySelectorAll("#lang button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===opt.lang));
+  $("prices").checked=opt.prices;
+  document.documentElement.lang=opt.lang;
+  const boxes=S.boxes.filter(b=>opt.sel.has(b.id)),per=+opt.size,pages=[];
+  for(let i=0;i<boxes.length;i+=per)pages.push(boxes.slice(i,i+per));
+  $("sheet").innerHTML=pages.length?pages.map(p=>`<div class="page s${per}">${p.map(sticker).join("")}</div>`).join("")
+    :`<div class="card hint" style="max-width:640px;margin:0 auto">Pick at least one box.</div>`;
+  fit();
+}
+// On a phone the A4 preview is scaled down to the screen width (printing is always full size)
+function fit(){const w=$("sheet").clientWidth-24;document.querySelectorAll(".page").forEach(p=>{const k=Math.min(1,w/p.offsetWidth);
+  p.style.transform=k<1?`scale(${k})`:"";p.style.marginBottom=k<1?`${-(1-k)*p.offsetHeight+12}px`:""})}
+window.addEventListener("resize",fit);
+$("size").addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(b){opt.size=b.dataset.v;ls.set("qr:size",opt.size);render()}});
+$("lang").addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(b){opt.lang=b.dataset.v;ls.set("qr:lang",opt.lang);render()}});
+$("prices").addEventListener("change",()=>{opt.prices=$("prices").checked;ls.set("qr:prices",opt.prices);render()});
+$("boxes").addEventListener("change",e=>{const id=+e.target.value;e.target.checked?opt.sel.add(id):opt.sel.delete(id);render()});
+$("print").addEventListener("click",()=>window.print());
+
+(async()=>{
+  const r=await fetch("/ammo/api/c/"+SLUG,{credentials:"same-origin"});
+  if(r.status===401){location.href="/diary/login";return}
+  S=await r.json();
+  S.boxes=S.boxes.filter(b=>!b.archived&&b.code);
+  $("clubName").textContent=S.club.name;document.title="QR stickers · "+S.club.name;
+  const want=new URLSearchParams(location.search).get("box");
+  opt.sel=new Set(S.boxes.filter(b=>!want||String(b.id)===want).map(b=>b.id));
+  $("boxes").innerHTML=S.boxes.length?S.boxes.map(b=>`<label class="check"><input type="checkbox" value="${b.id}" ${opt.sel.has(b.id)?"checked":""}> ${esc(b.name)} <span class="hint">${esc(b.calibre)}</span></label>`).join("")
+    :`<div class="hint">No boxes yet.</div>`;
+  render();
+})();
+</script>
+</body>
+</html>
