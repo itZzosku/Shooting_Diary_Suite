@@ -20,6 +20,12 @@
 .box .n{font-family:var(--f-mono);font-size:1.3rem;font-weight:600;text-align:right}
 .box small{color:var(--muted);font-size:.82rem}
 .box.arch{opacity:.5}
+.box.bx{display:flex;flex-direction:column;gap:6px}
+.box .bh{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center}
+.crows{display:flex;flex-direction:column;gap:2px;padding-left:12px;border-left:3px solid var(--line)}
+.crow{display:flex;justify-content:space-between;gap:10px;font-size:.92rem}
+.crow small{color:var(--muted);font-size:.8rem}
+.crow .num{font-weight:600}
 .tabs{display:flex;gap:6px;flex-wrap:wrap}
 .tab{background:none;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:.9rem;font-weight:600}
 .tab[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
@@ -212,29 +218,34 @@ function renderWarn(){
 
 /* ---- stock ---- */
 function renderStock(){
-  // Boxes grouped by what they hold ("9 mm Luger", or "12/70 + 7.62x54R" for a box with two calibres);
-  // the totals and buy-more levels are per calibre, over all boxes
-  const calLabel=b=>b.cals.join(" + "),active=S.boxes.filter(b=>!b.archived),cals=[...new Set(active.map(calLabel))];
+  // Each box first, and under it what's in it per calibre (and per ammo when a calibre has several);
+  // below the boxes the calibres over all boxes with their buy-more levels
+  const active=S.boxes.filter(b=>!b.archived).sort((a,b)=>a.name.localeCompare(b.name,"fi"));
   const merch=(S.products||[]).filter(p=>p.track&&!p.archived);
   const merchHtml=merch.length?`<div class="cal"><div class="calhead"><h2>${T("Merch")}</h2></div>${merch.map(p=>
     `<button class="box" type="button" data-pm="${p.id}"><span><b>${esc(p.name)}</b>${p.low&&p.stock<p.low?`<span class="tag warn">${T("low")}</span>`:""}<br><small>${eur(p.price)}${p.low?" · "+T("warn below {n}",{n:fmt(p.low)}):""}</small></span><span class="n">${fmt(p.stock)}</span></button>`).join("")}</div>`:"";
-  if(!cals.length){$("stock").innerHTML=`<div class="card hint">${T("No boxes yet.")}${isAdmin()?" "+T("Add ammo prices and boxes on Setup."):""}</div>`+merchHtml;$("stockActs").innerHTML="";return}
-  const calTot=c=>{const tot=(S.cal_totals||{})[c]||0,lv=S.levels[c];return`<b>${fmt(tot)}</b>
-      ${lv?`<span class="tag ${tot<lv?"bad":""}">${T("buy below {n}",{n:fmt(lv)})}</span>`:""}
-      ${isAdmin()?`<button class="link" type="button" data-level="${esc(c)}" style="margin-left:8px">${T("Level")}</button>`:""}`};
-  $("stock").innerHTML=cals.map(grp=>{
-    const bs=active.filter(b=>calLabel(b)===grp),cs=bs[0].cals;
-    return`<div class="cal"><div class="calhead"><h2>${esc(grp)}</h2>${cs.length===1?`<span>${calTot(cs[0])}</span>`:""}</div>
-      ${cs.length>1?`<div style="display:flex;gap:4px 18px;flex-wrap:wrap;font-size:.9rem;margin:2px 0 4px">${cs.map(c=>`<span>${esc(c)} ${calTot(c)}</span>`).join("")}</div>`:""}
-      ${bs.map(b=>{const its=Object.entries(b.stock).filter(([,n])=>n).map(([i,n])=>`${esc(itemName(itemOf(+i)))} ${fmt(n)}`).join(" · ");
-        return`<button class="box" type="button" data-box="${b.id}"><span><b>${esc(b.name)}</b>${b.low&&b.total<b.low?`<span class="tag warn">${T("refill")}</span>`:""}${b.mine?`<span class="tag">${T("yours")}</span>`:""}<br>
-          <small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}${its&&Object.keys(b.stock).length>1?" · "+its:""}</small></span><span class="n">${fmt(b.total)}</span></button>`}).join("")}
-    </div>`}).join("")+merchHtml;
+  if(!active.length){$("stock").innerHTML=`<div class="card hint">${T("No boxes yet.")}${isAdmin()?" "+T("Add ammo prices and boxes on Setup."):""}</div>`+merchHtml;$("stockActs").innerHTML="";return}
+  const boxes=active.map(b=>{
+    const rows=b.cals.map(c=>{const its=S.items.filter(i=>i.calibre===c&&(b.stock[i.id]||!i.archived)),
+        n=its.reduce((a,i)=>a+(b.stock[i.id]||0),0),
+        parts=its.filter(i=>b.stock[i.id]).map(i=>`${esc(i.name||T("Default"))} ${fmt(b.stock[i.id])}`);
+      return`<div class="crow"><span>${esc(c)}${parts.length>1||(parts.length===1&&its.find(i=>b.stock[i.id]).name)?` <small>${parts.join(" · ")}</small>`:""}</span><span class="num">${fmt(n)}</span></div>`}).join("");
+    return`<button class="box bx" type="button" data-box="${b.id}">
+      <span class="bh"><span><b>${esc(b.name)}</b>${b.low&&b.total<b.low?`<span class="tag warn">${T("refill")}</span>`:""}${b.mine?`<span class="tag">${T("yours")}</span>`:""}
+        <br><small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}${b.low?" · "+T("refill below {n}",{n:fmt(b.low)}):""}</small></span><span class="n">${fmt(b.total)}</span></span>
+      <span class="crows">${rows}</span></button>`}).join("");
+  const allCals=[...new Set(active.flatMap(b=>b.cals))];
+  const cals=`<div class="cal" style="margin-top:22px"><div class="calhead"><h2>${T("Calibres in all boxes")}</h2></div>${allCals.map(c=>{const tot=(S.cal_totals||{})[c]||0,lv=S.levels[c];
+    return`<div class="crow" style="padding:8px 2px;border-bottom:1px solid var(--line)"><span>${esc(c)}${lv?` <span class="tag ${tot<lv?"bad":""}">${T("buy below {n}",{n:fmt(lv)})}</span>`:""}</span>
+      <span><b class="num">${fmt(tot)}</b>${isAdmin()?` <button class="link" type="button" data-level="${esc(c)}" style="margin-left:8px">${T("Level")}</button>`:""}</span></div>`}).join("")}</div>`;
   const any=S.boxes.some(b=>!b.archived&&mayBox(b));
-  $("stockActs").innerHTML=any?`<button class="ghost" type="button" data-act="buy">${T("+ Refill")}</button><button class="ghost" type="button" data-act="move">${T("Move")}</button><button class="ghost" type="button" data-act="count">${T("Count")}</button>`:"";
+  // Refill / Move / Count right under the boxes
+  $("stock").innerHTML=`<div class="cal"><div class="calhead"><h2>${T("Boxes")}</h2></div>${boxes}<div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${any?`<button class="ghost" type="button" data-act="buy">${T("+ Refill")}</button><button class="ghost" type="button" data-act="move">${T("Move")}</button><button class="ghost" type="button" data-act="count">${T("Count")}</button>`:""}</div></div>`+cals+merchHtml;
+  $("stockActs").innerHTML="";
 }
 $("stock").addEventListener("click",e=>{const b=e.target.closest("[data-box]");if(b)return boxSheet(boxOf(+b.dataset.box));
   const pm=e.target.closest("[data-pm]");if(pm)return merchSheet(S.products.find(p=>p.id===+pm.dataset.pm));
+  const ac=e.target.closest("[data-act]");if(ac)return moveSheet(ac.dataset.act,null);
   const l=e.target.closest("[data-level]");if(l)levelSheet(l.dataset.level)});
 $("stockActs").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b)moveSheet(b.dataset.act,null)});
 
