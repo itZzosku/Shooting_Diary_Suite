@@ -1,6 +1,8 @@
 """Club ammo from the command line (run in the repo folder, with the venv's python):
 
-  python -m club club-add SLUG "Club name" [--admin USERNAME]   new club (USERNAME: a diary account)
+  python -m club club-add "Club name" [--id SLUG] [--admin USERNAME]
+                                         new club; the id in links is made from the name unless --id is given
+  python -m club club-delete SLUG [--yes]  a club and everything in it (boxes, prices, the whole log)
   python -m club admin SLUG USERNAME [--remove]                  make a diary account a club admin
   python -m club list                                            clubs, boxes and stock
   python -m club backup DIR [--keep 12]                          clubs-YYYY-MM-DD.db into DIR; also forgets old names
@@ -46,9 +48,12 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m club")
     sub = p.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("club-add")
-    a.add_argument("slug")
     a.add_argument("name")
+    a.add_argument("--id", dest="slug", default="", help="id in links (default: from the name)")
     a.add_argument("--admin")
+    d = sub.add_parser("club-delete")
+    d.add_argument("slug")
+    d.add_argument("--yes", action="store_true", help="also when it has boxes or entries")
     ad = sub.add_parser("admin")
     ad.add_argument("slug")
     ad.add_argument("username")
@@ -67,10 +72,10 @@ def main(argv=None):
             sys.exit(f"No diary account called {name}")
         if a.cmd == "club-add":
             try:
-                cid = club.create_club(a.slug, a.name)
+                cid, slug = club.create_club(a.slug, a.name)
             except ValueError as e:
                 sys.exit(str(e))
-            print(f"Club {a.name}: /ammo/{a.slug.lower()}/admin")
+            print(f"Club {a.name}: /ammo/{slug}/admin")
         else:
             c = club.club_by_slug(a.slug, club.connect())
             if not c:
@@ -79,6 +84,17 @@ def main(argv=None):
         if u:
             club.set_role(cid, u["id"], None if getattr(a, "remove", False) else "admin")
             print(f"{u['username']}: {'removed' if getattr(a, 'remove', False) else 'admin'}")
+    elif a.cmd == "club-delete":
+        conn = club.connect()
+        n = club.club_counts(a.slug, conn)
+        if n is None:
+            sys.exit(f"No club {a.slug}")
+        if any(n.values()) and not a.yes:
+            sys.exit(f"{a.slug} has {n['boxes']} boxes, {n['items']} ammo prices and {n['moves']} log rows – "
+                     f"add --yes to delete it all (a backup first: python -m club backup DIR)")
+        club.delete_club(a.slug, conn)
+        conn.close()
+        print(f"Deleted club {a.slug}")
     elif a.cmd == "list":
         conn = club.connect()
         for c in conn.execute("SELECT * FROM clubs ORDER BY slug"):

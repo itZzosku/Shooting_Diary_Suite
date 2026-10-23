@@ -342,11 +342,12 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   move and count for that box and sees stock but not shooters' names. Site admins act as admin of every club.
   Stock is never stored – it's the sum of all moves, so the log is the audit trail.
 - Abuse: a hidden field for bots, 30 entries / hour per address, resent offline entries aren't doubled.
-- Command line: `python -m club club-add SLUG "Name" --admin USERNAME`, `python -m club admin SLUG USERNAME`,
-  `python -m club list` (stock and warnings), `python -m club backup DIR`. A site admin can also create a club
+- Command line (on the server: `venv/bin/python -m club …`): `club-add "Name" [--id SLUG] [--admin USERNAME]`
+  (the id in links is made from the name: "VaaRes SRA" → `vaares-sra`), `club-delete SLUG [--yes]` (the club and
+  everything in it), `admin SLUG USERNAME [--remove]`, `list` (stock and warnings), `backup DIR`. A site admin can also create a club
   from `/ammo/`. The diary home page shows a *Club ammo* tile to admins and box holders.
 
-Getting started: `python -m club club-add myclub "My Club" --admin osku`, then on `/ammo/myclub/admin` → Setup:
+Getting started: `venv/bin/python -m club club-add "My Club" --admin osku`, then on `/ammo/my-club/admin` → Setup:
 MobilePay number, ammo & prices, boxes (holder, refill level); *Purchase* the starting stock into each box; tap
 a box for its link and print the QR code.
 

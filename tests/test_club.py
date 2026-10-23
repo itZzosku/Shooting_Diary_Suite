@@ -37,7 +37,7 @@ def setup():
         if not users.by_name(n):
             users.create(n, n + "-password-1")
     app = _app()
-    cid = club.create_club("testclub", "Test Club")
+    cid, _slug = club.create_club("testclub", "Test Club")
     club.set_role(cid, users.by_name("cadmin")["id"], "admin")
     a = _login(app, "cadmin", "cadmin-password-1")
     a.put("/ammo/api/c/testclub", json={"name": "Test Club", "mobilepay": "12345"})
@@ -157,3 +157,18 @@ def test_bridge_is_the_only_diary_import():
         if p.name != "bridge.py":
             assert "diary" not in [ln.split()[1].split(".")[0] for ln in p.read_text().splitlines()
                                    if ln.startswith(("import ", "from "))], p
+
+
+def test_club_id_from_name_and_delete():
+    club.init_db()
+    with club.connect() as c:
+        c.execute("DELETE FROM clubs WHERE slug LIKE 'vaares%'")
+    assert club.create_club("", "VaaRes SRA")[1] == "vaares-sra"
+    assert club.create_club("", "Vaares  SRA!")[1] == "vaares-sra-2"
+    assert club.create_club("", "Ähtärin Ampujat")[1] == "ahtarin-ampujat"
+    from club.__main__ import main
+    with pytest.raises(SystemExit):
+        main(["club-delete", "nosuchclub"])
+    main(["club-delete", "vaares-sra-2"])
+    assert club.club_by_slug("vaares-sra-2", club.connect()) is None
+    assert club.club_by_slug("vaares-sra", club.connect())

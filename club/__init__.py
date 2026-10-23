@@ -184,8 +184,25 @@ def _price(v):
 
 
 # ------------------------------------------------------------------ clubs, boxes (also used by the command line)
+def slug_from(name, conn):
+    """Club id for links from the name: "VaaRes SRA" → vaares-sra (-2, -3 … if taken)."""
+    import unicodedata
+    base = unicodedata.normalize("NFKD", str(name or "").lower()).encode("ascii", "ignore").decode()
+    base = re.sub(r"[^a-z0-9]+", "-", base).strip("-")[:28].strip("-") or "club"
+    if len(base) < 2:
+        base = "club-" + base
+    slug, n = base, 2
+    while conn.execute("SELECT 1 FROM clubs WHERE slug=?", (slug,)).fetchone():
+        slug, n = f"{base}-{n}", n + 1
+    return slug
+
+
 def create_club(slug, name, conn=None):
-    slug = str(slug or "").strip().lower()
+    """Returns (id, slug). An empty slug is made from the name."""
+    c = conn or connect()
+    slug = str(slug or "").strip().lower() or slug_from(name, c)
+    if conn is None:
+        c.close()
     if not SLUG_RE.match(slug):
         raise ValueError("Club id: 2–31 lowercase letters, digits or -")
     name = _clean(name, 80)
@@ -195,12 +212,38 @@ def create_club(slug, name, conn=None):
     try:
         cur = c.execute("INSERT INTO clubs(slug,name,created) VALUES(?,?,?)", (slug, name, _now()))
         c.commit()
-        return cur.lastrowid
+        return cur.lastrowid, slug
     except sqlite3.IntegrityError:
         raise ValueError("That club id is taken")
     finally:
         if conn is None:
             c.close()
+
+
+def delete_club(slug, conn=None):
+    """The club and everything in it (boxes, prices, the whole log). Returns counts, or None if no such club."""
+    c = conn or connect()
+    try:
+        r = c.execute("SELECT id FROM clubs WHERE slug=?", (slug,)).fetchone()
+        if not r:
+            return None
+        out = {}
+        for t in ("moves", "boxes", "items", "levels", "club_roles"):
+            out[t] = c.execute(f"DELETE FROM {t} WHERE club_id=?", (r["id"],)).rowcount
+        c.execute("DELETE FROM clubs WHERE id=?", (r["id"],))
+        c.commit()
+        return out
+    finally:
+        if conn is None:
+            c.close()
+
+
+def club_counts(slug, conn):
+    r = conn.execute("SELECT id FROM clubs WHERE slug=?", (slug,)).fetchone()
+    if not r:
+        return None
+    return {t: conn.execute(f"SELECT COUNT(*) FROM {t} WHERE club_id=?", (r["id"],)).fetchone()[0]
+            for t in ("moves", "boxes", "items")}
 
 
 def set_role(club_id, user_id, role, conn=None):
@@ -566,11 +609,11 @@ def api_new_club():
         abort(403)
     b = _body()
     try:
-        cid = create_club(b.get("slug"), b.get("name"), cdb())
+        cid, slug = create_club(b.get("slug"), b.get("name"), cdb())
     except ValueError as e:
         return _err(str(e))
     set_role(cid, u["id"], "admin", cdb())
-    return jsonify(ok=True, slug=str(b.get("slug")).strip().lower())
+    return jsonify(ok=True, slug=slug)
 
 
 def _user_names(ids):
