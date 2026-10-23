@@ -136,6 +136,8 @@ def init_db():
         conn.execute("ALTER TABLE clubs ADD COLUMN pay_msg TEXT NOT NULL DEFAULT ''")    # text before the reference
     if "pay_url" not in {r[1] for r in conn.execute("PRAGMA table_info(boxes)")}:
         conn.execute("ALTER TABLE boxes ADD COLUMN pay_url TEXT NOT NULL DEFAULT ''")   # MobilePay link of the box
+    from . import shop
+    shop.init_db(conn)                        # fees and merch
     conn.commit()
     conn.close()
 
@@ -234,7 +236,7 @@ def delete_club(slug, conn=None):
         if not r:
             return None
         out = {}
-        for t in ("moves", "boxes", "items", "levels", "club_roles"):
+        for t in ("moves", "boxes", "items", "levels", "club_roles", "sales", "products"):
             out[t] = c.execute(f"DELETE FROM {t} WHERE club_id=?", (r["id"],)).rowcount
         c.execute("DELETE FROM clubs WHERE id=?", (r["id"],))
         c.commit()
@@ -338,7 +340,8 @@ def warnings(conn, club_id):
         n = per_cal.get(lv["calibre"], 0)
         if lv["low"] and n < lv["low"]:
             out.append({"kind": "calibre", "calibre": lv["calibre"], "n": n, "low": lv["low"]})
-    return out
+    from . import shop
+    return out + shop.merch_warnings(conn, club_id)
 
 
 # ------------------------------------------------------------------ pages
@@ -668,9 +671,13 @@ def api_state(slug):
         p["username"] = names.get(p["user_id"], "?")
     for b in boxes:
         b["holder_user"] = names.get(b["holder_uid"]) if b["holder_uid"] else None
+    from . import shop
+    admin = role == "admin"
     return jsonify(club={k: club[k] for k in ("slug", "name", "mobilepay", "pay_msg")}, role=role, me=u["username"],
-                   items=items, boxes=boxes, levels=levels, people=people if role == "admin" else [],
-                   warnings=warnings(conn, club["id"]), types=TYPES)
+                   items=items, boxes=boxes, levels=levels, people=people if admin else [],
+                   warnings=warnings(conn, club["id"]), types=TYPES,
+                   products=shop._products(conn, club["id"]) if admin else [],
+                   pay_code=shop.pay_code(conn, club) if admin else None)
 
 
 @cbp.put("/api/c/<slug>")
@@ -887,8 +894,12 @@ def api_log(slug):
         for k in ("device", "client_id", "uid", "by_uid", "voided_by"):
             r.pop(k, None)
         out.append(r)
-    months = [m["m"] for m in conn.execute("SELECT DISTINCT substr(date,1,7) AS m FROM moves WHERE club_id=? "
-                                           "ORDER BY m DESC", (club["id"],))]
+    from . import shop
+    if not request.args.get("box"):
+        out += shop.log_rows(conn, club, month, role)      # fees and merch (admins)
+        out.sort(key=lambda r: (r["date"], r["at"]), reverse=True)
+    months = sorted({m["m"] for m in conn.execute("SELECT DISTINCT substr(date,1,7) AS m FROM moves WHERE club_id=?",
+                                                  (club["id"],))} | set(shop.months(conn, club["id"])), reverse=True)
     return jsonify(month=month, months=months, moves=out)
 
 
@@ -897,13 +908,15 @@ def api_void(slug, grp):
     club, u, _r = _club_for(slug)
     b, conn = _body(), cdb()
     undo = bool(b.get("undo"))
-    r = conn.execute("SELECT * FROM moves WHERE grp=? AND club_id=? LIMIT 1", (grp, club["id"])).fetchone()
-    if not r:
+    tables = [t for t in ("moves", "sales")
+              if conn.execute(f"SELECT 1 FROM {t} WHERE grp=? AND club_id=? LIMIT 1", (grp, club["id"])).fetchone()]
+    if not tables:
         return _err("not_found", 404)
-    if undo:
-        conn.execute("UPDATE moves SET voided_at=NULL, voided_by=NULL WHERE grp=?", (grp,))
-    else:
-        conn.execute("UPDATE moves SET voided_at=?, voided_by=? WHERE grp=? AND voided_at IS NULL", (_now(), u["id"], grp))
+    for t in tables:
+        if undo:
+            conn.execute(f"UPDATE {t} SET voided_at=NULL, voided_by=NULL WHERE grp=?", (grp,))
+        else:
+            conn.execute(f"UPDATE {t} SET voided_at=?, voided_by=? WHERE grp=? AND voided_at IS NULL", (_now(), u["id"], grp))
     conn.commit()
     return jsonify(ok=True)
 
@@ -914,6 +927,8 @@ def api_paid(slug, grp):
     b, conn = _body(), cdb()
     n = conn.execute("UPDATE moves SET paid=? WHERE grp=? AND club_id=? AND kind='use'",
                      (1 if b.get("paid") else 0, grp, club["id"])).rowcount
+    n += conn.execute("UPDATE sales SET paid=? WHERE grp=? AND club_id=? AND kind='sale'",
+                      (1 if b.get("paid") else 0, grp, club["id"])).rowcount
     conn.commit()
     return jsonify(ok=bool(n))
 
@@ -930,3 +945,7 @@ def api_people(slug):
         return _err("Not yourself – ask another admin.")
     set_role(club["id"], u["id"], "admin" if b.get("role") else None, cdb())
     return jsonify(ok=True)
+
+
+# Fees and merch (season fee, one-time fee, patches …): routes on the same blueprint
+from . import shop  # noqa: E402,F401

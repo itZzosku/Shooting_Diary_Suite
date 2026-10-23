@@ -28,6 +28,8 @@ def forget_old_names(years=NAMES_YEARS):
     with club.connect() as c:
         n = c.execute("UPDATE moves SET name='', uid=NULL, device=NULL WHERE kind='use' AND date<? AND name!=''",
                       (cutoff,)).rowcount
+        n += c.execute("UPDATE sales SET name='', uid=NULL, device=NULL WHERE kind='sale' AND date<? AND name!=''",
+                       (cutoff,)).rowcount
     return n
 
 

@@ -74,9 +74,13 @@ const SLUG=location.pathname.split("/")[2];
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const T={
-  fi:{title:"Seuran patruunat",steps:["Skannaa QR-koodi puhelimen kameralla.","Kirjoita nimesi ja ammutut patruunat ja paina <b>Tallenna</b>.",
+  fi:{payTitle:"Maksut",paySteps:["Skannaa QR-koodi puhelimen kameralla.","Kirjoita nimesi, valitse mitä maksat ja paina <b>Tallenna</b>.",
+      "Maksa MobilePaylla: sivu näyttää summan ja viestin."],kinds:{season:"kausimaksu",single:"kertamaksu",merch:""},
+    title:"Seuran patruunat",steps:["Skannaa QR-koodi puhelimen kameralla.","Kirjoita nimesi ja ammutut patruunat ja paina <b>Tallenna</b>.",
       "Maksa MobilePaylla: sivu näyttää summan ja viestin <b>{msg}</b>."],msgRef:"+ koodi",ref:"koodi",perRound:"€ / kpl",price:"Hinta",noAcc:"Tunnuksia ei tarvita."},
-  en:{title:"Club ammo",steps:["Scan the QR code with your phone's camera.","Write your name and the rounds you shot, tap <b>Save</b>.",
+  en:{payTitle:"Payments",paySteps:["Scan the QR code with your phone's camera.","Write your name, pick what you pay for, tap <b>Save</b>.",
+      "Pay with MobilePay: the page shows the amount and the message."],kinds:{season:"season fee",single:"one-time fee",merch:""},
+    title:"Club ammo",steps:["Scan the QR code with your phone's camera.","Write your name and the rounds you shot, tap <b>Save</b>.",
       "Pay with MobilePay: the page shows the amount and the message <b>{msg}</b>."],msgRef:"+ code",ref:"code",perRound:"€ / round",price:"Price",noAcc:"No account needed."}};
 let S=null;
 const opt={size:ls.get("qr:size","2"),lang:ls.get("qr:lang","fi"),prices:ls.get("qr:prices",true),sel:null};
@@ -99,14 +103,24 @@ function sticker(b){
     ?`<div class="stk"><div class="col" style="flex:0 0 auto;justify-content:center">${qrSvg(url)}</div><div class="col">${head}${steps}${tail}</div></div>`
     :`<div class="stk">${head}${qrSvg(url)}${steps}${tail}</div>`;
 }
+function paySticker(){
+  const t=T[opt.lang],url=location.origin+"/ammo/"+SLUG+"/pay/"+S.pay_code;
+  const ps=(S.products||[]).filter(p=>!p.archived);
+  const price=opt.prices&&ps.length?`<div class="price">${ps.map(p=>`${esc(p.name)} ${(+p.price).toFixed(2).replace(".",opt.lang==="fi"?",":".")} €`).join("<br>")}</div>`:"";
+  const head=`<div class="club">${esc(S.club.name)}</div><div><div class="box">${t.payTitle}</div><div class="cal">${ps.map(p=>t.kinds[p.kind]).filter((x,i,a)=>x&&a.indexOf(x)===i).join(" · ")}</div></div>`;
+  const steps=`<ol>${t.paySteps.map(x=>`<li>${x}</li>`).join("")}</ol>`,tail=`${price}<div class="url">${esc(url)}</div>`;
+  return opt.size==="2"
+    ?`<div class="stk"><div class="col" style="flex:0 0 auto;justify-content:center">${qrSvg(url)}</div><div class="col">${head}${steps}${tail}</div></div>`
+    :`<div class="stk">${head}${qrSvg(url)}${steps}${tail}</div>`;
+}
 function render(){
   document.querySelectorAll("#size button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===opt.size));
   document.querySelectorAll("#lang button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===opt.lang));
   $("prices").checked=opt.prices;
   document.documentElement.lang=opt.lang;
-  const boxes=S.boxes.filter(b=>opt.sel.has(b.id)),per=+opt.size,pages=[];
-  for(let i=0;i<boxes.length;i+=per)pages.push(boxes.slice(i,i+per));
-  $("sheet").innerHTML=pages.length?pages.map(p=>`<div class="page s${per}">${p.map(sticker).join("")}</div>`).join("")
+  const stk=S.boxes.filter(b=>opt.sel.has(b.id)).map(sticker).concat(opt.sel.has("pay")?[paySticker()]:[]),per=+opt.size,pages=[];
+  for(let i=0;i<stk.length;i+=per)pages.push(stk.slice(i,i+per));
+  $("sheet").innerHTML=pages.length?pages.map(p=>`<div class="page s${per}">${p.join("")}</div>`).join("")
     :`<div class="card hint" style="max-width:640px;margin:0 auto">Pick at least one box.</div>`;
   fit();
 }
@@ -117,7 +131,7 @@ window.addEventListener("resize",fit);
 $("size").addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(b){opt.size=b.dataset.v;ls.set("qr:size",opt.size);render()}});
 $("lang").addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(b){opt.lang=b.dataset.v;ls.set("qr:lang",opt.lang);render()}});
 $("prices").addEventListener("change",()=>{opt.prices=$("prices").checked;ls.set("qr:prices",opt.prices);render()});
-$("boxes").addEventListener("change",e=>{const id=+e.target.value;e.target.checked?opt.sel.add(id):opt.sel.delete(id);render()});
+$("boxes").addEventListener("change",e=>{const id=e.target.value==="pay"?"pay":+e.target.value;e.target.checked?opt.sel.add(id):opt.sel.delete(id);render()});
 $("print").addEventListener("click",()=>window.print());
 
 (async()=>{
@@ -126,10 +140,11 @@ $("print").addEventListener("click",()=>window.print());
   S=await r.json();
   S.boxes=S.boxes.filter(b=>!b.archived&&b.code);
   $("clubName").textContent=S.club.name;document.title="QR stickers · "+S.club.name;
-  const want=new URLSearchParams(location.search).get("box");
-  opt.sel=new Set(S.boxes.filter(b=>!want||String(b.id)===want).map(b=>b.id));
-  $("boxes").innerHTML=S.boxes.length?S.boxes.map(b=>`<label class="check"><input type="checkbox" value="${b.id}" ${opt.sel.has(b.id)?"checked":""}> ${esc(b.name)} <span class="hint">${esc(b.calibre)}</span></label>`).join("")
-    :`<div class="hint">No boxes yet.</div>`;
+  const qs=new URLSearchParams(location.search),want=qs.get("box"),wantPay=qs.get("pay");
+  opt.sel=new Set(wantPay?["pay"]:S.boxes.filter(b=>!want||String(b.id)===want).map(b=>b.id));
+  const hasPay=S.pay_code&&(S.products||[]).some(p=>!p.archived);
+  $("boxes").innerHTML=(S.boxes.length?S.boxes.map(b=>`<label class="check"><input type="checkbox" value="${b.id}" ${opt.sel.has(b.id)?"checked":""}> ${esc(b.name)} <span class="hint">${esc(b.calibre)}</span></label>`).join("")
+    :`<div class="hint">No boxes yet.</div>`)+(hasPay?`<label class="check"><input type="checkbox" value="pay" ${opt.sel.has("pay")?"checked":""}> Payments page <span class="hint">fees &amp; merch</span></label>`:"");
   render();
 })();
 </script>

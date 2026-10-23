@@ -56,6 +56,7 @@
   <div class="tabs" role="tablist">
     <button class="tab" data-tab="stock" aria-pressed="true">Stock</button>
     <button class="tab" data-tab="log" aria-pressed="false">Log &amp; payments</button>
+    <button class="tab" data-tab="fees" aria-pressed="false" id="feesTab">Season fees</button>
     <button class="tab" data-tab="setup" aria-pressed="false" id="setupTab">Setup</button>
   </div>
 
@@ -69,12 +70,22 @@
   <section id="tLog" hidden style="display:flex;flex-direction:column;gap:14px">
     <div class="grid2">
       <label class="f">Month<select id="lMonth"></select></label>
-      <label class="f">Show<select id="lKind"><option value="">Everything</option><option value="use">Shooters' entries</option><option value="unpaid">Not paid</option><option value="stock">Refills, moves, counts, hand-overs</option></select></label>
+      <label class="f">Show<select id="lKind"><option value="">Everything</option><option value="use">Shooters' entries</option><option value="unpaid">Not paid</option><option value="fees">Fees &amp; merch</option><option value="stock">Refills, moves, counts, hand-overs</option></select></label>
     </div>
     <div class="sum" id="lSum"></div>
     <label class="f">Find a name or reference<input type="search" id="lFind" placeholder="e.g. Matti, A7K3 or the whole message"></label>
     <div class="rows" id="log"></div>
     <p class="hint" id="logHint"></p>
+  </section>
+
+  <!-- Season fees (admins): who has paid this year – for the match desk -->
+  <section id="tFees" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="grid2">
+      <label class="f">Year<select id="fYear"></select></label>
+      <label class="f">Find a name<input type="search" id="fFind" placeholder="e.g. Matti"></label>
+    </div>
+    <div class="hint" id="fSum"></div>
+    <div class="rows" id="fees"></div>
   </section>
 
   <!-- Setup (admins) -->
@@ -98,6 +109,18 @@
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2>Boxes</h2><span style="display:flex;gap:8px"><a class="ghost" href="qr">Print QR stickers</a><button class="ghost" id="addBox" type="button">+ Box</button></span></div>
       <p class="hint" style="margin:6px 0 4px">Each box has its own secret link: print it as a QR code on the lid. Tap a box on Stock for its link.</p>
       <div id="boxList"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Fees &amp; merch</h2><button class="ghost" id="addProd" type="button">+ Fee / item</button></div>
+      <p class="hint" style="margin:6px 0 4px">Season fee (once a year), one-time fee (e.g. per SRA match) and merch such as patches. Each has its own MobilePay link and message, so they go to the right category.</p>
+      <div id="prodList"></div>
+    </div>
+    <div class="card">
+      <h2>Payments page</h2>
+      <p class="hint" style="margin:6px 0 8px">One QR code for all fees and merch, e.g. on the match desk. Shooters can also use it for a friend, or the organiser can fill it in for each shooter.</p>
+      <div class="lnk" id="payUrl"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="ghost" id="payCopy">Copy link</button><a class="ghost" id="payOpen" target="_blank" rel="noopener">Open</a>
+        <a class="ghost" href="qr?pay=1">Print sticker</a><button type="button" class="ghost" id="payNew">New link…</button></div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Admins</h2><button class="ghost" id="addAdmin" type="button">+ Admin</button></div>
@@ -146,13 +169,13 @@ async function load(){
   S=await api("GET","c/"+SLUG);
   document.title=S.club.name+" · Club ammo";$("clubName").textContent=S.club.name;
   $("roleTxt").textContent=isAdmin()?" · admin":" · box holder";
-  $("setupTab").hidden=!isAdmin();
+  $("setupTab").hidden=!isAdmin();$("feesTab").hidden=!isAdmin();
   renderWarn();renderStock();if(isAdmin())renderSetup();
 }
 
 /* ---- warnings ---- */
 function renderWarn(){
-  $("warn").innerHTML=S.warnings.map(w=>w.kind==="box"
+  $("warn").innerHTML=S.warnings.map(w=>w.kind==="merch"?`<div class="banner">Running out: <b>${esc(w.name)}</b> ${fmt(w.n)} left (warn below ${fmt(w.low)})</div>`:w.kind==="box"
     ?`<div class="banner">Refill <b>${esc(w.name)}</b>: ${fmt(w.n)} left (refill below ${fmt(w.low)})</div>`
     :`<div class="banner" style="border:1px solid var(--accent)"><b>Buy more ${esc(w.calibre)}</b>: ${fmt(w.n)} in all boxes (buy below ${fmt(w.low)})</div>`).join("");
 }
@@ -160,7 +183,10 @@ function renderWarn(){
 /* ---- stock ---- */
 function renderStock(){
   const cals=[...new Set(S.boxes.filter(b=>!b.archived).map(b=>b.calibre))];
-  if(!cals.length){$("stock").innerHTML=`<div class="card hint">No boxes yet.${isAdmin()?" Add ammo prices and boxes on Setup.":""}</div>`;$("stockActs").innerHTML="";return}
+  const merch=(S.products||[]).filter(p=>p.track&&!p.archived);
+  const merchHtml=merch.length?`<div class="cal"><div class="calhead"><h2>Merch</h2></div>${merch.map(p=>
+    `<button class="box" type="button" data-pm="${p.id}"><span><b>${esc(p.name)}</b>${p.low&&p.stock<p.low?'<span class="tag warn">low</span>':""}<br><small>${eur(p.price)}${p.low?" · warn below "+fmt(p.low):""}</small></span><span class="n">${fmt(p.stock)}</span></button>`).join("")}</div>`:"";
+  if(!cals.length){$("stock").innerHTML=`<div class="card hint">No boxes yet.${isAdmin()?" Add ammo prices and boxes on Setup.":""}</div>`+merchHtml;$("stockActs").innerHTML="";return}
   $("stock").innerHTML=cals.map(cal=>{
     const bs=S.boxes.filter(b=>b.calibre===cal&&!b.archived),tot=bs.reduce((a,b)=>a+b.total,0),lv=S.levels[cal];
     return`<div class="cal"><div class="calhead"><h2>${esc(cal)}</h2><span><b>${fmt(tot)}</b>
@@ -169,11 +195,12 @@ function renderStock(){
       ${bs.map(b=>{const its=Object.entries(b.stock).filter(([,n])=>n).map(([i,n])=>`${esc(itemName(itemOf(+i)))} ${fmt(n)}`).join(" · ");
         return`<button class="box" type="button" data-box="${b.id}"><span><b>${esc(b.name)}</b>${b.low&&b.total<b.low?'<span class="tag warn">refill</span>':""}${b.mine?'<span class="tag">yours</span>':""}<br>
           <small>${b.holder_name?"Held by "+esc(b.holder_name):"No holder"}${its&&Object.keys(b.stock).length>1?" · "+its:""}</small></span><span class="n">${fmt(b.total)}</span></button>`}).join("")}
-    </div>`}).join("");
+    </div>`}).join("")+merchHtml;
   const any=S.boxes.some(b=>!b.archived&&mayBox(b));
   $("stockActs").innerHTML=any?`<button class="ghost" type="button" data-act="buy">+ Refill</button><button class="ghost" type="button" data-act="move">Move</button><button class="ghost" type="button" data-act="count">Count</button>`:"";
 }
 $("stock").addEventListener("click",e=>{const b=e.target.closest("[data-box]");if(b)return boxSheet(boxOf(+b.dataset.box));
+  const pm=e.target.closest("[data-pm]");if(pm)return merchSheet(S.products.find(p=>p.id===+pm.dataset.pm));
   const l=e.target.closest("[data-level]");if(l)levelSheet(l.dataset.level)});
 $("stockActs").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b)moveSheet(b.dataset.act,null)});
 
@@ -285,12 +312,14 @@ function renderLog(){
   const f=$("lKind").value,q=$("lFind").value.trim().toLowerCase();
   const groups=[];const by={};
   LOG.moves.forEach(r=>{if(!by[r.grp]){by[r.grp]={...r,rows:[]};groups.push(by[r.grp])}by[r.grp].rows.push(r)});
-  const uses=groups.filter(g=>g.kind==="use"&&!g.voided_at);
-  const amt=g=>g.rows.reduce((a,r)=>a+(-r.qty)*(r.price||0),0);
-  const paid=uses.filter(g=>g.paid).reduce((a,g)=>a+amt(g),0),unpaid=uses.filter(g=>!g.paid).reduce((a,g)=>a+amt(g),0);
+  const uses=groups.filter(g=>g.kind==="use"&&!g.voided_at),pays=groups.filter(g=>(g.kind==="use"||g.kind==="sale")&&!g.voided_at);
+  const amt=g=>g.rows.reduce((a,r)=>a+(g.kind==="sale"?r.qty:-r.qty)*(r.price||0),0);
+  const paid=pays.filter(g=>g.paid).reduce((a,g)=>a+amt(g),0),unpaid=pays.filter(g=>!g.paid).reduce((a,g)=>a+amt(g),0);
   $("lSum").innerHTML=`<div><b>${fmt(uses.reduce((a,g)=>a+g.rows.reduce((x,r)=>x-r.qty,0),0))}</b><small>rounds shot</small></div>
     <div><b>${eur(paid)}</b><small>paid (MobilePay)</small></div><div><b style="${unpaid?"color:var(--accent)":""}">${eur(unpaid)}</b><small>not paid</small></div>`;
-  const list=groups.filter(g=>!f||(f==="use"?g.kind==="use":f==="unpaid"?g.kind==="use"&&!g.paid&&!g.voided_at:g.kind!=="use"))
+  const FEES=["sale","prefill","pcount"];
+  const list=groups.filter(g=>!f||(f==="use"?g.kind==="use":f==="unpaid"?(g.kind==="use"||g.kind==="sale")&&!g.paid&&!g.voided_at
+      :f==="fees"?FEES.includes(g.kind):g.kind!=="use"&&!FEES.includes(g.kind)))
     .filter(g=>!q||(g.name||"").toLowerCase().includes(q)||(!!g.ref&&q.split(/\s+/).includes(g.ref.toLowerCase())));   // "harrastemaksu a7k3" finds A7K3
   const K={use:"",buy:"Refill",move:"Move",count:"Count",handover:"Hand-over"};
   $("log").innerHTML=list.length?list.map(g=>{
@@ -300,12 +329,18 @@ function renderLog(){
         <br><small>${fiDate(g.date)} · ${esc(g.bname)} · ref <b class="num">${esc(g.ref)}</b></small>`;right=eur(amt(g))}
     else if(g.kind==="move"){const out=g.rows.find(r=>r.qty<0),inn=g.rows.find(r=>r.qty>0);
       what=`Move ${fmt(inn.qty)} ${esc(inn.iname||inn.ical)} · ${esc(out.bname)} → ${esc(inn.bname)}<br><small>${fiDate(g.date)}${g.by?" · "+esc(g.by):""}${g.note?" · "+esc(g.note):""}</small>`;right=""}
+    else if(g.kind==="sale"){
+      what=`<b>${esc(g.name)}</b> · ${esc(g.rows.map(r=>r.pname+(r.qty>1?" × "+r.qty:"")).join(", "))}${g.paid?"":'<span class="tag warn">not paid</span>'}
+        <br><small>${fiDate(g.date)} · ref <b class="num">${esc(g.ref)}</b></small>`;right=eur(amt(g))}
+    else if(g.kind==="prefill"||g.kind==="pcount"){
+      what=`${g.kind==="prefill"?"Refill":"Count"} · ${esc(r0.pname)}<br><small>${fiDate(g.date)}${g.by?" · "+esc(g.by):""}${g.note?" · "+esc(g.note):""}</small>`;
+      right=(r0.qty>0?"+":"")+fmt(r0.qty)}
     else if(g.kind==="handover"){what=`${esc(r0.bname)} handed to <b>${esc(g.name)}</b><br><small>${fiDate(g.date)}${g.note?" · "+esc(g.note):""}${g.by?" · "+esc(g.by):""}</small>`;right=""}
     else{what=`${K[g.kind]} · ${esc(r0.bname)} · ${esc(r0.iname||r0.ical)}<br><small>${fiDate(g.date)}${g.by?" · "+esc(g.by):""}${g.note?" · "+esc(g.note):""}</small>`;
       right=(r0.qty>0?"+":"")+fmt(r0.qty)}
-    return`<div class="row${v?" void":""}"><div class="what">${what}${v?`<br><small>Voided${g.voided_by_name?" by "+esc(g.voided_by_name):""}${g.note&&g.kind==="use"?" · "+esc(g.note):""}</small>`:""}</div>
+    return`<div class="row${v?" void":""}"><div class="what">${what}${v?`<br><small>Voided${g.voided_by_name?" by "+esc(g.voided_by_name):""}${g.note&&(g.kind==="use"||g.kind==="sale")?" · "+esc(g.note):""}</small>`:""}</div>
       <div class="r"><div class="num">${right}</div>${isAdmin()&&g.kind!=="handover"?`<button class="link" type="button" data-void="${g.grp}" data-undo="${v?1:""}">${v?"Restore":"Void"}</button>`:""}
-      ${isAdmin()&&g.kind==="use"&&!v?`<br><button class="link${g.paid?" quiet":""}" type="button" data-paid="${g.grp}" data-to="${g.paid?"":1}">${g.paid?"Not paid?":"Mark paid"}</button>`:""}</div></div>`}).join("")
+      ${isAdmin()&&(g.kind==="use"||g.kind==="sale")&&!v?`<br><button class="link${g.paid?" quiet":""}" type="button" data-paid="${g.grp}" data-to="${g.paid?"":1}">${g.paid?"Not paid?":"Mark paid"}</button>`:""}</div></div>`}).join("")
     :`<div class="hint">Nothing here.</div>`;
   $("logHint").innerHTML=(LOG_BOX?`Only box <b>${esc((boxOf(LOG_BOX)||{}).name)}</b> · <button class="link" type="button" id="allBoxes">all boxes</button>. `:"")+
     (isAdmin()?"Match the references with the club's MobilePay payments. A voided entry stays in the log, crossed out.":"Shooters' names are shown to club admins only.");
@@ -328,6 +363,11 @@ function renderSetup(){
     <span><span class="num">${(+i.price).toFixed(2)} €</span> <button class="link" type="button" data-item="${i.id}">Edit</button></span></div>`).join(""):`<div class="hint">None yet.</div>`;
   $("boxList").innerHTML=S.boxes.length?S.boxes.map(b=>`<div class="irow"${b.archived?' style="opacity:.5"':""}><span><b>${esc(b.name)}</b> · ${esc(b.calibre)}${b.archived?'<span class="tag">archived</span>':""}<br><small class="hint">${b.holder_name?"Held by "+esc(b.holder_name):"No holder"}${b.holder_user?" ("+esc(b.holder_user)+")":""}</small></span>
     <button class="link" type="button" data-editbox="${b.id}">Edit</button></div>`).join(""):`<div class="hint">None yet.</div>`;
+  const KN={season:"Season fee",single:"One-time fee",merch:"Merch"};
+  $("prodList").innerHTML=(S.products||[]).length?S.products.map(p=>`<div class="irow"${p.archived?' style="opacity:.5"':""}><span><b>${esc(p.name)}</b> · ${KN[p.kind]}${p.archived?'<span class="tag">archived</span>':""}
+      <br><small class="hint">${p.pay_url?"MobilePay link set":"No MobilePay link"}${p.pay_msg?" · message "+esc(p.pay_msg)+" + code":""}${p.track?" · stock "+fmt(p.stock):""}</small></span>
+    <span><span class="num">${eur(p.price)}</span> <button class="link" type="button" data-prod="${p.id}">Edit</button></span></div>`).join(""):`<div class="hint">None yet.</div>`;
+  const pu=location.origin+"/ammo/"+SLUG+"/pay/"+S.pay_code;$("payUrl").textContent=pu;$("payOpen").href=pu;
   $("people").innerHTML=S.people.map(p=>`<div class="irow"><span>${esc(p.username)}${p.username===S.me?' <span class="tag">you</span>':""}</span>
     ${p.username===S.me?"":`<button class="link" type="button" data-rmadmin="${esc(p.username)}">Remove</button>`}</div>`).join("")||`<div class="hint">Only site admins.</div>`;
 }
@@ -344,6 +384,52 @@ function itemSheet(i){
   $("sBody").onclick=null;
 }
 $("addItem").addEventListener("click",()=>itemSheet(null));
+function prodSheet(p){
+  const n=!p;p=p||{kind:"single",name:"",price:"",pay_url:"",pay_msg:"",track:0,low:0,archived:0};
+  const html=k=>`<div class="grid2"><label class="f">Name<input type="text" id="pName" maxlength="60" value="${esc(v("pName")??p.name)}" placeholder="e.g. Kausimaksu 2026"></label>
+      <label class="f">Type<select id="pKind">${[["season","Season fee – once a year"],["single","One-time fee"],["merch","Merch"]].map(([x,l])=>`<option value="${x}" ${x===k?"selected":""}>${l}</option>`).join("")}</select></label></div>
+    <label class="f">Price €<input type="number" inputmode="decimal" step="0.01" min="0" id="pPrice" value="${esc(v("pPrice")??p.price)}"></label>
+    <label class="f">MobilePay link (optional)<input type="text" id="pPay" maxlength="400" inputmode="url" autocapitalize="none" value="${esc(v("pPay")??p.pay_url)}" placeholder="https://… from the category's MobilePay QR"></label>
+    <label class="f">Payment message<input type="text" id="pMsg" maxlength="40" value="${esc(v("pMsg")??p.pay_msg)}" placeholder="e.g. KAUSIMAKSU"></label>
+    <p class="hint" style="margin:-6px 0 0">Shown to the payer with the entry's code, e.g. <b>KAUSIMAKSU A7K3</b>. Fees with the same link and message are paid in one go.</p>
+    ${k==="merch"?`<label class="check"><input type="checkbox" id="pTrack" ${p.track?"checked":""}> Keep stock (Refill / Count on Stock; hidden when sold out)</label>
+      <label class="f">Warn below<input type="number" inputmode="numeric" min="0" id="pLow" value="${p.low||""}" placeholder="0 = no warning"></label>`:""}
+    ${n?"":`<label class="check"><input type="checkbox" id="pArch" ${p.archived?"checked":""}> Archived (no longer offered; history keeps it)</label>`}`;
+  sheet(n?"New fee / item":"Edit "+p.name,html(p.kind),async()=>{
+    await api("POST",`c/${SLUG}/products`,{id:p.id,kind:v("pKind"),name:v("pName"),price:v("pPrice"),pay_url:(v("pPay")||"").trim(),pay_msg:v("pMsg"),
+      track:!!($("pTrack")&&$("pTrack").checked),low:v("pLow")||0,archived:!n&&$("pArch").checked});toast("Saved")});
+  $("sBody").onclick=null;$("sBody").onchange=e=>{if(e.target.id==="pKind")$("sBody").innerHTML=html(e.target.value)};
+}
+function merchSheet(p){
+  sheet(p.name,`<div class="card"><div class="row"><b>In stock</b><b class="num">${fmt(p.stock)}</b></div></div>
+    <div class="grid2"><label class="f">Kind<select id="mmKind"><option value="refill">+ Refill (new items)</option><option value="count">Count (what's really there)</option></select></label>
+      <label class="f">How many<input type="number" inputmode="numeric" min="0" id="mmQty"></label></div>
+    <label class="f">Note (optional)<input type="text" id="mmNote" maxlength="200"></label>`,
+    async()=>{await api("POST",`c/${SLUG}/pmoves`,{product:p.id,kind:v("mmKind"),qty:v("mmQty"),note:v("mmNote")});toast("Saved")});
+  $("sBody").onclick=null;$("sBody").onchange=null;
+}
+$("addProd").addEventListener("click",()=>prodSheet(null));
+$("prodList").addEventListener("click",e=>{const b=e.target.closest("[data-prod]");if(b)prodSheet(S.products.find(p=>p.id===+b.dataset.prod))});
+$("payCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("payUrl").textContent);toast("Link copied")}catch(err){toast("Select the link and copy it")}});
+$("payNew").addEventListener("click",async e=>{const b=e.target;if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Tap again: the old QR stops working";return}
+  b.dataset.armed="";b.textContent="New link…";await api("POST",`c/${SLUG}/paycode`,{});await load();toast("New link – print a new sticker")});
+
+/* ---- season fees: who has paid ---- */
+let FEES=null;
+async function loadFees(){
+  FEES=await api("GET",`c/${SLUG}/season?year=${$("fYear").value||today().slice(0,4)}`);
+  const ys=[...new Set([today().slice(0,4)].concat(FEES.years))].sort().reverse();
+  $("fYear").innerHTML=ys.map(y=>`<option ${y===FEES.year?"selected":""}>${y}</option>`).join("");
+  renderFees();
+}
+function renderFees(){
+  const q=$("fFind").value.trim().toLowerCase(),rows=FEES.rows.filter(r=>!q||r.name.toLowerCase().includes(q));
+  $("fSum").innerHTML=`<b>${FEES.rows.length}</b> season fee${FEES.rows.length===1?"":"s"} in ${FEES.year}${FEES.rows.some(r=>!r.paid)?` · <b style="color:var(--accent)">${FEES.rows.filter(r=>!r.paid).length}</b> not paid`:""}. Names are as people typed them.`;
+  $("fees").innerHTML=rows.length?rows.map(r=>`<div class="row"><div class="what"><b>${esc(r.name)}</b>${r.paid?' <span class="tag">✓ paid</span>':'<span class="tag warn">not paid</span>'}
+      <br><small>${fiDate(r.date)} · ${esc(r.pname)} · ref <b class="num">${esc(r.ref)}</b></small></div><div class="r num">${eur(r.price)}</div></div>`).join("")
+    :`<div class="hint">${q?"No season fee under that name – a one-time fee then.":"None yet."}</div>`;
+}
+$("fYear").addEventListener("change",loadFees);$("fFind").addEventListener("input",renderFees);
 $("items").addEventListener("click",e=>{const b=e.target.closest("[data-item]");if(b)itemSheet(itemOf(+b.dataset.item))});
 $("addBox").addEventListener("click",()=>boxEdit(null));
 $("boxList").addEventListener("click",e=>{const b=e.target.closest("[data-editbox]");if(b)boxEdit(boxOf(+b.dataset.editbox))});
@@ -355,10 +441,10 @@ $("people").addEventListener("click",async e=>{const b=e.target.closest("[data-r
 
 /* ---- tabs ---- */
 function tab(t){document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tab===t));
-  $("tStock").hidden=t!=="stock";$("tLog").hidden=t!=="log";$("tSetup").hidden=t!=="setup";
-  if(t==="log"&&!LOG)loadLog();try{sessionStorage.setItem("ammo:tab",t)}catch(e){}}
+  $("tStock").hidden=t!=="stock";$("tLog").hidden=t!=="log";$("tSetup").hidden=t!=="setup";$("tFees").hidden=t!=="fees";
+  if(t==="log"&&!LOG)loadLog();if(t==="fees")loadFees();try{sessionStorage.setItem("ammo:tab",t)}catch(e){}}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="log")LOG_BOX=null,LOG=null;tab(b.dataset.tab)}));
-load().then(()=>{let t="stock";try{t=sessionStorage.getItem("ammo:tab")||"stock"}catch(e){}if(t==="setup"&&!isAdmin())t="stock";tab(t)}).catch(e=>{$("warn").innerHTML=`<div class="msg">${esc(e.message)}</div>`});
+load().then(()=>{let t="stock";try{t=sessionStorage.getItem("ammo:tab")||"stock"}catch(e){}if((t==="setup"||t==="fees")&&!isAdmin())t="stock";tab(t)}).catch(e=>{$("warn").innerHTML=`<div class="msg">${esc(e.message)}</div>`});
 </script>
 </body>
 </html>

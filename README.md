@@ -22,6 +22,7 @@ New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the
 | `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
 | `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |
 | `/ammo/<club>/<code>` | **Club ammo** – a box's shooter form, public (the code is the box's secret, printed as a QR code) |
+| `/ammo/<club>/pay/<code>` | **Club fees** – payments page for season / one-time fees and merch, public (secret link, QR code) |
 | `/ammo/<club>/qr` | **Club ammo** – printable QR stickers for the boxes (admins) |
 | `/ammo/<club>/admin` | **Club ammo** – stock, refills, moves, counts, payments (diary login + a role in the club) |
 
@@ -347,6 +348,15 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
 - **QR stickers** (Setup → Boxes → *Print QR stickers*, or *Print sticker* on a box): 1, 2 or 4 per A4, Finnish or
   English, with the club, box, calibre, the steps (scan → name and rounds → MobilePay with the message) and the
   prices. Print or save as PDF at 100 %. The QR codes are made in the browser (`club/static/vendor/qrcode.js`).
+- **Fees & merch** (`club/shop.py`): Setup → *Fees & merch* – season fee (*kausimaksu*, once a year), one-time fee
+  (*kertamaksu*, e.g. per SRA match) and merch (patches …, optional stock with *Refill* / *Count* and a low warning).
+  Each has its own price, MobilePay link (its category) and message, e.g. KAUSIMAKSU. One **payments page** per club
+  (Setup → *Payments page*: link, *Print sticker*, *New link*): name, tick the fees / pick how many items, Save → one
+  MobilePay payment per category ("Maksu 1/2 … 2/2"), each with *Avaa MobilePay*, the amount and the message +
+  code. Same languages, offline queue and *Take back* as the box form; also works for the organiser at the desk
+  (one shooter after another with *New entry*). Admins: **Season fees** tab – who has paid in a year, search by name
+  (names as typed) – and the fees in *Log & payments* (filter *Fees & merch*, Mark paid, Void). Box holders don't
+  see fees.
 - **Roles per club**: admins (diary accounts) do everything; a box's holder, if given a diary account, can buy,
   move and count for that box and sees stock but not shooters' names. Site admins act as admin of every club.
   Stock is never stored – it's the sum of all moves, so the log is the audit trail.

@@ -1,7 +1,7 @@
 /* Club ammo service worker (scope /ammo/): the box form opens at the range without signal.
-   - Box pages and box info (GET /ammo/api/b/...): network first, last good copy when offline.
+   - Box and payments pages and their info (GET /ammo/api/b/…, /ammo/api/p/…): network first, last good copy when offline.
    - Styles and fonts: cache first. Entries are queued by the page itself, never here. */
-const VERSION = "a8";
+const VERSION = "a9";
 const PAGE = "ammo-page", ASSETS = "ammo-assets-" + VERSION;
 
 self.addEventListener("install", e => e.waitUntil(self.skipWaiting()));
@@ -35,11 +35,11 @@ self.addEventListener("fetch", e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
   const p = url.pathname;
-  if (req.mode === "navigate" && /^\/ammo\/[a-z0-9-]+\/[A-Za-z0-9_-]{8,40}$/.test(p)) {
+  if (req.mode === "navigate" && /^\/ammo\/[a-z0-9-]+\/(pay\/)?[A-Za-z0-9_-]{8,40}$/.test(p)) {
     e.respondWith(networkFirst(req, p).catch(() => new Response(
       "<p style='font:16px system-ui;padding:24px'>Offline. Open this box's page once while online and it works offline after that.</p>",
       {headers: {"Content-Type": "text/html; charset=utf-8"}})));
-  } else if (p.startsWith("/ammo/api/b/")) {
+  } else if (p.startsWith("/ammo/api/b/") || p.startsWith("/ammo/api/p/")) {
     e.respondWith(networkFirst(req, p, true).catch(() =>
       new Response(JSON.stringify({error: "offline"}), {status: 503, headers: {"Content-Type": "application/json"}})));
   } else if (p.startsWith("/ammo/static/") || p.startsWith("/diary/static/fonts/") || p.startsWith("/diary/static/icons/")) {

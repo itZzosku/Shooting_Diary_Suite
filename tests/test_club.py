@@ -30,7 +30,7 @@ def setup():
     """Club 'testclub': admin 'cadmin', holder 'chold' of 9 mm B; boxes 9 mm A/B, 7.62 A."""
     club.init_db()
     with sqlite3.connect(club.db_path()) as c:
-        for t in ("clubs", "club_roles", "items", "boxes", "levels", "moves"):
+        for t in ("clubs", "club_roles", "items", "boxes", "levels", "moves", "products", "sales"):
             c.execute(f"DELETE FROM {t}")
     club._posts.clear()
     for n in ("cadmin", "chold", "cshooter"):
@@ -184,3 +184,52 @@ def test_box_mobilepay_link(setup):
     assert a.post("/ammo/api/c/testclub/boxes", json=dict(body, pay_url="javascript:alert(1)")).status_code == 400
     assert a.post("/ammo/api/c/testclub/boxes", json=dict(body, pay_url="https://qr.mobilepay.fi/example")).status_code == 200
     assert app.test_client().get(f"/ammo/api/b/{codes['7.62 A']}").json["box"]["pay_url"] == "https://qr.mobilepay.fi/example"
+
+
+def test_fees_and_merch(setup):
+    app, a, ids, codes = setup
+    P = "/ammo/api/c/testclub/products"
+    season = a.post(P, json={"kind": "season", "name": "Kausimaksu", "price": 40, "pay_msg": "KAUSIMAKSU",
+                             "pay_url": "https://qr.mobilepay.fi/vp/season"}).json["id"]
+    single = a.post(P, json={"kind": "single", "name": "Kertamaksu", "price": 10, "pay_msg": "KERTAMAKSU",
+                             "pay_url": "https://qr.mobilepay.fi/vp/single"}).json["id"]
+    patch = a.post(P, json={"kind": "merch", "name": "Hihamerkki", "price": 8, "pay_msg": "KERTAMAKSU",
+                            "pay_url": "https://qr.mobilepay.fi/vp/single", "track": True, "low": 3}).json["id"]
+    assert a.post(P, json={"kind": "bogus", "name": "x", "price": 1}).status_code == 400
+    st = a.get("/ammo/api/c/testclub").json
+    code = st["pay_code"]
+    anon = app.test_client()
+    # Merch without stock isn't offered
+    assert {p["name"] for p in anon.get(f"/ammo/api/p/{code}").json["products"]} == {"Kausimaksu", "Kertamaksu"}
+    a.post("/ammo/api/c/testclub/pmoves", json={"kind": "refill", "product": patch, "qty": 5})
+    assert "Hihamerkki" in {p["name"] for p in anon.get(f"/ammo/api/p/{code}").json["products"]}
+    r = anon.post(f"/ammo/api/p/{code}/pay", json={"name": "Matti M", "date": _today(), "device": "d1", "client_id": "p1",
+                                                   "lines": [{"product": season}, {"product": single},
+                                                             {"product": patch, "qty": 3}]}).json
+    assert r["total"] == 74.0
+    pays = {p["pay_url"]: p for p in r["pays"]}         # one MobilePay payment per category
+    assert pays["https://qr.mobilepay.fi/vp/season"]["total"] == 40 and pays["https://qr.mobilepay.fi/vp/season"]["msg"] == "KAUSIMAKSU " + r["ref"]
+    assert pays["https://qr.mobilepay.fi/vp/single"]["total"] == 34
+    # Resent from the offline queue: no double; can't buy more patches than there are
+    assert anon.post(f"/ammo/api/p/{code}/pay", json={"name": "Matti M", "date": _today(), "client_id": "p1",
+                                                      "lines": [{"product": single}]}).json["ref"] == r["ref"]
+    assert anon.post(f"/ammo/api/p/{code}/pay", json={"name": "X Y", "date": _today(),
+                                                      "lines": [{"product": patch, "qty": 3}]}).status_code == 400
+    st = a.get("/ammo/api/c/testclub").json
+    assert next(p for p in st["products"] if p["id"] == patch)["stock"] == 2
+    assert any(w["kind"] == "merch" for w in st["warnings"])                   # 2 < 3
+    a.post("/ammo/api/c/testclub/pmoves", json={"kind": "count", "product": patch, "qty": 4})
+    assert next(p for p in a.get("/ammo/api/c/testclub").json["products"] if p["id"] == patch)["stock"] == 4
+    # Season list, log, void
+    assert [x["name"] for x in a.get("/ammo/api/c/testclub/season").json["rows"]] == ["Matti M"]
+    log = a.get("/ammo/api/c/testclub/log").json["moves"]
+    assert {m["kind"] for m in log} >= {"sale", "prefill", "pcount"}
+    assert a.post(f"/ammo/api/c/testclub/paid/{r['grp']}", json={"paid": False}).json["ok"]
+    a.post(f"/ammo/api/c/testclub/void/{r['grp']}", json={})
+    assert a.get("/ammo/api/c/testclub/season").json["rows"] == []
+    # Box holders don't see fees; a new link stops the old one
+    h = _login(app, "chold", "chold-password-1")
+    assert h.get("/ammo/api/c/testclub").json["pay_code"] is None
+    assert all(m["kind"] not in ("sale", "prefill", "pcount") for m in h.get("/ammo/api/c/testclub/log").json["moves"])
+    a.post("/ammo/api/c/testclub/paycode", json={})
+    assert anon.get(f"/ammo/api/p/{code}").status_code == 404
