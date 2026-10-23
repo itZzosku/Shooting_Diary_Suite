@@ -241,11 +241,13 @@ def preview(conn, parsed):
             ids = {l.get("gunId") for l in day_visits[0][1].get("lines", []) if l.get("gunId")}
             gun_id = ids.pop() if len(ids) == 1 else None
         cal = gmap.get(gun_id, {}).get("cal") if gun_id else None
+        # every calibre the gun fires (a .357 Magnum revolver shoots .38 Special loads too)
+        cals = [cal] + list(gmap.get(gun_id, {}).get("cals") or []) if cal else []
         spec = load_spec(h, s.get("bullet_gr"), cal)
         load_id = match_load(lrows, spec)
         if not spec and s.get("bullet_gr"):
             same = [r["id"] for r in lrows if not r["archived"] and r["bullet_gr"]
-                    and abs(r["bullet_gr"] - s["bullet_gr"]) < 0.6 and (not cal or r["cal"] in (None, cal))]
+                    and abs(r["bullet_gr"] - s["bullet_gr"]) < 0.6 and (not cal or r["cal"] is None or r["cal"] in cals)]
             load_id = same[0] if len(same) == 1 else None
         s["suggest"] = {"gun_id": gun_id, "visit_id": visit_id, "load_id": load_id,
                         "load": None if load_id else spec}

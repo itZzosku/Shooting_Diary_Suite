@@ -698,17 +698,19 @@ const gunOpts=sel=>`<option value="">— no gun —</option>`+S.guns.slice().sor
 const calKey=c=>String(c||"").toLowerCase().replace(/creedmoor/g,"cm").replace(/remington/g,"rem").replace(/winchester/g,"win")
   .replace(/springfield/g,"spring").replace(/parabellum/g,"luger").replace(/[^a-z0-9]/g,"");
 const gunCal=id=>(S.guns.find(g=>g.id===id)||{}).cal||"";
+// Every calibre the gun fires (main one first): a .357 Magnum revolver takes .38 Special loads too
+const gunCalKeys=id=>{const g=S.guns.find(x=>x.id===id)||{};return[g.cal,...(g.cals||[])].filter(Boolean).map(calKey)};
 function loadOpts(sel,spec,gunId){
-  const gc=calKey(gunCal(gunId)),opt=l=>`<option value="${esc(l.id)}" ${l.id===sel?"selected":""}>${esc(l.name)}</option>`;
+  const gc=gunCalKeys(gunId),opt=l=>`<option value="${esc(l.id)}" ${l.id===sel?"selected":""}>${esc(l.name)}</option>`;
   const list=S.loads.filter(l=>!l.archived||l.id===sel).sort((a,b)=>a.name.localeCompare(b.name,"fi",{numeric:true}));
-  const mine=gc?list.filter(l=>!l.cal||calKey(l.cal)===gc):list,other=gc?list.filter(l=>l.cal&&calKey(l.cal)!==gc):[];
+  const mine=gc.length?list.filter(l=>!l.cal||gc.includes(calKey(l.cal))):list,other=gc.length?list.filter(l=>l.cal&&!gc.includes(calKey(l.cal))):[];
   return`<option value="">— no load —</option>`+(spec?`<option value="new" ${sel==="new"?"selected":""}>New: ${esc(spec.name)}</option>`:"")
     +`<option value="custom">+ New load…</option>`+mine.map(opt).join("")
     +(other.length?`<optgroup label="Other calibres">${other.map(opt).join("")}</optgroup>`:"");
 }
 // A gun and a load of different calibres on one session is almost always a wrong pick.
-function calClash(gunId,loadId){const g=gunCal(gunId),l=(loadOf(loadId)||{}).cal;
-  return g&&l&&calKey(g)!==calKey(l)?`Gun calibre ${g}, load calibre ${l}`:""}
+function calClash(gunId,loadId){const g=gunCal(gunId),l=(loadOf(loadId)||{}).cal,ks=gunCalKeys(gunId);
+  return g&&l&&!ks.includes(calKey(l))?`Gun calibre ${g}, load calibre ${l}`:""}
 
 /* ---------- import ---------- */
 $("importBtn").addEventListener("click",()=>{S.preview=null;$("iList").innerHTML="";$("iSum").hidden=true;$("iWeather").hidden=true;$("iActions").hidden=true;$("iMsg").hidden=true;openSheet("iSheet")});

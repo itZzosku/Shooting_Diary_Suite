@@ -386,3 +386,13 @@ def test_health_endpoint(two, tmp_path, monkeypatch):
     monkeypatch.setattr(health, "_db_ok", lambda: False)
     r = anon.get("/diary/health")
     assert r.status_code == 503 and r.get_json()["status"] == "down"
+
+
+def test_gun_with_two_calibres(two):
+    app, o, m = two
+    body = {"name": "S&W 19-3", "type": "Revolveri", "cal": ".357 Magnum", "cals": [".38 Special", " "]}
+    assert o.put("/diary/api/guns/g-sw19", json=body).status_code == 200
+    g = [x for x in o.get("/diary/api/guns").get_json() if x["id"] == "g-sw19"][0]
+    assert g["cal"] == ".357 Magnum" and g["cals"] == [".38 Special"]
+    assert o.put("/diary/api/guns/g-sw19", json=dict(body, cals=".38")).status_code == 400   # must be a list
+    o.delete("/diary/api/guns/g-sw19", headers=H)

@@ -336,6 +336,7 @@ header.top{padding-top:6px!important}
       <label class="f">Type<select id="gType"></select></label>
       <label class="f">Calibre<input type="text" id="gCal" list="dlCal"></label>
     </div>
+    <label class="f">Also fires (other calibres, comma-separated)<input type="text" id="gCals" list="dlCal" placeholder="e.g. .38 Special for a .357 Magnum revolver"></label>
     <label class="f">Firing mode<select id="gMode"></select></label>
     <div class="grid2">
       <label class="f">Acquired<input type="date" id="gAcq"></label>
@@ -576,10 +577,13 @@ function exportLines(s){
   return out;
 }
 function typeCounts(list){const tc={};list.forEach(s=>exportLines(s).forEach(l=>{if(l.type)tc[l.type]=(tc[l.type]||0)+1}));return tc}
+// A gun's calibres: the main one first, then any others it also fires (.357 Magnum revolver → .38 Special too)
+const gunCals=g=>[g.cal,...(g.cals||[])].filter(Boolean);
 function gunTotals(){
-  const t={};S.sessions.forEach(s=>(s.lines||[]).forEach(l=>{if(!l.gunId)return;const g=t[l.gunId]=t[l.gunId]||{r:0,d:new Set(),last:"",lent:0};g.r+=+l.rounds||0;g.d.add(s.date);if(s.date>g.last)g.last=s.date}));
+  const blank=()=>({r:0,d:new Set(),last:"",lent:0,byCal:{}}),add=(g,l)=>{const c=l.cal||"";g.byCal[c]=(g.byCal[c]||0)+(+l.rounds||0)};
+  const t={};S.sessions.forEach(s=>(s.lines||[]).forEach(l=>{if(!l.gunId)return;const g=t[l.gunId]=t[l.gunId]||blank();g.r+=+l.rounds||0;add(g,l);g.d.add(s.date);if(s.date>g.last)g.last=s.date}));
   // Shots friends fired with your guns: part of the gun's round count, not of your own shooting record
-  S.loans.forEach(n=>(n.lines||[]).forEach(l=>{if(!l.gunId)return;const g=t[l.gunId]=t[l.gunId]||{r:0,d:new Set(),last:"",lent:0};g.r+=+l.rounds||0;g.lent+=+l.rounds||0}));
+  S.loans.forEach(n=>(n.lines||[]).forEach(l=>{if(!l.gunId)return;const g=t[l.gunId]=t[l.gunId]||blank();g.r+=+l.rounds||0;add(g,l);g.lent+=+l.rounds||0}));
   return t;
 }
 const gunsSorted=()=>S.guns.slice().sort((a,b)=>(!!a.archived-!!b.archived)||((a.order??99)-(b.order??99))||String(a.name).localeCompare(b.name));
@@ -615,7 +619,7 @@ function renderGuns(){
   el.innerHTML=list.map(g=>{const t=tot[g.id]||{r:0,d:new Set(),last:""},all=(+g.startCount||0)+t.r;
     return `<div class="gunrow" data-id="${esc(g.id)}"><span class="grip" aria-label="Move" title="Drag to reorder">⠿</span><button type="button" class="gun ${g.archived?"archived":""}" data-gun="${esc(g.id)}">
       <b>${esc(g.name)}</b>
-      <span class="g-sub">${esc([tEn(g.type),g.cal].filter(Boolean).join(" · "))}${g.acquired?` · acquired ${fiDate(g.acquired)}`:""}${t.d.size?` · ${t.d.size} day${t.d.size===1?"":"s"} · last ${fiDate(t.last)}`:""}${t.lent?` · incl. ${fmt(t.lent)} loaned`:""}</span>
+      <span class="g-sub">${esc([tEn(g.type),gunCals(g).join(" / ")].filter(Boolean).join(" · "))}${gunCals(g).length>1&&Object.keys(t.byCal||{}).length?` · ${Object.entries(t.byCal).filter(([,n])=>n).sort((a,b)=>b[1]-a[1]).map(([c,n])=>esc(c||"no calibre")+" "+fmt(n)).join(" · ")}`:""}${g.acquired?` · acquired ${fiDate(g.acquired)}`:""}${t.d.size?` · ${t.d.size} day${t.d.size===1?"":"s"} · last ${fiDate(t.last)}`:""}${t.lent?` · incl. ${fmt(t.lent)} loaned`:""}</span>
       <span class="g-r"><span class="num">${fmt(all)}</span><small>shots</small></span></button></div>`}).join("");
 }
 /* Drag the ⠿ handle to reorder guns; the new order is saved as each gun's "order". */
@@ -736,7 +740,9 @@ function renderChips(){
   const gt=gunTotals(),uses=g=>gt[g.id]?gt[g.id].d.size:0,last=g=>gt[g.id]?gt[g.id].last:"";
   const active=gunsSorted().filter(g=>!g.archived&&ownedOn(g,f.date)).sort((x,y)=>uses(y)-uses(x)||last(y).localeCompare(last(x)));
   $("presetChips").innerHTML=(active.length
-      ?active.map(g=>`<button type="button" class="chip add" data-addgun="${esc(g.id)}">+ ${esc(g.name)}</button>`).join("")
+      ?active.map(g=>gunCals(g).length>1
+          ?gunCals(g).map(c=>`<button type="button" class="chip add" data-addgun="${esc(g.id)}" data-addcal="${esc(c)}">+ ${esc(g.name)} · ${esc(c)}</button>`).join("")
+          :`<button type="button" class="chip add" data-addgun="${esc(g.id)}">+ ${esc(g.name)}</button>`).join("")
       :presets().map((p,i)=>`<button type="button" class="chip add" data-preset="${i}">+ ${esc(tEn(p.type))} ${esc(p.cal)}</button>`).join(""))
     +`<button type="button" class="chip add" data-preset="blank">+ Other row</button>`;
 }
@@ -746,7 +752,7 @@ function lineHTML(l,i){
     ${S.guns.length?`<label class="f">Gun<select data-k="gunId">${gunOptions(l.gunId)}</select></label>`:""}
     <div class="lgrid">
       <label class="f">Type<select data-k="type"><option value="">—</option>${TYPES.map(t=>`<option value="${t}" ${l.type===t?"selected":""}>${tEn(t)}</option>`).join("")}</select></label>
-      <label class="f">Calibre<input type="text" data-k="cal" list="dlCal" value="${esc(l.cal)}"></label>
+      <label class="f">Calibre${calInput(l)}</label>
       <label class="f">Firing mode<select data-k="mode">${modeOpts(l.mode)}</select></label>
       <label class="f">Shots<div class="step"><button type="button" data-step="-5" aria-label="Minus 5">−</button><input type="number" inputmode="numeric" min="0" data-k="rounds" value="${l.rounds||""}" placeholder="0"><button type="button" data-step="5" aria-label="Plus 5">+</button></div></label>
     </div>
@@ -771,6 +777,12 @@ $("form").addEventListener("input",e=>{
   else if(t.dataset.k&&t.tagName!=="SELECT"){const i=+t.closest(".line").dataset.i;f.lines[i][t.dataset.k]=t.dataset.k==="rounds"?Math.max(0,parseInt(t.value)||0):t.value;if(t.dataset.k==="rounds")updTotal()}
   saveDraft();
 });
+function calInput(l){
+  const g=l.gunId&&S.guns.find(x=>x.id===l.gunId),cs=g?gunCals(g):[];
+  if(cs.length<2)return`<input type="text" data-k="cal" list="dlCal" value="${esc(l.cal)}">`;
+  const opts=cs.includes(l.cal)||!l.cal?cs:cs.concat([l.cal]);
+  return`<select data-k="cal">${opts.map(c=>`<option ${c===l.cal?"selected":""}>${esc(c)}</option>`).join("")}</select>`;
+}
 function applyGun(l,id){
   const g=S.guns.find(x=>x.id===id);
   if(!g){delete l.gunId;delete l.gun;return}
@@ -789,7 +801,7 @@ $("form").addEventListener("click",e=>{
   else if(b.dataset.org!==undefined){f.org=f.org===b.dataset.org?"":b.dataset.org;$("fOrg").value=f.org;renderChips();saveDraft()}
   else if(b.dataset.addgun!==undefined){
     const prevInfo=f.lines.length?f.lines[f.lines.length-1].info:(S.sessions.find(s=>s.org&&s.org===f.org)?.lines?.[0]?.info||"");
-    const l={type:"",cal:"",mode:"",rounds:0,info:prevInfo||""};applyGun(l,b.dataset.addgun);f.lines.push(l);renderLines();saveDraft();
+    const l={type:"",cal:"",mode:"",rounds:0,info:prevInfo||""};applyGun(l,b.dataset.addgun);if(b.dataset.addcal)l.cal=b.dataset.addcal;f.lines.push(l);renderLines();saveDraft();
     const ins=$("lines").querySelectorAll('input[data-k="rounds"]');if(ins.length)ins[ins.length-1].focus()}
   else if(b.dataset.preset!==undefined){
     const prevInfo=f.lines.length?f.lines[f.lines.length-1].info:(S.sessions.find(s=>s.org&&s.org===f.org)?.lines?.[0]?.info||"");
@@ -931,7 +943,7 @@ $("log").addEventListener("click",e=>{const b=e.target.closest(".entry");if(b)op
 function openGun(id){
   const g=id?S.guns.find(x=>x.id===id):null;S.editGun=id||null;S.gDelArm=false;
   $("gTitle").textContent=g?"Edit gun":"New gun";
-  $("gName").value=g?g.name:"";$("gCal").value=g&&g.cal||"";$("gMode").innerHTML=modeOpts(g&&g.mode||"");
+  $("gName").value=g?g.name:"";$("gCal").value=g&&g.cal||"";$("gCals").value=(g&&g.cals||[]).join(", ");$("gMode").innerHTML=modeOpts(g&&g.mode||"");
   $("gType").innerHTML=`<option value="">—</option>`+TYPES.map(t=>`<option value="${t}" ${g&&g.type===t?"selected":""}>${tEn(t)}</option>`).join("");
   $("gStart").value=g&&g.startCount?g.startCount:"";$("gAcq").value=g&&g.acquired||"";$("gArch").checked=!!(g&&g.archived);
   const t=g&&gunTotals()[g.id];
@@ -948,7 +960,9 @@ $("gClose").addEventListener("click",closeSheets);
 $("gForm").addEventListener("submit",async e=>{e.preventDefault();
   const name=$("gName").value.trim();if(!name){$("gMsg").textContent="Give the gun a name.";$("gMsg").hidden=false;return}
   const old=S.editGun&&S.guns.find(x=>x.id===S.editGun);
-  const d={name,type:$("gType").value,cal:$("gCal").value.trim(),mode:mFi($("gMode").value),
+  const cal=$("gCal").value.trim(),seen=new Set([cal.toLowerCase()]);
+  const cals=$("gCals").value.split(/[,;]/).map(x=>x.trim()).filter(x=>x&&!seen.has(x.toLowerCase())&&seen.add(x.toLowerCase()));
+  const d={name,type:$("gType").value,cal,cals,mode:mFi($("gMode").value),
     startCount:Math.max(0,parseInt($("gStart").value)||0),acquired:$("gAcq").value||"",archived:$("gArch").checked,order:old?(old.order??99):S.guns.length+1};
   await S.store.saveGun(S.editGun||newGunId(),d);Draft.done($("gForm"));closeSheets();toast("Gun saved");
 });

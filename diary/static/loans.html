@@ -453,7 +453,11 @@ function openLoan(id){
 // Calibre: your gun → its calibre (fixed); their gun → pick from the price list / your guns' calibres, or type another
 function calChoices(){return[...new Set(Object.keys(S.prices||{}).concat(S.guns.map(g=>g.cal).filter(Boolean)))].sort((a,b)=>a.localeCompare(b,"fi",{numeric:true}))}
 function calField(l,i){
-  if(l.gunId)return`<input type="text" value="${esc(l.cal||"–")}" readonly tabindex="-1" style="background:var(--surface-2)">`;
+  if(l.gunId){   // your gun: its calibre, or a choice when it fires several (.357 Magnum / .38 Special)
+    const g=S.guns.find(x=>x.id===l.gunId)||{},cs=[g.cal,...(g.cals||[])].filter(Boolean);
+    if(cs.length>1)return`<select data-ln="${i}" data-k="gunCal">${cs.map(c=>`<option ${c===l.cal?"selected":""}>${esc(c)}</option>`).join("")}</select>`;
+    return`<input type="text" value="${esc(l.cal||"–")}" readonly tabindex="-1" style="background:var(--surface-2)">`;
+  }
   const opts=calChoices(),known=!l.cal||opts.some(c=>calKey(c)===calKey(l.cal));
   if(!known||l.calOther)return`<input type="text" data-ln="${i}" data-k="cal" value="${esc(l.cal)}" placeholder="e.g. 7.62x39" list="dlPrCal">`;
   return`<select data-ln="${i}" data-k="calSel"><option value="">— calibre —</option>${opts.map(c=>`<option ${calKey(c)===calKey(l.cal)?"selected":""}>${esc(c)}</option>`).join("")}<option value="__other">Other…</option></select>`;
@@ -485,6 +489,7 @@ $("lnLines").addEventListener("input",e=>{const t=e.target,i=t.dataset.ln;if(i==
   else if(k==="who")l.who=t.value.trim();
   else if(k==="cal"){l.cal=t.value.trim();const p=priceFor(l.cal);
     if(p!=null){l.price=p;const pi=t.closest(".lnline").querySelector('[data-k="price"]');if(pi)pi.value=p}}
+  else if(k==="gunCal"){l.cal=t.value;const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
   else if(k==="calSel"){
     if(t.value==="__other"){l.calOther=true;l.cal="";renderLnLines();const f=$("lnLines").querySelector(`[data-ln="${i}"][data-k="cal"]`);if(f)f.focus();return}
     l.cal=t.value;const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}

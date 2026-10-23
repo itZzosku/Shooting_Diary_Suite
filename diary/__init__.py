@@ -587,7 +587,14 @@ def put_profile():
     return jsonify(ok=True)
 
 
-GUN_KEYS = {"name": str, "type": str, "cal": str, "mode": str, "startCount": int,
+def _cal_list(v):
+    """Other calibres a gun fires (e.g. .38 Special in a .357 Magnum): up to 5 short names."""
+    if not isinstance(v, list):
+        raise ValueError("cals")
+    return [str(x).strip()[:40] for x in v if str(x).strip()][:5]
+
+
+GUN_KEYS = {"name": str, "type": str, "cal": str, "cals": _cal_list, "mode": str, "startCount": int,
             "archived": bool, "order": int, "acquired": str}
 
 
