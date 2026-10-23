@@ -107,7 +107,7 @@ function sticker(b){
   const t=T[opt.lang],url=location.origin+"/ammo/"+SLUG+"/"+b.code;
   const msg=S.club.pay_msg?`${esc(S.club.pay_msg)} ${t.msgRef}`:t.ref;
   const items=S.items.filter(i=>i.calibre===b.calibre&&!i.archived);
-  const price=opt.prices&&items.length?`<div class="price">${items.map(i=>`${esc(i.name||b.calibre)} ${(+i.price).toFixed(2).replace(".",opt.lang==="en"?".":",")} ${t.perRound}`).join("<br>")}</div>`:"";
+  const price=opt.prices&&items.length?`<div class="price">${items.map(i=>`${esc(b.calibre)}${i.name?" "+esc(i.name):""} ${(+i.price).toFixed(2).replace(".",opt.lang==="en"?".":",")} ${t.perRound}`).join("<br>")}</div>`:"";
   const head=`<div class="club">${esc(S.club.name)}</div><div><div class="box">${esc(b.name)}</div><div class="cal">${esc(b.calibre)} · ${t.title}</div></div>`;
   const steps=`<ol>${t.steps.map(s=>`<li>${s.replace("{msg}",msg)}</li>`).join("")}</ol>`;
   const tail=`${price}<div class="url">${esc(url)}</div>`;
