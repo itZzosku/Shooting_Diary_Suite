@@ -106,7 +106,8 @@ h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform
 .whorow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;border-top:1px solid var(--line);padding:10px 0}
 .whorow .num b{font-family:var(--f-mono)}
 .whorow .act{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-.prrow{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px}
+.prrow{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) 64px;gap:8px}
+.prhead{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) 64px;gap:8px;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-bottom:-2px}
 .entry{display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:8px}
 .entry:hover{border-color:var(--muted)}
 .day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-right:1px solid var(--line);padding-right:10px}
@@ -265,9 +266,10 @@ header.top{padding-top:6px!important}
 <div class="sheet" id="prSheet" hidden role="dialog" aria-modal="true" aria-labelledby="prTitle">
   <form class="sheet-in" id="prForm" autocomplete="off">
     <div class="sheet-bar"><h2 id="prTitle">Ammo prices</h2><button class="ghost" type="button" data-lnclose>Close</button></div>
-    <p class="hint" style="margin:0">Price per round in euros, by calibre. A new loan line takes the price of its gun's calibre; you can still change it on the line.</p>
+    <p class="hint" style="margin:0">Price per round in euros. Several prices for one calibre? Add a row per ammo with its name (e.g. .22 LR · SK Standard Plus and .22 LR · Lapua Center-X); a loan line then lets you pick which. The first row of a calibre is its default.</p>
+    <div class="prhead" aria-hidden="true"><span>Calibre</span><span>Ammo brand / load</span><span>€ / round</span></div>
     <div id="prRows" style="display:flex;flex-direction:column;gap:8px"></div>
-    <button class="ghost" type="button" id="prAdd" style="align-self:flex-start">+ Calibre</button>
+    <button class="ghost" type="button" id="prAdd" style="align-self:flex-start">+ Calibre / ammo</button>
     <div class="actions"><button class="primary" type="submit">Save prices</button></div>
   </form>
 </div>
@@ -408,9 +410,17 @@ const eur=v=>(+v||0).toFixed(2)+" €";
 // "6.5 Creedmoor" = "6.5 CM", ".223 Remington" = ".223 Rem" when looking up a price
 const calKey=c=>String(c||"").toLowerCase().replace(/creedmoor/g,"cm").replace(/remington/g,"rem").replace(/winchester/g,"win")
   .replace(/springfield/g,"spring").replace(/parabellum/g,"luger").replace(/[^a-z0-9]/g,"");
-function priceFor(cal){const k=calKey(cal);if(!k)return null;for(const[c,p]of Object.entries(S.prices||{}))if(calKey(c)===k)return+p;return null}
+/* Ammo prices: per calibre, optionally several per calibre, stored as "calibre · ammo" → € per round.
+   The first entry of a calibre (the plain one if there is one) is its default. */
+const AMMO_SEP=" · ";
+function priceList(){return Object.entries(S.prices||{}).map(([k,p])=>{const i=k.indexOf(AMMO_SEP);
+  return{key:k,cal:i<0?k:k.slice(0,i),ammo:i<0?"":k.slice(i+AMMO_SEP.length),price:+p}})}
+function pricesFor(cal){const k=calKey(cal);if(!k)return[];
+  return priceList().filter(e=>calKey(e.cal)===k).sort((a,b)=>(a.ammo?1:0)-(b.ammo?1:0))}
+function priceFor(cal,ammo){const es=pricesFor(cal);if(!es.length)return null;
+  const hit=ammo!=null&&es.find(e=>e.ammo===ammo);return(hit||es[0]).price}
 const loanCost=l=>(+l.rounds||0)*(+l.price||0);
-const lineLabel=l=>l.gunId?(l.gun||"gun"):("ammo"+(l.cal?" "+l.cal:""));   // a friend's own gun: only your ammo
+const lineLabel=l=>(l.gunId?(l.gun||"gun"):("ammo"+(l.cal?" "+l.cal:"")))+(l.ammo?" ("+l.ammo+")":"");   // a friend's own gun: only your ammo
 function byWho(n){   // {who: {rounds, cost, guns:[{gun, rounds}]}} in line order
   const m=new Map();(n.lines||[]).forEach(l=>{const w=l.who||"–";const e=m.get(w)||{rounds:0,cost:0,guns:[]};
     e.rounds+=+l.rounds||0;e.cost+=loanCost(l);e.guns.push(l);m.set(w,e)});return m}
@@ -446,12 +456,12 @@ function openLoan(id){
   const friends=new Set(),events=new Set();S.loans.forEach(x=>{(x.lines||[]).forEach(l=>l.who&&friends.add(l.who));x.event&&events.add(x.event)});
   S.sessions.slice(0,60).forEach(s=>s.place&&events.add(s.place));
   $("dlFriend").innerHTML=[...friends].map(v=>`<option value="${esc(v)}">`).join("");
-  $("dlPrCal").innerHTML=[...new Set(Object.keys(S.prices||{}).concat(S.guns.map(g=>g.cal).filter(Boolean)))].map(v=>`<option value="${esc(v)}">`).join("");$("dlEvent").innerHTML=[...events].map(v=>`<option value="${esc(v)}">`).join("");
+  $("dlPrCal").innerHTML=calChoices().map(v=>`<option value="${esc(v)}">`).join("");$("dlEvent").innerHTML=[...events].map(v=>`<option value="${esc(v)}">`).join("");
   renderLnLines();$("lnSheet").hidden=false;document.body.style.overflow="hidden";$("lnSheet").scrollTop=0;
   Draft.open($("lnForm"),n?id:"new");
 }
 // Calibre: your gun → its calibre (fixed); their gun → pick from the price list / your guns' calibres, or type another
-function calChoices(){return[...new Set(Object.keys(S.prices||{}).concat(S.guns.map(g=>g.cal).filter(Boolean)))].sort((a,b)=>a.localeCompare(b,"fi",{numeric:true}))}
+function calChoices(){return[...new Set(priceList().map(e=>e.cal).concat(S.guns.flatMap(g=>[g.cal,...(g.cals||[])]).filter(Boolean)))].sort((a,b)=>a.localeCompare(b,"fi",{numeric:true}))}
 function calField(l,i){
   if(l.gunId){   // your gun: its calibre, or a choice when it fires several (.357 Magnum / .38 Special)
     const g=S.guns.find(x=>x.id===l.gunId)||{},cs=[g.cal,...(g.cals||[])].filter(Boolean);
@@ -462,6 +472,10 @@ function calField(l,i){
   if(!known||l.calOther)return`<input type="text" data-ln="${i}" data-k="cal" value="${esc(l.cal)}" placeholder="e.g. 7.62x39" list="dlPrCal">`;
   return`<select data-ln="${i}" data-k="calSel"><option value="">— calibre —</option>${opts.map(c=>`<option ${calKey(c)===calKey(l.cal)?"selected":""}>${esc(c)}</option>`).join("")}<option value="__other">Other…</option></select>`;
 }
+function ammoField(l,i){
+  const es=pricesFor(l.cal);if(es.length<2)return"";
+  return`<label class="f">Ammo<select data-ln="${i}" data-k="ammo">${es.map(e=>`<option value="${esc(e.ammo)}" ${e.ammo===(l.ammo||"")?"selected":""}>${esc(e.ammo||"Standard")} – ${e.price.toFixed(2)} €</option>`).join("")}</select></label>`;
+}
 function renderLnLines(){
   $("lnLines").innerHTML=LN.lines.map((l,i)=>`<div class="lnline">
     <label class="f">Friend<input type="text" list="dlFriend" data-ln="${i}" data-k="who" value="${esc(l.who)}" placeholder="name"></label>
@@ -470,8 +484,8 @@ function renderLnLines(){
     <label class="f">Calibre${calField(l,i)}</label>
     <label class="f">Shots<input type="number" inputmode="numeric" min="0" step="1" data-ln="${i}" data-k="rounds" value="${l.rounds||""}" placeholder="0"></label>
     <span></span>
-    <label class="f">€ / round<input type="text" inputmode="decimal" data-ln="${i}" data-k="price" value="${l.price===""||l.price==null?"":l.price}" placeholder="0.00"></label>
-    <span></span><span></span>
+    ${ammoField(l,i)}<label class="f">€ / round<input type="text" inputmode="decimal" data-ln="${i}" data-k="price" value="${l.price===""||l.price==null?"":l.price}" placeholder="0.00"></label>
+    ${pricesFor(l.cal).length>1?"<span></span>":"<span></span><span></span>"}
     <span class="sub">${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}</span></div>`).join("");
   renderLnWho();
 }
@@ -489,11 +503,12 @@ $("lnLines").addEventListener("input",e=>{const t=e.target,i=t.dataset.ln;if(i==
   else if(k==="who")l.who=t.value.trim();
   else if(k==="cal"){l.cal=t.value.trim();const p=priceFor(l.cal);
     if(p!=null){l.price=p;const pi=t.closest(".lnline").querySelector('[data-k="price"]');if(pi)pi.value=p}}
-  else if(k==="gunCal"){l.cal=t.value;const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
+  else if(k==="gunCal"){l.cal=t.value;l.ammo="";const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
+  else if(k==="ammo"){l.ammo=t.value;const p=priceFor(l.cal,l.ammo);if(p!=null)l.price=p;renderLnLines();return}
   else if(k==="calSel"){
     if(t.value==="__other"){l.calOther=true;l.cal="";renderLnLines();const f=$("lnLines").querySelector(`[data-ln="${i}"][data-k="cal"]`);if(f)f.focus();return}
-    l.cal=t.value;const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
-  if(k==="gunId"){const g=S.guns.find(x=>x.id===t.value)||{};l.gunId=t.value;l.gun=g.name||"";l.cal=t.value?g.cal||"":"";l.calOther=false;
+    l.cal=t.value;l.ammo="";const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
+  if(k==="gunId"){const g=S.guns.find(x=>x.id===t.value)||{};l.gunId=t.value;l.gun=g.name||"";l.cal=t.value?g.cal||"":"";l.calOther=false;l.ammo="";
     const p=priceFor(l.cal);if(p!=null)l.price=p;renderLnLines();return}
   const sub=t.closest(".lnline").querySelector(".sub");sub.textContent=`${fmt(+l.rounds||0)} × ${(+l.price||0).toFixed(2)} € = ${eur(loanCost(l))}`;renderLnWho()});
 $("lnLines").addEventListener("click",e=>{const x=e.target.closest("[data-lnx]");if(!x)return;LN.lines.splice(+x.dataset.lnx,1);renderLnLines()});
@@ -511,7 +526,7 @@ Draft.form($("lnForm"),"loan",{extra:()=>LN?{lines:LN.lines,paid:[...LN.paid]}:n
   apply:x=>{LN.lines=(x.lines||[]).map(l=>({...l}));LN.paid=new Set(x.paid||[]);renderLnLines()},reopen:()=>openLoan(LN&&!LN.isNew?LN.id:null)});
 $("lnForm").addEventListener("submit",async e=>{e.preventDefault();
   const msg=m=>{$("lnMsg").textContent=m;$("lnMsg").hidden=false;toast(m)};   // toast too: the top Save is far from the message
-  const lines=LN.lines.filter(l=>l.who||l.gunId||+l.rounds).map(l=>({who:l.who,gunId:l.gunId||null,gun:l.gun,cal:(l.cal||"").trim(),rounds:+l.rounds||0,price:+l.price||0}));
+  const lines=LN.lines.filter(l=>l.who||l.gunId||+l.rounds).map(l=>({who:l.who,gunId:l.gunId||null,gun:l.gun,cal:(l.cal||"").trim(),ammo:l.ammo||"",rounds:+l.rounds||0,price:+l.price||0}));
   if(!$("lnDate").value)return msg("Enter a date.");
   if(!lines.length)return msg("Add at least one friend and what they shot.");
   if(lines.some(l=>!l.who))return msg("Every line needs the friend's name.");
@@ -527,17 +542,21 @@ $("lnDel").addEventListener("click",async()=>{if(!LN.delArm){LN.delArm=true;$("l
 
 /* ammo prices per calibre */
 function openPrices(){
-  const cals=new Map();Object.entries(S.prices||{}).forEach(([c,p])=>cals.set(c,p));
-  S.guns.filter(g=>g.cal&&!g.archived).forEach(g=>{if(priceFor(g.cal)==null&&![...cals.keys()].some(c=>calKey(c)===calKey(g.cal)))cals.set(g.cal,"")});
-  $("prRows").innerHTML=[...cals.entries()].map(([c,p])=>prRow(c,p)).join("");
+  const rows=priceList().map(e=>[e.cal,e.ammo,e.price]);
+  S.guns.filter(g=>!g.archived).flatMap(g=>[g.cal,...(g.cals||[])]).filter(Boolean)
+    .forEach(c=>{if(!rows.some(x=>calKey(x[0])===calKey(c)))rows.push([c,"",""])});
+  rows.sort((a,b)=>a[0].localeCompare(b[0],"fi",{numeric:true}));      // same calibre together, default first as stored
+  $("prRows").innerHTML=rows.map(([c,a,p])=>prRow(c,a,p)).join("");
+  $("dlPrCal").innerHTML=calChoices().map(v=>`<option value="${esc(v)}">`).join("");
   $("prSheet").hidden=false;document.body.style.overflow="hidden";
 }
-const prRow=(c,p)=>`<div class="prrow"><input type="text" value="${esc(c)}" placeholder="Calibre" aria-label="Calibre"><input type="text" inputmode="decimal" value="${p===""||p==null?"":p}" placeholder="€ / round" aria-label="Price per round"></div>`;
+const prRow=(c,a,p)=>`<div class="prrow"><input type="text" value="${esc(c)}" placeholder=".22 LR" aria-label="Calibre" list="dlPrCal"><input type="text" value="${esc(a)}" placeholder="optional" aria-label="Ammo brand or load" maxlength="40"><input type="text" inputmode="decimal" value="${p===""||p==null?"":p}" placeholder="0.00" aria-label="Price per round"></div>`;
 $("pricesBtn").addEventListener("click",openPrices);
-$("prAdd").addEventListener("click",()=>$("prRows").insertAdjacentHTML("beforeend",prRow("","")));
+$("prAdd").addEventListener("click",()=>$("prRows").insertAdjacentHTML("beforeend",prRow("","","")));
 $("prForm").addEventListener("submit",async e=>{e.preventDefault();
-  const out={};$("prRows").querySelectorAll(".prrow").forEach(r=>{const[c,p]=r.querySelectorAll("input");const v=parseFloat(p.value.replace(",","."));
-    if(c.value.trim()&&isFinite(v))out[c.value.trim()]=v});
+  const out={};$("prRows").querySelectorAll(".prrow").forEach(r=>{const[c,a,p]=r.querySelectorAll("input");const v=parseFloat(p.value.replace(",","."));
+    const cal=c.value.trim(),am=a.value.trim().replaceAll(AMMO_SEP.trim()," ");
+    if(cal&&isFinite(v))out[am?cal+AMMO_SEP+am:cal]=v});
   await S.store.savePrices(out);closeSheets();toast("Prices saved")});
 
 

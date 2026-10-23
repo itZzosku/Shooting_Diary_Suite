@@ -63,3 +63,13 @@ def test_loan_crud_cost_and_backup(client):
     assert client.delete("/diary/api/loans/n-1").status_code == 403
     assert client.delete("/diary/api/loans/n-1", headers=H).status_code == 200
     assert client.get("/diary/api/loans").get_json() == []
+
+
+def test_ammo_name_on_line_and_long_price_names(client):
+    c = client
+    r = c.put("/diary/api/ammo-prices", json={".22 LR": 0.12, ".22 LR · Lapua Center-X": 0.25})
+    assert r.status_code == 200 and r.get_json()["prices"][".22 LR · Lapua Center-X"] == 0.25
+    body = {"date": "2026-10-20", "lines": [{"who": "Friend", "cal": ".22 LR", "ammo": "Lapua Center-X", "rounds": 50, "price": 0.25}]}
+    assert c.put("/diary/api/loans/n-ammo-1", json=body).status_code == 200
+    ln = [x for x in c.get("/diary/api/loans").get_json() if x["id"] == "n-ammo-1"][0]
+    assert ln["lines"][0]["ammo"] == "Lapua Center-X"

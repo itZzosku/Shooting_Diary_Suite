@@ -301,8 +301,11 @@ When friends shoot your guns and/or your ammo (e.g. at a match): *+ Loan*, one e
 and a line per friend and gun with shots and price per round. Their shots count toward each gun's round count
 ("incl. N loaned") but never toward your own shooting record or the licence export. A friend's own gun with
 your ammo: *Not my gun – ammo only* and the calibre. Cost per friend, *Paid* ticks, *Share cost* sends the
-breakdown; unpaid totals on the page and the landing tile. *Ammo prices* holds the price per round by calibre
-(starting values in `diary/loans.py`, `DEFAULT_AMMO_PRICES`; each account edits its own).
+breakdown; unpaid totals on the page and the landing tile. *Ammo prices* holds the price per round: calibre, ammo
+brand / load (optional) and € per round, so one calibre can have several (e.g. .22 LR SK Standard Plus 0.12 € and
+Lapua Center-X 0.25 €). A loan line then offers an *Ammo* choice that sets its price; the first entry of a calibre is
+the default. Stored as "calibre · ammo" keys (starting values in `diary/loans.py`, `DEFAULT_AMMO_PRICES`; each
+account edits its own).
 
 ## Click calculator (`/diary/calculator`)
 

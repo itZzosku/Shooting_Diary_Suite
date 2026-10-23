@@ -68,6 +68,7 @@ def _clean(body):
         out_lines.append({"who": " ".join(str(l.get("who") or "").split())[:60],
                           "gunId": str(l.get("gunId") or "")[:64] or None,
                           "gun": str(l.get("gun") or "")[:120], "cal": str(l.get("cal") or "")[:40],
+                          "ammo": " ".join(str(l.get("ammo") or "").split())[:60],
                           "rounds": rounds, "price": round(price, 4)})
     paid = [" ".join(str(p).split())[:60] for p in (body.get("paid") or []) if str(p).strip()][:50]
     return {"date": body["date"], "event": " ".join(str(body.get("event") or "").split())[:120],
@@ -148,7 +149,7 @@ def api_put_prices():
         abort(400 if request.is_json else 415)
     out = {}
     for k, v in body.items():
-        name = " ".join(str(k).split())[:40]
+        name = " ".join(str(k).split())[:90]          # "calibre" or "calibre · ammo name"
         try:
             price = float(str(v).replace(",", "."))
         except (TypeError, ValueError):
