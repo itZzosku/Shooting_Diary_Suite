@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Update the site from GitHub main and restart it — only if the new code passes its checks.
+# Update the site from GitHub and restart it — only if the new code passes its checks.
+# Follows the branch that is checked out (main, or e.g. club-ammo while testing it); BRANCH=… overrides.
 #
 #   ./scripts/update.sh            pull, check, restart
 #   ./scripts/update.sh --check    show what would come in, change nothing
@@ -25,7 +26,8 @@ if [ -z "${SERVICE:-}" ]; then
   fi
 fi
 RESTART_CMD="${RESTART_CMD:-}"
-BRANCH="${BRANCH:-main}"
+CURRENT="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
+BRANCH="${BRANCH:-$CURRENT}"            # the checked-out branch
 DATA_DIR="${DIARY_DATA_DIR:-$REPO_DIR/diary_data}"
 SNAP_DIR="${SNAP_DIR:-$REPO_DIR/diary_backups/pre-update}"   # git-ignored (diary_backups/)
 SNAP_KEEP="${SNAP_KEEP:-5}"
@@ -62,10 +64,12 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   git status --short --untracked-files=no
   fail "Local changes in tracked files. Commit or undo them first (git checkout -- <file>), or reset with: git reset --hard origin/$BRANCH"
 fi
-[ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ] || fail "Not on $BRANCH (git checkout $BRANCH)."
+[ "$CURRENT" != "HEAD" ] || fail "No branch checked out (detached HEAD) – git checkout main"
+[ "$CURRENT" = "$BRANCH" ] || fail "On $CURRENT, not $BRANCH (git checkout $BRANCH)."
+[ "$BRANCH" = "main" ] || echo "Note: following branch $BRANCH, not main (back with: git checkout main && $0)"
 
 say "Fetching origin/$BRANCH"
-git fetch --quiet origin "$BRANCH"
+git fetch --quiet origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
 OLD="$(git rev-parse HEAD)"
 NEW="$(git rev-parse "origin/$BRANCH")"
 if [ "$OLD" = "$NEW" ]; then
@@ -118,8 +122,9 @@ fi
 
 # 4. Checks: everything compiles, the app imports, tests pass (tests use a throwaway data folder)
 say "Checking"
-"$PYTHON" -m compileall -q diary main.py >/dev/null || rollback "Python files don't compile"
-DIARY_DATA_DIR="$(mktemp -d)" "$PYTHON" -c "import diary, flask; a = flask.Flask('x'); diary.init_app(a)" \
+COMPILE="diary main.py"; [ -d club ] && COMPILE="$COMPILE club"
+"$PYTHON" -m compileall -q $COMPILE >/dev/null || rollback "Python files don't compile"
+DIARY_DATA_DIR="$(mktemp -d)" "$PYTHON" -c "import main" \
   || rollback "The app doesn't start"
 if "$PYTHON" -c "import pytest" 2>/dev/null; then
   "$PYTHON" -m pytest -q tests || rollback "Tests failed"
