@@ -345,8 +345,9 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   is ticked by default; unticked entries show as not paid. Logged-in shooters can tick *Also add to my diary*
   (the rounds go onto that day's visit, or a new one, with the box's firearm type). Works offline: entries wait
   on the phone and are sent later. The same phone can *Take back* an entry for 30 minutes.
-- **Admin page**: *Stock* lists each box with what's in it per calibre (and per ammo), then the calibres over all
-  boxes with their buy-more levels; *Refill* (new rounds into a box), *Move* (box → box), *Count*
+- **Admin page**: *Stock* lists each box with what's in it per calibre (and per ammo) and a *Level* link per
+  calibre to set that box's refill level (Alpha 9 mm below 300, another 9 mm box below 250 …), then the calibres
+  over all boxes; *Refill* (new rounds into a box), *Move* (box → box), *Count*
   (the difference to the log is saved as a correction), *Hand over* (new holder, logged). Warnings when a box is
   below its refill level and when all boxes of a calibre are below its *buy more* level. *Log & payments* per
   month: rounds shot, paid / not paid totals, search by name or reference, *Mark paid*, *Void* (stays in the

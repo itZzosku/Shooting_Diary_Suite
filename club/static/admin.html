@@ -20,7 +20,7 @@
 .box .n{font-family:var(--f-mono);font-size:1.3rem;font-weight:600;text-align:right}
 .box small{color:var(--muted);font-size:.82rem}
 .box.arch{opacity:.5}
-.box.bx{display:flex;flex-direction:column;gap:6px}
+.box.bx{display:flex;flex-direction:column;gap:6px;cursor:pointer}
 .box .bh{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center}
 .crows{display:flex;flex-direction:column;gap:2px;padding-left:12px;border-left:3px solid var(--line)}
 .crow{display:flex;justify-content:space-between;gap:10px;font-size:.92rem}
@@ -233,21 +233,24 @@ function renderStock(){
         n=its.reduce((a,i)=>a+(b.stock[i.id]||0),0),
         parts=its.filter(i=>b.stock[i.id]).map(i=>`${esc(i.name||T("Default"))} ${fmt(b.stock[i.id])}`),lw=(b.lows||{})[c];
       return`<div class="crow"><span>${esc(c)}${parts.length>1||(parts.length===1&&its.find(i=>b.stock[i.id]).name)?` <small>${parts.join(" · ")}</small>`:""}
-        ${lw&&n<lw?`<span class="tag warn">${T("refill")}</span>`:""}${lw?` <small>${T("refill below {n}",{n:fmt(lw)})}</small>`:""}</span><span class="num">${fmt(n)}</span></div>`}).join("");
-    return`<button class="box bx" type="button" data-box="${b.id}">
+        ${lw&&n<lw?`<span class="tag warn">${T("refill")}</span>`:""}${lw?` <small>${T("refill below {n}",{n:fmt(lw)})}</small>`:""}</span>
+        <span style="white-space:nowrap"><span class="num">${fmt(n)}</span>${isAdmin()?` <button class="link" type="button" data-lowbox="${b.id}" data-cal="${esc(c)}" style="margin-left:8px">${T("Level")}</button>`:""}</span></div>`}).join("");
+    return`<div class="box bx" role="button" tabindex="0" data-box="${b.id}">
       <span class="bh"><span><b>${esc(b.name)}</b>${low(b)?`<span class="tag warn">${T("refill")}</span>`:""}${b.mine?`<span class="tag">${T("yours")}</span>`:""}
         <br><small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}</small></span></span>
-      <span class="crows">${rows}</span></button>`}).join("");
+      <span class="crows">${rows}</span></div>`}).join("");
   const allCals=[...new Set(active.flatMap(b=>b.cals))];
   const cals=`<div class="cal" style="margin-top:22px"><div class="calhead"><h2>${T("Calibres in all boxes")}</h2></div>${allCals.map(c=>{const tot=(S.cal_totals||{})[c]||0,lv=S.levels[c];
     return`<div class="crow" style="padding:8px 2px;border-bottom:1px solid var(--line)"><span>${esc(c)}${lv?` <span class="tag ${tot<lv?"bad":""}">${T("buy below {n}",{n:fmt(lv)})}</span>`:""}</span>
-      <span><b class="num">${fmt(tot)}</b>${isAdmin()?` <button class="link" type="button" data-level="${esc(c)}" style="margin-left:8px">${T("Level")}</button>`:""}</span></div>`}).join("")}</div>`;
+      <span><b class="num">${fmt(tot)}</b>${isAdmin()&&lv?` <button class="link quiet" type="button" data-level="${esc(c)}" style="margin-left:8px">${T("Level")}</button>`:""}</span></div>`}).join("")}</div>`;
   const any=S.boxes.some(b=>!b.archived&&mayBox(b));
   // Refill / Move / Count right under the boxes
   $("stock").innerHTML=`<div class="cal"><div class="calhead"><h2>${T("Boxes")}</h2></div>${boxes}<div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${any?`<button class="ghost" type="button" data-act="buy">${T("+ Refill")}</button><button class="ghost" type="button" data-act="move">${T("Move")}</button><button class="ghost" type="button" data-act="count">${T("Count")}</button>`:""}</div></div>`+cals+merchHtml;
   $("stockActs").innerHTML="";
 }
-$("stock").addEventListener("click",e=>{const b=e.target.closest("[data-box]");if(b)return boxSheet(boxOf(+b.dataset.box));
+$("stock").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches("[data-box]"))boxSheet(boxOf(+e.target.dataset.box))});
+$("stock").addEventListener("click",e=>{const lb=e.target.closest("[data-lowbox]");if(lb)return boxLowSheet(boxOf(+lb.dataset.lowbox),lb.dataset.cal);
+  const b=e.target.closest("[data-box]");if(b)return boxSheet(boxOf(+b.dataset.box));
   const pm=e.target.closest("[data-pm]");if(pm)return merchSheet(S.products.find(p=>p.id===+pm.dataset.pm));
   const ac=e.target.closest("[data-act]");if(ac)return moveSheet(ac.dataset.act,null);
   const l=e.target.closest("[data-level]");if(l)levelSheet(l.dataset.level)});
@@ -357,6 +360,11 @@ function boxEdit(b){
       :`<span class="hint">${T("Write the calibre first.")}</span>`};
   drawLows();$("sBody").oninput=e=>{if(e.target.id==="eCal"||e.target.id==="eCals")drawLows()};
   if(!n)delButton(`boxes/${b.id}`);
+}
+// Refill level of one calibre in one box (Alpha 9 mm below 300, Charlie 9 mm below 250 …)
+function boxLowSheet(b,cal){
+  sheet(T("Refill {name}",{name:b.name+(b.cals.length>1?" "+cal:"")}),`<label class="f">${T("Warn when {name} has less than",{name:esc(b.name)+" · "+esc(cal)})}<input type="number" inputmode="numeric" id="blLow" min="0" value="${(b.lows||{})[cal]||""}" placeholder="${T("0 = no warning")}"></label>`,
+    async()=>{await api("POST",`c/${SLUG}/boxes`,Object.assign(boxBody(b),{lows:Object.assign({},b.lows||{},{[cal]:+v("blLow")||0})}));toast(T("Saved"))});
 }
 function levelSheet(cal){
   sheet(T("Buy more {cal}",{cal}),`<label class="f">${T("Warn when all {cal} boxes together are below",{cal:esc(cal)})}<input type="number" inputmode="numeric" id="lvLow" min="0" value="${S.levels[cal]||""}" placeholder="${T("0 = no warning")}"></label>`,
