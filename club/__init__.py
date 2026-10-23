@@ -422,7 +422,7 @@ def _err(msg, code=400):
 
 # ------------------------------------------------------------------ shooter API (no login; the box code is the key)
 _posts, _posts_lock = {}, threading.Lock()
-MAX_POSTS, POST_WINDOW = 30, 60 * 60          # entries per hour from one address
+MAX_POSTS, POST_WINDOW = 300, 60 * 60         # entries per hour from one address (mobile data: many phones share one)
 
 
 def _limited():

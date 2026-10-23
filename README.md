@@ -350,7 +350,7 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
 - **Roles per club**: admins (diary accounts) do everything; a box's holder, if given a diary account, can buy,
   move and count for that box and sees stock but not shooters' names. Site admins act as admin of every club.
   Stock is never stored – it's the sum of all moves, so the log is the audit trail.
-- Abuse: a hidden field for bots, 30 entries / hour per address, resent offline entries aren't doubled.
+- Abuse: a hidden field for bots, 300 entries / hour per address (phones on mobile data often share one), resent offline entries aren't doubled.
 - Command line (on the server: `venv/bin/python -m club …`): `club-add "Name" [--id SLUG] [--admin USERNAME]`
   (the id in links is made from the name: "VaaRes SRA" → `vaares-sra`), `club-delete SLUG [--yes]` (the club and
   everything in it), `admin SLUG USERNAME [--remove]`, `list` (stock and warnings), `backup DIR`. A site admin can also create a club
