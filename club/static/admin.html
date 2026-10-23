@@ -236,7 +236,7 @@ function renderStock(){
         ${lw&&n<lw?`<span class="tag warn">${T("refill")}</span>`:""}${lw?` <small>${T("refill below {n}",{n:fmt(lw)})}</small>`:""}</span><span class="num">${fmt(n)}</span></div>`}).join("");
     return`<button class="box bx" type="button" data-box="${b.id}">
       <span class="bh"><span><b>${esc(b.name)}</b>${low(b)?`<span class="tag warn">${T("refill")}</span>`:""}${b.mine?`<span class="tag">${T("yours")}</span>`:""}
-        <br><small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}</small></span><span class="n">${fmt(b.total)}</span></span>
+        <br><small>${b.holder_name?T("Held by {name}",{name:esc(b.holder_name)}):T("No holder")}</small></span></span>
       <span class="crows">${rows}</span></button>`}).join("");
   const allCals=[...new Set(active.flatMap(b=>b.cals))];
   const cals=`<div class="cal" style="margin-top:22px"><div class="calhead"><h2>${T("Calibres in all boxes")}</h2></div>${allCals.map(c=>{const tot=(S.cal_totals||{})[c]||0,lv=S.levels[c];
@@ -280,8 +280,8 @@ function boxSheet(b){
   const its=Object.entries(b.stock).filter(([,n])=>n);
   const url=boxUrl(b);
   sheet(b.name,`<div class="hint">${esc(b.cals.join(" + "))}${b.type?" · "+esc(b.type):""} · ${b.holder_name?T("held by {name}",{name:"<b>"+esc(b.holder_name)+"</b>"}):T("no holder")}</div>
-    <div class="card"><div class="rows">${its.length?its.map(([i,n])=>`<div class="row"><span>${esc(itemName(itemOf(+i)))}</span><span class="num">${fmt(n)}</span></div>`).join("")
-      :`<div class="hint">${T("Empty.")}</div>`}<div class="row"><b>${T("In the box")}</b><b class="num">${fmt(b.total)}</b></div></div>
+    <div class="card"><div class="rows">${its.length?its.map(([i,n])=>`<div class="row"><span>${esc((it=>it?it.calibre+(it.name?" "+it.name:""):"")(itemOf(+i)))}</span><span class="num">${fmt(n)}</span></div>`).join("")
+      :`<div class="hint">${T("Empty.")}</div>`}</div>
       ${Object.entries(b.lows||{}).map(([c,lw])=>`<div class="hint">${b.cals.length>1?esc(c)+": ":""}${T("Refill below {n}",{n:fmt(lw)})}</div>`).join("")}
       <div class="hint">${T(b.pay_url?"MobilePay link set":"noBoxMp")}</div></div>
     ${mayBox(b)?`<div class="acts"><button type="button" data-a="buy">${T("+ Refill")}</button><button type="button" data-a="move">${T("Move to another box")}</button>
@@ -300,7 +300,7 @@ function boxSheet(b){
       await api("POST",`c/${SLUG}/boxes/${b.id}/newcode`,{});await load();boxSheet(boxOf(b.id));toast(T("New link – print a new QR sticker"))}};
 }
 
-function boxOpts(sel,filter){return S.boxes.filter(b=>!b.archived&&(!filter||filter(b))).map(b=>`<option value="${b.id}" ${sel===b.id?"selected":""}>${esc(b.name)} (${esc(b.cals.join(" + "))}) – ${fmt(b.total)}</option>`).join("")}
+function boxOpts(sel,filter){return S.boxes.filter(b=>!b.archived&&(!filter||filter(b))).map(b=>`<option value="${b.id}" ${sel===b.id?"selected":""}>${esc(b.name)} (${esc(b.cals.join(" + "))})</option>`).join("")}
 function itemOpts(box){return S.items.filter(i=>box.cals.includes(i.calibre)&&!i.archived).map(i=>`<option value="${i.id}">${esc(box.cals.length>1?i.calibre+(i.name?" "+i.name:""):itemName(i))}${box?" – "+T("{n} in box",{n:fmt(box.stock[i.id]||0)}):""}</option>`).join("")}
 function moveSheet(kind,b){
   const mine=S.boxes.filter(x=>!x.archived&&mayBox(x));
