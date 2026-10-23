@@ -331,7 +331,8 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   in), date, ammo – only what's in that box – and rounds with 25/50/100/200 buttons. It shows the total and,
   after Save, an *Open MobilePay* button (the box's MobilePay link – paste the address from your MobilePay QR code
   into Edit box, so the number and payment category are right) or else the club's MobilePay number, with a
-  4-character reference for the payment message. One QR code per box is enough: the form's link. *I'm paying now*
+  4-character reference for the payment message, after the club's own text if one is set in Setup (e.g.
+  *HARRASTEMAKSU A7K3*). One QR code per box is enough: the form's link. *I'm paying now*
   is ticked by default; unticked entries show as not paid. Logged-in shooters can tick *Also add to my diary*
   (the rounds go onto that day's visit, or a new one, with the box's firearm type). Works offline: entries wait
   on the phone and are sent later. The same phone can *Take back* an entry for 30 minutes.

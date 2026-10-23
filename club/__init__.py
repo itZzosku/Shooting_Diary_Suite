@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS clubs (
     slug TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     mobilepay TEXT NOT NULL DEFAULT '',
-    created TEXT NOT NULL
+    created TEXT NOT NULL,
+    pay_msg TEXT NOT NULL DEFAULT ''          -- MobilePay message before the reference, e.g. HARRASTEMAKSU
 );
 CREATE TABLE IF NOT EXISTS club_roles (
     club_id INTEGER NOT NULL,
@@ -131,6 +132,8 @@ def init_db():
     conn = connect()
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    if "pay_msg" not in {r[1] for r in conn.execute("PRAGMA table_info(clubs)")}:
+        conn.execute("ALTER TABLE clubs ADD COLUMN pay_msg TEXT NOT NULL DEFAULT ''")    # text before the reference
     if "pay_url" not in {r[1] for r in conn.execute("PRAGMA table_info(boxes)")}:
         conn.execute("ALTER TABLE boxes ADD COLUMN pay_url TEXT NOT NULL DEFAULT ''")   # MobilePay link of the box
     conn.commit()
@@ -451,7 +454,8 @@ def api_box(code):
     if not box:
         return _err("not_found", 404)
     u = current_user()
-    return jsonify(club={"name": club["name"], "slug": club["slug"], "mobilepay": club["mobilepay"]},
+    return jsonify(club={"name": club["name"], "slug": club["slug"], "mobilepay": club["mobilepay"],
+                         "pay_msg": club["pay_msg"]},
                    box={"name": box["name"], "calibre": box["calibre"], "pay_url": box["pay_url"]},
                    items=_box_items(conn, club, box),
                    me={"name": bridge.display_name(u), "user": u["username"]} if u else None,
@@ -652,7 +656,7 @@ def api_state(slug):
         p["username"] = names.get(p["user_id"], "?")
     for b in boxes:
         b["holder_user"] = names.get(b["holder_uid"]) if b["holder_uid"] else None
-    return jsonify(club={k: club[k] for k in ("slug", "name", "mobilepay")}, role=role, me=u["username"],
+    return jsonify(club={k: club[k] for k in ("slug", "name", "mobilepay", "pay_msg")}, role=role, me=u["username"],
                    items=items, boxes=boxes, levels=levels, people=people if role == "admin" else [],
                    warnings=warnings(conn, club["id"]), types=TYPES)
 
@@ -663,7 +667,8 @@ def api_club_put(slug):
     b = _body()
     name = _clean(b.get("name"), 80) or club["name"]
     mp = _clean(b.get("mobilepay"), 40)
-    cdb().execute("UPDATE clubs SET name=?, mobilepay=? WHERE id=?", (name, mp, club["id"]))
+    msg = _clean(b.get("pay_msg"), 40)          # + space + 4-character reference: fits MobilePay's 60
+    cdb().execute("UPDATE clubs SET name=?, mobilepay=?, pay_msg=? WHERE id=?", (name, mp, msg, club["id"]))
     cdb().commit()
     return jsonify(ok=True)
 

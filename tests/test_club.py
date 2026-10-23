@@ -40,7 +40,7 @@ def setup():
     cid, _slug = club.create_club("testclub", "Test Club")
     club.set_role(cid, users.by_name("cadmin")["id"], "admin")
     a = _login(app, "cadmin", "cadmin-password-1")
-    a.put("/ammo/api/c/testclub", json={"name": "Test Club", "mobilepay": "12345"})
+    a.put("/ammo/api/c/testclub", json={"name": "Test Club", "mobilepay": "12345", "pay_msg": "HARRASTEMAKSU"})
     ids = {}
     for cal, name, price in (("9 mm Luger", "Geco", 0.30), ("9 mm Luger", "S&B", 0.25), ("7.62x39", "", 0.40)):
         ids[name or "762"] = a.post("/ammo/api/c/testclub/items", json={"calibre": cal, "name": name, "price": price}).json["id"]
@@ -70,6 +70,7 @@ def test_buy_use_move_count(setup):
     anon = app.test_client()
     info = anon.get(f"/ammo/api/b/{codes['9 mm A']}").json
     assert info["box"]["calibre"] == "9 mm Luger" and info["club"]["mobilepay"] == "12345" and info["me"] is None
+    assert info["club"]["pay_msg"] == "HARRASTEMAKSU"
     assert {i["name"] for i in info["items"]} == {"Geco"}                  # what's in the box
     assert {i["name"] for i in anon.get(f"/ammo/api/b/{codes['9 mm B']}").json["items"]} == {"Geco"}
     a.post("/ammo/api/c/testclub/moves", json={"kind": "buy", "box": ids["9 mm B"], "item": ids["S&B"], "qty": 50})

@@ -167,14 +167,15 @@ $("form").addEventListener("submit",async e=>{
 });
 function showDone(r,queued){
   const mp=S.info.club.mobilepay,url=S.info.box.pay_url;
+  const msg=r?((S.info.club.pay_msg?S.info.club.pay_msg+" ":"")+r.ref):"";      // e.g. HARRASTEMAKSU A7K3
   const amt=r?r.total:S.lines.reduce((a,l)=>a+(+l.qty||0)*(+itemOf(l.item).price||0),0);
   const paying=r?r.paid:queued.paid;
   $("pay").innerHTML=(r?`<div class="ok">✓ Saved</div>`:`<div class="ok">✓ Saved on this phone</div><div class="hint">It's sent when there's a connection.</div>`)+
     `<div class="amt">${eur(amt)} <button type="button" class="copy" data-copy="${(Math.round(amt*100)/100).toFixed(2).replace(".",",")}">Copy</button></div>`+
     (paying&&url?`<a class="primary big" style="text-decoration:none;display:block" href="${esc(url)}">Open MobilePay</a>`+
-      `<div class="hint">Pay ${eur(amt)}${r?` with the message <b class="num">${esc(r.ref)}</b> <button type="button" class="copy" data-copy="${esc(r.ref)}">Copy</button>`:""}</div>`:
+      `<div class="hint">Pay ${eur(amt)}${r?` with the message<br><b class="num" style="white-space:nowrap">${esc(msg)}</b> <button type="button" class="copy" data-copy="${esc(msg)}">Copy</button>`:""}</div>`:
      paying&&mp?`<div class="to">MobilePay to <b>${esc(mp)}</b> <button type="button" class="copy" data-copy="${esc(mp)}">Copy</button></div>`+
-      (r?`<div class="ref">Message: <b>${esc(r.ref)}</b> <button type="button" class="copy" data-copy="${esc(r.ref)}">Copy</button></div>`:""):
+      (r?`<div class="ref">Message: <b>${esc(msg)}</b> <button type="button" class="copy" data-copy="${esc(msg)}">Copy</button></div>`:""):
      !paying?`<div class="hint">Marked as not paid yet – pay a club admin later.</div>`:"")+
     (r&&r.diary?`<div class="hint">Added to your diary.</div>`:r&&r.diary===false?`<div class="msg">Couldn't add it to your diary.</div>`:"");
   $("form").hidden=true;$("done").hidden=false;window.scrollTo(0,0);
