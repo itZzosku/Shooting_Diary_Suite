@@ -350,7 +350,7 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   over all boxes; *Refill* (new rounds into a box), *Move* (box → box), *Count*
   (the difference to the log is saved as a correction), *Hand over* (new holder, logged). Warnings when a box is
   below its refill level and when all boxes of a calibre are below its *buy more* level. *Log & payments* per
-  month: rounds shot, paid / not paid totals, search by name or reference, *Mark paid*, *Void* (stays in the
+  month: rounds shot, paid / not paid totals, search by name or reference, *Hide voided*, *Mark paid*, *Void* (stays in the
   log, crossed out). *Setup*: club name, MobilePay number, payment message, ammo & prices, boxes, admins.
 - **QR stickers** (Setup → Boxes → *Print QR stickers*, or *Print sticker* on a box): 1, 2 or 4 per A4, Finnish or
   English, with the club, box, calibre, the steps (scan → name and rounds → MobilePay with the message) and the

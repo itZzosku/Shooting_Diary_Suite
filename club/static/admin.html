@@ -87,6 +87,7 @@
     </div>
     <div class="sum" id="lSum"></div>
     <label class="f"><span data-t="Find a name or reference"></span><input type="search" id="lFind" data-tp="e.g. Matti, A7K3 or the whole message"></label>
+    <label class="check"><input type="checkbox" id="lHideVoid"> <span data-t="Hide voided"></span></label>
     <div class="rows" id="log"></div>
     <p class="hint" id="logHint"></p>
     <div id="exportRow"><button type="button" class="ghost" id="exportBtn" data-t="Export for the treasurer…"></button></div>
@@ -392,6 +393,7 @@ function renderLog(){
   const FEEK=["sale","prefill","pcount"];
   const list=groups.filter(g=>!f||(f==="use"?g.kind==="use":f==="unpaid"?(g.kind==="use"||g.kind==="sale")&&!g.paid&&!g.voided_at
       :f==="fees"?FEEK.includes(g.kind):g.kind!=="use"&&!FEEK.includes(g.kind)))
+    .filter(g=>!($("lHideVoid").checked&&g.voided_at))
     .filter(g=>!q||(g.name||"").toLowerCase().includes(q)||(!!g.ref&&q.split(/\s+/).includes(g.ref.toLowerCase())));   // "harrastemaksu a7k3" finds A7K3
   const K={use:"",buy:T("Refill"),move:T("Move"),count:T("Count"),handover:T("Hand-over")};
   const unpaidTag=`<span class="tag warn">${T("not paid")}</span>`,meta=g=>`${fiDate(g.date)}${g.by?" · "+esc(g.by):""}${g.note?" · "+esc(g.note):""}`;
@@ -419,6 +421,9 @@ function renderLog(){
 }
 $("lMonth").addEventListener("change",loadLog);
 $("lKind").addEventListener("change",renderLog);$("lFind").addEventListener("input",renderLog);
+// Hide voided: remembered on this phone
+try{$("lHideVoid").checked=localStorage.getItem("ammo:hidevoid")==="1"}catch(e){}
+$("lHideVoid").addEventListener("change",()=>{try{localStorage.setItem("ammo:hidevoid",$("lHideVoid").checked?"1":"0")}catch(e){}renderLog()});
 $("log").addEventListener("click",async e=>{
   const b=e.target.closest("[data-void],[data-paid]");if(!b)return;
   if(b.dataset.void){if(!b.dataset.undo&&b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=T("Tap again to void");return}

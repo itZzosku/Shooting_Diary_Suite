@@ -104,6 +104,7 @@ const ADMIN_FI={
   "{n} season fees in {year}":"{n} kausimaksua vuonna {year}","Names are as people typed them.":"Nimet ovat sellaisina kuin ihmiset ne kirjoittivat.",
   "✓ paid":"✓ maksettu","No season fee under that name – a one-time fee then.":"Tällä nimellä ei ole kausimaksua – siis kertamaksu.",
   "Not allowed.":"Ei sallittu.",
+  "Hide voided":"Piilota mitätöidyt",
   "Refill {name}":"Täydennysraja: {name}","Warn when {name} has less than":"Varoita, kun laatikossa {name} on alle",
   "Refill below (per calibre)":"Täydennä alle (kaliipereittain)","Write the calibre first.":"Kirjoita ensin kaliiperi.",
   "Calibres in all boxes":"Kaliiperit kaikissa laatikoissa","refill below {n}":"täydennä alle {n}",
