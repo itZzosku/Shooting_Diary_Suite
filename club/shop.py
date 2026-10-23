@@ -130,14 +130,27 @@ def api_pay_info(code):
                    withdraw_min=WITHDRAW_MIN)
 
 
+def pay_message(tmpl, date, qty, ref):
+    """The MobilePay message for one product, from its template: {pvm} → 24.10.2026, {vuosi} → 2026, {kpl} → 2,
+    {koodi} → the entry's code (added at the end when the template doesn't place it). English names work too:
+    {date}, {year}, {qty}, {code}.  "SRA KERTAMAKSU {pvm}" → "SRA KERTAMAKSU 24.10.2026 A7K3"."""
+    y, m, d = date.split("-")
+    out = str(tmpl or "")
+    for keys, val in ((("{pvm}", "{date}"), f"{d}.{m}.{y}"), (("{vuosi}", "{year}"), y), (("{kpl}", "{qty}"), str(qty))):
+        for k in keys:
+            out = out.replace(k, val)
+    if "{koodi}" in out or "{code}" in out:
+        return out.replace("{koodi}", ref).replace("{code}", ref).strip()
+    return (out + " " + ref).strip()
+
+
 def _sale_out(conn, grp):
     rows = conn.execute("SELECT s.*, p.name AS pname, p.kind AS pkind, p.pay_url, p.pay_msg FROM sales s "
                         "JOIN products p ON p.id=s.product_id WHERE s.grp=? ORDER BY s.id", (grp,)).fetchall()
-    pays = {}                                  # one MobilePay payment per category (link + message)
+    pays = {}                                  # one MobilePay payment per link + message
     for r in rows:
-        k = (r["pay_url"], r["pay_msg"])
-        g = pays.setdefault(k, {"pay_url": r["pay_url"], "msg": ((r["pay_msg"] + " ") if r["pay_msg"] else "") + r["ref"],
-                                "total": 0, "names": []})
+        msg = pay_message(r["pay_msg"], r["date"], r["qty"], r["ref"])
+        g = pays.setdefault((r["pay_url"], msg), {"pay_url": r["pay_url"], "msg": msg, "total": 0, "names": []})
         g["total"] = round(g["total"] + r["qty"] * (r["price"] or 0), 2)
         g["names"].append(r["pname"] + (f" × {r['qty']}" if r["qty"] > 1 else ""))
     return {"grp": grp, "ref": rows[0]["ref"], "date": rows[0]["date"], "at": rows[0]["at"], "paid": bool(rows[0]["paid"]),
@@ -247,7 +260,7 @@ def api_product(slug):
     pay = str(b.get("pay_url") or "").strip()
     if pay and (len(pay) > 400 or not re.match(r"^(https://|mobilepay://)\S+$", pay)):
         return _err("MobilePay link: paste the address from the MobilePay QR code (https://… or mobilepay://…).")
-    msg = _clean(b.get("pay_msg"), 40)
+    msg = _clean(b.get("pay_msg"), 50)
     track = 1 if kind == "merch" and b.get("track") else 0
     pid = b.get("id")
     vals = (kind, name, price, pay, msg, track, low if track else 0, 1 if b.get("archived") else 0)

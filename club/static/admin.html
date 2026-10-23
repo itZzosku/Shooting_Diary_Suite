@@ -390,8 +390,10 @@ function prodSheet(p){
       <label class="f">Type<select id="pKind">${[["season","Season fee – once a year"],["single","One-time fee"],["merch","Merch"]].map(([x,l])=>`<option value="${x}" ${x===k?"selected":""}>${l}</option>`).join("")}</select></label></div>
     <label class="f">Price €<input type="number" inputmode="decimal" step="0.01" min="0" id="pPrice" value="${esc(v("pPrice")??p.price)}"></label>
     <label class="f">MobilePay link (optional)<input type="text" id="pPay" maxlength="400" inputmode="url" autocapitalize="none" value="${esc(v("pPay")??p.pay_url)}" placeholder="https://… from the category's MobilePay QR"></label>
-    <label class="f">Payment message<input type="text" id="pMsg" maxlength="40" value="${esc(v("pMsg")??p.pay_msg)}" placeholder="e.g. KAUSIMAKSU"></label>
-    <p class="hint" style="margin:-6px 0 0">Shown to the payer with the entry's code, e.g. <b>KAUSIMAKSU A7K3</b>. Fees with the same link and message are paid in one go.</p>
+    <label class="f">Payment message<input type="text" id="pMsg" maxlength="50" value="${esc(v("pMsg")??p.pay_msg)}" placeholder="e.g. SRA KERTAMAKSU {pvm}"></label>
+    <p class="hint" style="margin:-6px 0 0">Filled in for the payer: <b>{pvm}</b> → the date (24.10.2026), <b>{vuosi}</b> → the year, <b>{kpl}</b> → how many;
+      the entry's code goes at the end (or where <b>{koodi}</b> is). E.g. <b>SRA KERTAMAKSU {pvm}</b> → SRA KERTAMAKSU 24.10.2026 A7K3,
+      <b>SRA Hihamerkki {kpl} kpl</b> → SRA Hihamerkki 2 kpl A7K3. Each different message is its own MobilePay payment.</p>
     ${k==="merch"?`<label class="check"><input type="checkbox" id="pTrack" ${p.track?"checked":""}> Keep stock (Refill / Count on Stock; hidden when sold out)</label>
       <label class="f">Warn below<input type="number" inputmode="numeric" min="0" id="pLow" value="${p.low||""}" placeholder="0 = no warning"></label>`:""}
     ${n?"":`<label class="check"><input type="checkbox" id="pArch" ${p.archived?"checked":""}> Archived (no longer offered; history keeps it)</label>`}`;

@@ -233,3 +233,12 @@ def test_fees_and_merch(setup):
     assert all(m["kind"] not in ("sale", "prefill", "pcount") for m in h.get("/ammo/api/c/testclub/log").json["moves"])
     a.post("/ammo/api/c/testclub/paycode", json={})
     assert anon.get(f"/ammo/api/p/{code}").status_code == 404
+
+
+def test_pay_message_template():
+    from club.shop import pay_message
+    assert pay_message("SRA KERTAMAKSU {pvm}", "2026-10-27", 1, "A7K3") == "SRA KERTAMAKSU 27.10.2026 A7K3"
+    assert pay_message("SRA KAUSIMAKSU {vuosi}", "2026-10-27", 1, "A7K3") == "SRA KAUSIMAKSU 2026 A7K3"
+    assert pay_message("SRA Hihamerkki {kpl} kpl", "2026-10-27", 2, "A7K3") == "SRA Hihamerkki 2 kpl A7K3"
+    assert pay_message("{koodi} SRA", "2026-10-27", 1, "A7K3") == "A7K3 SRA"
+    assert pay_message("", "2026-10-27", 1, "A7K3") == "A7K3"
