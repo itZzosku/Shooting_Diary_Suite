@@ -18,13 +18,16 @@
 .seg button{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.95rem;font-weight:600;min-width:44px}
 .seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .sticky{position:sticky;top:0;z-index:2;background:var(--bg);padding:10px 0;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
-.comp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.comp{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}
+.comp .ln{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.comp .ln .lab{font-size:.85rem;color:var(--muted)}
+.comp .addit{align-self:flex-start;background:none;border:0;padding:4px 0;color:var(--accent);font-weight:600;font-size:.85rem}
 .comp .who b{font-weight:600}
 .comp .who small{display:block;color:var(--muted);font-size:.8rem}
 .comp .q{display:flex;align-items:center;gap:4px}
 .comp .q button{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:1.2rem;line-height:1}
 .comp .q input{width:62px;text-align:center;font-family:var(--f-mono);font-weight:600;font-size:1.1rem;padding:8px 4px}
-.comp select{grid-column:1/-1;font-size:.85rem;padding:6px 8px}
+.comp select{font-size:.85rem;padding:6px 8px;min-width:0}
 .comp.has{box-shadow:inset 4px 0 0 var(--accent);padding-left:10px}
 .state{font-size:.75rem;color:var(--muted);min-width:14px;text-align:center}
 .state.wait{color:var(--accent)}
@@ -67,7 +70,7 @@ const FI={Officer:"Toimitsija",Match:"Ottelu",Stage:"Rasti",Squad:"Ryhmä",All:"
   "Stage {s}: {n} rounds · all stages {t}":"Rasti {s}: {n} patruunaa · kaikki rastit {t}","total {n}":"yht. {n}",
   "No matches yet – an admin adds them on the admin page (Matches).":"Ei vielä otteluita – ylläpitäjä lisää ne hallintasivulla (Ottelut).",
   "No competitors yet.":"Ei vielä ampujia.","Offline – entries wait on this phone and are sent later.":"Ei yhteyttä – kirjaukset odottavat puhelimessa ja lähtevät myöhemmin.",
-  "Sent {n} saved entries":"Lähetetty {n} tallennettua kirjausta","Not saved:":"Ei tallentunut:",fewer:"Vähemmän",more:"Enemmän"};
+  "Sent {n} saved entries":"Lähetetty {n} tallennettua kirjausta","Not saved:":"Ei tallentunut:",fewer:"Vähemmän",more:"Enemmän",Ammo:"Patruuna","+ another ammo":"+ Toinen patruuna"};
 let LANG=lsGet("ammo:adminlang")||((navigator.language||"").toLowerCase().startsWith("fi")?"fi":"en");
 const T=(s,v)=>{let r=(LANG==="fi"&&FI[s])||{hintRo:"For every competitor who used club ammo, enter the rounds they shot on this stage. Saved at once – also without signal; sent when the connection is back.",fewer:"Fewer",more:"More"}[s]||s;
   if(v)for(const k in v)r=r.split("{"+k+"}").join(v[k]);return r};
@@ -87,11 +90,16 @@ async function api(method,path,body){
 }
 
 /* ---- state: counts[comp|stage|item] = rounds; queue = entries not sent yet (offline) ---- */
-let M=null,COUNTS={},BY={},STAGE=1,SQUAD="",PICK={};
+let M=null,COUNTS={},BY={},STAGE=1,SQUAD="",PICK={},EXTRA={};   // EXTRA[comp|stage]: ammo lines added but still 0
 const QK="ammo:roqueue",key=(c,s,i)=>c+"|"+s+"|"+i;
 const queue=()=>lsGet(QK)||[];
 function rounds(c,s){return M.items.reduce((a,i)=>a+(COUNTS[key(c,s,i.id)]||0),0)}
-function itemFor(c,s){const has=M.items.find(i=>COUNTS[key(c,s,i.id)]);return has?has.id:(PICK[c]||M.items[0].id)}
+// The ammo lines of a competitor on this stage: every ammo with rounds, lines added with "+ another ammo",
+// else one line with the ammo they used last (a pistol shooter stays on 9 mm from stage to stage)
+function lines(c){
+  const ek=c+"|"+STAGE,ids=M.items.filter(i=>COUNTS[key(c,STAGE,i.id)]||(EXTRA[ek]||[]).includes(i.id)).map(i=>i.id);
+  return ids.length?ids:[M.items.some(i=>i.id===PICK[c])?PICK[c]:M.items[0].id]}
+const ammo=i=>esc(i.calibre)+(i.name?" "+esc(i.name):"");
 
 async function loadMatches(){
   let r;try{r=await api("GET",`c/${SLUG}/ro`)}catch(e){$("msg").textContent=e.message;$("msg").hidden=false;return}
@@ -123,11 +131,14 @@ function render(){
   const q=$("find").value.trim().toLowerCase();
   const list=M.competitors.filter(c=>(!SQUAD||c.squad===SQUAD)&&(!q||c.name.toLowerCase().includes(q)||c.num===q));
   const pend=new Set(queue().filter(x=>x.mid===M.match.id).map(x=>key(x.comp,x.stage,x.item)));
-  $("list").innerHTML=list.length?list.map(c=>{const it=itemFor(c.id,STAGE),n=COUNTS[key(c.id,STAGE,it)]||0,tot=Array.from({length:M.match.stages},(_,i)=>rounds(c.id,i+1)).reduce((a,b)=>a+b,0);
-    return`<div class="comp${n?" has":""}" data-c="${c.id}"><div class="who"><b>${esc(c.name)}</b><small>${[c.num&&"#"+esc(c.num),c.squad&&T("Squad")+" "+esc(c.squad),tot?T("total {n}",{n:tot}):"",n&&BY[key(c.id,STAGE,it)]&&BY[key(c.id,STAGE,it)]!==M.me?"✎ "+esc(BY[key(c.id,STAGE,it)]):""].filter(Boolean).join(" · ")}</small></div>
-      <div class="q"><button type="button" data-d="-1" aria-label="${T("fewer")}">−</button><input type="number" inputmode="numeric" min="0" max="2000" value="${n||""}" placeholder="0"><button type="button" data-d="1" aria-label="${T("more")}">+</button>
-        <span class="state${pend.has(key(c.id,STAGE,it))?" wait":""}">${pend.has(key(c.id,STAGE,it))?"⏳":n?"✓":""}</span></div>
-      ${M.items.length>1?`<select data-item>${M.items.map(i=>`<option value="${i.id}" ${i.id===it?"selected":""}>${esc(i.calibre)}${i.name?" "+esc(i.name):""}</option>`).join("")}</select>`:""}</div>`}).join("")
+  $("list").innerHTML=list.length?list.map(c=>{const ls=lines(c.id),stN=rounds(c.id,STAGE),tot=Array.from({length:M.match.stages},(_,i)=>rounds(c.id,i+1)).reduce((a,b)=>a+b,0);
+    const by=[...new Set(ls.map(it=>COUNTS[key(c.id,STAGE,it)]&&BY[key(c.id,STAGE,it)]).filter(x=>x&&x!==M.me))];
+    return`<div class="comp${stN?" has":""}" data-c="${c.id}"><div class="who"><b>${esc(c.name)}</b><small>${[c.num&&"#"+esc(c.num),c.squad&&T("Squad")+" "+esc(c.squad),tot?T("total {n}",{n:tot}):"",by.length?"✎ "+by.map(esc).join(", "):""].filter(Boolean).join(" · ")}</small></div>
+      ${ls.map(it=>{const n=COUNTS[key(c.id,STAGE,it)]||0,k=key(c.id,STAGE,it);
+        return`<div class="ln" data-it="${it}">${M.items.length>1?`<select data-item aria-label="${T("Ammo")}">${M.items.filter(i=>i.id===it||!ls.includes(i.id)).map(i=>`<option value="${i.id}" ${i.id===it?"selected":""}>${ammo(i)}</option>`).join("")}</select>`:`<span class="lab">${ammo(M.items[0])}</span>`}
+        <div class="q"><button type="button" data-d="-1" aria-label="${T("fewer")}">−</button><input type="number" inputmode="numeric" min="0" max="2000" value="${n||""}" placeholder="0"><button type="button" data-d="1" aria-label="${T("more")}">+</button>
+        <span class="state${pend.has(k)?" wait":""}">${pend.has(k)?"⏳":n?"✓":""}</span></div></div>`}).join("")}
+      ${M.items.length>ls.length?`<button type="button" class="addit" data-add>${T("+ another ammo")}</button>`:""}</div>`}).join("")
     :`<div class="hint" style="padding:12px 0">${T("No competitors yet.")}</div>`;
   const stageN=M.competitors.reduce((a,c)=>a+rounds(c.id,STAGE),0),all=M.competitors.reduce((a,c)=>a+Array.from({length:M.match.stages},(_,i)=>rounds(c.id,i+1)).reduce((x,y)=>x+y,0),0);
   $("sum").textContent=T("Stage {s}: {n} rounds · all stages {t}",{s:STAGE,n:stageN,t:all});
@@ -143,13 +154,18 @@ function set(c,item,qty){
   q.push({mid:M.match.id,comp:c,stage:STAGE,item,qty});lsSet(QK,q);
   clearTimeout(set.t);set.t=setTimeout(flush,500);
 }
-$("list").addEventListener("click",e=>{const b=e.target.closest("[data-d]");if(!b)return;const row=b.closest("[data-c]"),c=+row.dataset.c,it=itemFor(c,STAGE);
-  const n=Math.max(0,(COUNTS[key(c,STAGE,it)]||0)+ +b.dataset.d);set(c,it,n);render()});
-$("list").addEventListener("change",e=>{const row=e.target.closest("[data-c]");if(!row)return;const c=+row.dataset.c;
-  if(e.target.matches("[data-item]")){            // another ammo for this competitor on this stage: move the rounds over
-    const old=itemFor(c,STAGE),nw=+e.target.value,n=COUNTS[key(c,STAGE,old)]||0;PICK[c]=nw;
-    if(old!==nw&&n){set(c,old,0);set(c,nw,n)}render();return}
-  if(e.target.type==="number"){const n=Math.max(0,Math.min(2000,parseInt(e.target.value,10)||0));set(c,itemFor(c,STAGE),n);render()}});
+const lineOf=e=>{const row=e.target.closest("[data-c]"),ln=e.target.closest("[data-it]");return row?{c:+row.dataset.c,it:ln?+ln.dataset.it:0}:null};
+function keepLine(c,it){const ek=c+"|"+STAGE;EXTRA[ek]=[...new Set((EXTRA[ek]||[]).concat(it))]}
+$("list").addEventListener("click",e=>{const x=lineOf(e);if(!x)return;
+  if(e.target.closest("[data-add]")){const ls=lines(x.c),nx=M.items.find(i=>!ls.includes(i.id));if(nx){ls.forEach(it=>keepLine(x.c,it));keepLine(x.c,nx.id)}render();return}
+  const b=e.target.closest("[data-d]");if(!b||!x.it)return;
+  const n=Math.max(0,(COUNTS[key(x.c,STAGE,x.it)]||0)+ +b.dataset.d);keepLine(x.c,x.it);set(x.c,x.it,n);PICK[x.c]=x.it;render()});
+$("list").addEventListener("change",e=>{const x=lineOf(e);if(!x||!x.it)return;
+  if(e.target.matches("[data-item]")){            // this line is another ammo: the rounds move with it
+    const nw=+e.target.value,n=COUNTS[key(x.c,STAGE,x.it)]||0,ek=x.c+"|"+STAGE;
+    EXTRA[ek]=(EXTRA[ek]||[]).filter(i=>i!==x.it).concat(nw);if(lines(x.c).length<=1)PICK[x.c]=nw;
+    if(nw!==x.it&&n){set(x.c,x.it,0);set(x.c,nw,n)}render();return}
+  if(e.target.type==="number"){const n=Math.max(0,Math.min(2000,parseInt(e.target.value,10)||0));keepLine(x.c,x.it);set(x.c,x.it,n);PICK[x.c]=x.it;render()}});
 async function flush(){
   const q=queue();if(!q.length)return;const left=[];let sent=0;
   for(const x of q){

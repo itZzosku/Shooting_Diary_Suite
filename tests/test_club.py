@@ -407,6 +407,11 @@ def test_match_officer_counts_and_report(setup):
     # 0 removes an officer entry
     o.post(f"{C}/matches/{mid}/count", json={"comp": comp["Cecilia Cee"], "stage": 3, "item": ids["Geco"], "qty": 0})
     assert "Cecilia Cee" not in {x["name"] for x in a.get(f"{C}/matches/{mid}").json["report"]}
+    # Two ammo types on one stage (e.g. pistol + rifle): both kept, both in the report
+    o.post(f"{C}/matches/{mid}/count", json={"comp": comp["Cecilia Cee"], "stage": 2, "item": ids["Geco"], "qty": 10})
+    o.post(f"{C}/matches/{mid}/count", json={"comp": comp["Cecilia Cee"], "stage": 2, "item": ids["S&B"], "qty": 15})
+    cc = {x["name"]: x for x in a.get(f"{C}/matches/{mid}").json["report"]}["Cecilia Cee"]
+    assert cc["officer"] == 25 and {ln["item"]: ln["officer"] for ln in cc["lines"]} == {ids["Geco"]: 10, ids["S&B"]: 15}
     # The list can't be replaced once officers have entered rounds
     assert a.post(f"{C}/matches/{mid}/competitors", json={"replace": True, "rows": []}).status_code == 400
 
