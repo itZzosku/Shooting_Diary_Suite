@@ -407,6 +407,10 @@ def test_match_officer_counts_and_report(setup):
     # 0 removes an officer entry
     o.post(f"{C}/matches/{mid}/count", json={"comp": comp["Cecilia Cee"], "stage": 3, "item": ids["Geco"], "qty": 0})
     assert "Cecilia Cee" not in {x["name"] for x in a.get(f"{C}/matches/{mid}").json["report"]}
+    # Default ammo per stage: kept for real stages and ammo ids, stage 9 of 4 dropped
+    a.post(f"{C}/matches", json={"id": mid, "name": "Test match", "date": _today(), "stages": 4, "boxes": [ids["9 mm A"]],
+                                 "stage_ammo": {"1": [ids["Geco"]], "2": [ids["Geco"], ids["S&B"], ids["Geco"]], "9": [ids["S&B"]]}})
+    assert o.get(f"{C}/matches/{mid}").json["match"]["stage_ammo"] == {"1": [ids["Geco"]], "2": [ids["Geco"], ids["S&B"]]}
     # Two ammo types on one stage (e.g. pistol + rifle): both kept, both in the report
     o.post(f"{C}/matches/{mid}/count", json={"comp": comp["Cecilia Cee"], "stage": 2, "item": ids["Geco"], "qty": 10})
     o.post(f"{C}/matches/{mid}/count", json={"comp": comp["Cecilia Cee"], "stage": 2, "item": ids["S&B"], "qty": 15})

@@ -3,6 +3,7 @@
 "use strict";
 const ADMIN_EN={
   hintSsiLink:"Paste the match's link from shootnscoreit.com and press Fetch: name, date, stages and the competitors with their squads come from SSI's API.",
+  hintStageAmmo:"The officer page opens the stage with these ammo lines ready (e.g. both on a pistol + rifle stage). None picked = what the competitor used on the previous stage.",
   hintSsiSetup:"Fetching from SSI is off: the server needs SSI_API_KEY, SSI_EMAIL and SSI_PASSWORD in its .env. Until then fill in the match by hand and paste the competitor table.",
   hintOfficer:"A range or stat officer with a diary account: sees only the officer page, where they enter each competitor's rounds per stage. No money, no stock.",
   hintMatches:"Add a match for a match day: its stages, which ammo boxes are there and the competitor list from SSI. Officers then enter the rounds of club ammo per competitor and stage, and you see here whether each shooter's own entry matches.",
@@ -37,6 +38,8 @@ const ADMIN_EN={
 };
 const ADMIN_FI={
   "Officers":"Toimitsijat","Own entry":"Oma kirjaus","Difference":"Erotus","Missing €":"Puuttuu €","Status":"Tila",
+  "Default ammo per stage (optional)":"Oletuspatruuna rasteittain (valinnainen)","All stages":"Kaikki rastit","Stage":"Rasti","No ammo in these boxes.":"Näissä laatikoissa ei ole patruunoita.",
+  hintStageAmmo:"Toimitsijasivu avaa rastin näillä patruunoilla valmiiksi (esim. pistooli + kivääri -rastilla molemmat). Ilman valintaa ampujan edellisellä rastilla käyttämä patruuna.",
   "SSI link (optional)":"SSI-linkki (valinnainen)","Fetch":"Hae","Fetch from SSI":"Hae SSI:stä","Reading SSI…":"Luetaan SSI:tä…",
   hintSsiLink:"Liitä ottelun linkki shootnscoreit.comista ja paina Hae: nimi, päivä, rastit ja ampujat ryhmineen tulevat SSI:n rajapinnasta.",
   hintSsiSetup:"SSI-haku ei ole käytössä: palvelimen .env-tiedostoon tarvitaan SSI_API_KEY, SSI_EMAIL ja SSI_PASSWORD. Siihen asti täytä ottelu käsin ja liitä ampujataulukko.",

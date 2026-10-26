@@ -95,10 +95,12 @@ const QK="ammo:roqueue",key=(c,s,i)=>c+"|"+s+"|"+i;
 const queue=()=>lsGet(QK)||[];
 function rounds(c,s){return M.items.reduce((a,i)=>a+(COUNTS[key(c,s,i.id)]||0),0)}
 // The ammo lines of a competitor on this stage: every ammo with rounds, lines added with "+ another ammo",
-// else one line with the ammo they used last (a pistol shooter stays on 9 mm from stage to stage)
+// else the stage's default ammo from the match setup, else the ammo they used last
 function lines(c){
   const ek=c+"|"+STAGE,ids=M.items.filter(i=>COUNTS[key(c,STAGE,i.id)]||(EXTRA[ek]||[]).includes(i.id)).map(i=>i.id);
-  return ids.length?ids:[M.items.some(i=>i.id===PICK[c])?PICK[c]:M.items[0].id]}
+  if(ids.length)return ids;
+  const def=((M.match.stage_ammo||{})[STAGE]||[]).filter(id=>M.items.some(i=>i.id===id));   // the stage's default ammo (match setup)
+  return def.length?M.items.filter(i=>def.includes(i.id)).map(i=>i.id):[M.items.some(i=>i.id===PICK[c])?PICK[c]:M.items[0].id]}
 const ammo=i=>esc(i.calibre)+(i.name?" "+esc(i.name):"");
 
 async function loadMatches(){

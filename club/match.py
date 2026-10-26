@@ -55,6 +55,8 @@ def init_db(conn):
         conn.execute("ALTER TABLE moves ADD COLUMN comp_id INTEGER")        # shooter's entry → competitor
     if "ssi_url" not in {r[1] for r in conn.execute("PRAGMA table_info(matches)")}:
         conn.execute("ALTER TABLE matches ADD COLUMN ssi_url TEXT NOT NULL DEFAULT ''")   # where it was read from
+    if "stage_ammo" not in {r[1] for r in conn.execute("PRAGMA table_info(matches)")}:
+        conn.execute("ALTER TABLE matches ADD COLUMN stage_ammo TEXT NOT NULL DEFAULT '{}'")  # {"3": [item ids]}
 
 
 def _match(conn, club, mid):
@@ -63,6 +65,7 @@ def _match(conn, club, mid):
         abort(404)
     m = dict(r)
     m["boxes"] = json.loads(m["boxes"] or "[]")
+    m["stage_ammo"] = json.loads(m.get("stage_ammo") or "{}")
     return m
 
 
@@ -121,7 +124,14 @@ def _clean_match(b):
         raise ValueError("Name and date are needed.")
     stages = _int(b.get("stages") or 1, 1, MAX_STAGES)
     boxes = [int(x) for x in (b.get("boxes") or []) if str(x).isdigit()][:20]
-    return name, d, stages, json.dumps(boxes)
+    sa = b.get("stage_ammo") if isinstance(b.get("stage_ammo"), dict) else {}
+    stage_ammo = {}                            # default ammo per stage: the officer page opens the stage with these lines
+    for k, v in sa.items():
+        if str(k).isdigit() and 1 <= int(k) <= stages and isinstance(v, list):
+            ids = list(dict.fromkeys(int(x) for x in v if str(x).isdigit()))[:6]
+            if ids:
+                stage_ammo[str(int(k))] = ids
+    return name, d, stages, json.dumps(boxes), json.dumps(stage_ammo)
 
 
 @cbp.get("/api/c/<slug>/matches")
@@ -132,6 +142,7 @@ def api_matches(slug):
     for r in conn.execute("SELECT * FROM matches WHERE club_id=? ORDER BY date DESC, id DESC", (club["id"],)):
         m = dict(r)
         m["boxes"] = json.loads(m["boxes"] or "[]")
+        m["stage_ammo"] = json.loads(m.get("stage_ammo") or "{}")
         m["n_comp"] = conn.execute("SELECT COUNT(*) FROM competitors WHERE match_id=?", (m["id"],)).fetchone()[0]
         m["n_counts"] = conn.execute("SELECT COUNT(*) FROM officer_counts WHERE match_id=? AND qty>0",
                                      (m["id"],)).fetchone()[0]
@@ -147,20 +158,20 @@ def api_match_save(slug):
     club, _u, _r = _club_for(slug)
     b, conn = _body(), cdb()
     try:
-        name, d, stages, boxes = _clean_match(b)
+        name, d, stages, boxes, stage_ammo = _clean_match(b)
         ids = ssi.parse_url(b.get("ssi_url"))
         ssi_url = "https://shootnscoreit.com/event/%s/%s/" % ids if ids else ""
     except ValueError as e:
         return _err(str(e) if "needed" in str(e) else "Stages: 1–%d." % MAX_STAGES)
     if b.get("id"):
-        n = conn.execute("UPDATE matches SET name=?, date=?, stages=?, boxes=?, ssi_url=? WHERE id=? AND club_id=?",
-                         (name, d, stages, boxes, ssi_url, b["id"], club["id"])).rowcount
+        n = conn.execute("UPDATE matches SET name=?, date=?, stages=?, boxes=?, ssi_url=?, stage_ammo=? "
+                         "WHERE id=? AND club_id=?", (name, d, stages, boxes, ssi_url, stage_ammo, b["id"], club["id"])).rowcount
         if not n:
             return _err("not_found", 404)
         mid = b["id"]
     else:
-        mid = conn.execute("INSERT INTO matches(club_id,name,date,stages,boxes,created,ssi_url) VALUES(?,?,?,?,?,?,?)",
-                           (club["id"], name, d, stages, boxes, _now(), ssi_url)).lastrowid
+        mid = conn.execute("INSERT INTO matches(club_id,name,date,stages,boxes,created,ssi_url,stage_ammo) "
+                           "VALUES(?,?,?,?,?,?,?,?)", (club["id"], name, d, stages, boxes, _now(), ssi_url, stage_ammo)).lastrowid
     conn.commit()
     return jsonify(ok=True, id=mid)
 

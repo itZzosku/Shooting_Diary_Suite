@@ -48,6 +48,11 @@
 .langs{display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px}
 .langs button{background:none;border:0;border-radius:999px;padding:6px 11px;font-weight:600;font-size:.85rem;color:var(--fg);min-width:40px}
 .langs button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.sarow{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px;align-items:start}
+.sarow b{font-size:.85rem;font-weight:600;padding-top:6px}
+.sarow span{display:flex;flex-wrap:wrap;gap:5px}
+.sachip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:.8rem;font-weight:600;color:var(--fg)}
+.sachip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 </style>
 </head>
 <body>
@@ -649,8 +654,18 @@ $("mBody").addEventListener("click",async e=>{const b=e.target.closest("[data-rm
   if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=T("Tap again to remove");return}
   try{await api("POST",`c/${SLUG}/matches/${MD.match.id}/competitors/${b.dataset.rmcomp}/delete`,{});loadMatch()}catch(err){toast(err.message)}});
 function matchSheet(m){
-  const n=!m;m=m||{name:"",date:today(),stages:6,boxes:[],ssi_url:""};
+  const n=!m;m=m||{name:"",date:today(),stages:6,boxes:[],ssi_url:"",stage_ammo:{}};
   const boxes=S.boxes.filter(b=>!b.archived);let got=null;
+  const SA={};Object.entries(m.stage_ammo||{}).forEach(([k,ids])=>SA[k]=ids.slice());   // default ammo per stage
+  // The ammo the match can use: every ammo of the calibres in the ticked boxes (none ticked = all boxes)
+  const mItems=()=>{const ids=[...document.querySelectorAll("[data-mbox]:checked")].map(x=>+x.dataset.mbox),bx=boxes.filter(b=>!ids.length||ids.includes(b.id)),
+    cals=[...new Set(bx.flatMap(b=>b.cals))];return S.items.filter(i=>!i.archived&&cals.includes(i.calibre)).sort((a,b)=>cals.indexOf(a.calibre)-cals.indexOf(b.calibre))};
+  const chip=(st,i,on)=>`<button type="button" class="sachip" data-sa="${st}" data-it="${i.id}" aria-pressed="${on}">${esc(i.calibre)}${i.name?" "+esc(i.name):""}</button>`;
+  const drawSA=()=>{const el=$("maSA");if(!el)return;const its=mItems(),ns=Math.max(1,Math.min(30,+v("maSt")||1));
+    if(!its.length){el.innerHTML=`<p class="hint" style="margin:0">${T("No ammo in these boxes.")}</p>`;return}
+    const all=st=>its.every(i=>(SA[st]||[]).includes(i.id));
+    el.innerHTML=`<div class="sarow"><b>${T("All stages")}</b><span>${its.map(i=>chip("all",i,Array.from({length:ns},(_,k)=>(SA[k+1]||[]).includes(i.id)).every(Boolean))).join("")}</span></div>`+
+      Array.from({length:ns},(_,k)=>`<div class="sarow"><b>${T("Stage")} ${k+1}</b><span>${its.map(i=>chip(k+1,i,(SA[k+1]||[]).includes(i.id))).join("")}</span></div>`).join("")};
   sheet(n?T("New match"):T("Edit {name}",{name:m.name}),`${MS.ssi?"":`<p class="hint" style="margin:0">${T("hintSsiSetup")}</p>`}<div class="f"${MS.ssi?"":" hidden"}>${T("SSI link (optional)")}<div style="display:flex;gap:8px">
       <input type="url" id="maSsi" inputmode="url" autocapitalize="none" maxlength="200" style="flex:1;min-width:0" value="${esc(m.ssi_url||"")}" placeholder="https://shootnscoreit.com/event/22/…">
       <button type="button" class="ghost" id="maFetch">${T("Fetch")}</button></div></div>
@@ -659,13 +674,22 @@ function matchSheet(m){
     <div class="grid2"><label class="f">${T("Date")}<input type="date" id="maDate" value="${m.date}"></label>
       <label class="f">${T("Stages")}<input type="number" inputmode="numeric" min="1" max="30" id="maSt" value="${m.stages}"></label></div>
     <div class="f">${T("Club ammo boxes at the match")}${boxes.map(b=>`<label class="check"><input type="checkbox" data-mbox="${b.id}" ${m.boxes.includes(b.id)?"checked":""}> ${esc(b.name)} · ${esc(b.cals.join(" + "))}</label>`).join("")}</div>
-    <p class="hint" style="margin:-6px 0 0">${T("hintMatchBoxes")}</p>`,
+    <p class="hint" style="margin:-6px 0 0">${T("hintMatchBoxes")}</p>
+    <div class="f">${T("Default ammo per stage (optional)")}<div id="maSA" style="display:flex;flex-direction:column;gap:6px"></div></div>
+    <p class="hint" style="margin:-6px 0 0">${T("hintStageAmmo")}</p>`,
     async()=>{const r=await api("POST",`c/${SLUG}/matches`,{id:m.id,name:v("maName"),date:v("maDate"),stages:v("maSt"),ssi_url:(v("maSsi")||"").trim(),
-      boxes:[...document.querySelectorAll("[data-mbox]:checked")].map(x=>+x.dataset.mbox)});toast(T("Saved"));lsSet("ammo:adminmatch",r.id);
+      boxes:[...document.querySelectorAll("[data-mbox]:checked")].map(x=>+x.dataset.mbox),
+      stage_ammo:Object.fromEntries(Object.entries(SA).map(([k,ids])=>[k,ids.filter(id=>mItems().some(i=>i.id===id))]).filter(([k,ids])=>ids.length&&+k<=+v("maSt")))});toast(T("Saved"));lsSet("ammo:adminmatch",r.id);
       if(got&&got.competitors.length){const c=await api("POST",`c/${SLUG}/matches/${r.id}/competitors`,{rows:got.competitors});toast(T("{n} competitors added",{n:c.added}))}
       setTimeout(()=>loadMatches(r.id),0)});
+  drawSA();
+  $("sBody").onchange=e=>{if(e.target.matches("[data-mbox]"))drawSA()};
+  $("sBody").oninput=e=>{if(e.target.id==="maSt")drawSA()};
+  $("sBody").onclick=e=>{const b=e.target.closest("[data-sa]");if(!b)return;const id=+b.dataset.it,on=b.getAttribute("aria-pressed")!=="true",ns=Math.max(1,Math.min(30,+v("maSt")||1));
+    const put=st=>{const l=(SA[st]||[]).filter(x=>x!==id);SA[st]=on?l.concat(id):l};
+    if(b.dataset.sa==="all")for(let k=1;k<=ns;k++)put(k);else put(+b.dataset.sa);drawSA()};
   $("maFetch").onclick=async()=>{const b=$("maFetch");b.disabled=true;$("maInfo").textContent=T("Reading SSI…");
-    try{got=await ssiFetch(v("maSsi"));if(got.name)$("maName").value=got.name;if(got.date)$("maDate").value=got.date;if(got.stages)$("maSt").value=got.stages;
+    try{got=await ssiFetch(v("maSsi"));if(got.name)$("maName").value=got.name;if(got.date)$("maDate").value=got.date;if(got.stages){$("maSt").value=got.stages;drawSA()}
       $("maInfo").textContent=T("From SSI: {name} · {date} · {s} stages · {n} competitors. Tick the boxes and Save – the competitors are added with their squads.",
         {name:got.name||"?",date:got.date?fiDate(got.date):"?",s:got.stages||"?",n:got.competitors.length})}
     catch(err){$("maInfo").textContent=err.message+" "+T("You can still fill in the match by hand and paste the table.")}finally{b.disabled=false}};
