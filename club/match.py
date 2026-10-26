@@ -139,7 +139,7 @@ def api_matches(slug):
     officers = [r["user_id"] for r in conn.execute("SELECT user_id FROM club_roles WHERE club_id=? AND role='officer'",
                                                    (club["id"],))]
     names = _user_names(set(officers))
-    return jsonify(matches=out, officers=[names.get(o, "?") for o in officers])
+    return jsonify(matches=out, officers=[names.get(o, "?") for o in officers], ssi=ssi.configured())
 
 
 @cbp.post("/api/c/<slug>/matches")
@@ -167,7 +167,7 @@ def api_match_save(slug):
 
 @cbp.post("/api/c/<slug>/ssi")
 def api_ssi(slug):
-    """Read a match from its SSI link: name, date, stages and the participants table (checked on the admin page)."""
+    """Read a match from SSI's API by its link: name, date, stages and the competitors with squads."""
     _club_for(slug)
     try:
         return jsonify(ok=True, **ssi.fetch(str(_body().get("url") or "")))
@@ -210,17 +210,22 @@ def api_competitors(slug, mid):
             return _err("Officers have already entered rounds – add competitors instead of replacing the list.")
         conn.execute("UPDATE moves SET comp_id=NULL WHERE comp_id IN (SELECT id FROM competitors WHERE match_id=?)", (mid,))
         conn.execute("DELETE FROM competitors WHERE match_id=?", (mid,))
-    have = {r["name"].lower() for r in conn.execute("SELECT name FROM competitors WHERE match_id=?", (mid,))}
-    added = 0
+    have = {r["name"].lower(): r["id"] for r in conn.execute("SELECT id, name FROM competitors WHERE match_id=?", (mid,))}
+    added = updated = 0
     for num, name, squad, div in clean:
-        if name.lower() in have:
+        if name.lower() in have:              # already on the list: take the new number / squad / division (re-fetch)
+            if have[name.lower()]:
+                updated += conn.execute("UPDATE competitors SET num=?, squad=?, division=? WHERE id=? AND "
+                                        "(num!=? OR squad!=? OR division!=?)",
+                                        (num, squad, div, have[name.lower()], num, squad, div)).rowcount
+                have[name.lower()] = None
             continue
-        have.add(name.lower())
+        have[name.lower()] = None
         conn.execute("INSERT INTO competitors(match_id,num,name,squad,division) VALUES(?,?,?,?,?)",
                      (mid, num, name, squad, div))
         added += 1
     conn.commit()
-    return jsonify(ok=True, added=added)
+    return jsonify(ok=True, added=added, updated=updated)
 
 
 @cbp.post("/api/c/<slug>/matches/<int:mid>/competitors/<int:cid>/delete")

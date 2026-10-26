@@ -73,6 +73,7 @@ ufw enable
 | `DIARY_ADMIN_USER` | `osku` | Name given to a pre-accounts single-user diary when it's converted |
 | `FLASK_SECRET_KEY` | auto | Cookie signing key; generated into `diary_data/secret_key` if unset |
 | `DIARY_SMTP_*`, `DIARY_BACKUP_TO` | – | Backup e-mail, see below |
+| `SSI_API_KEY`, `SSI_EMAIL`, `SSI_PASSWORD` | – | Club ammo: fetch matches and competitors from Shoot'n Score It's API (all three needed) |
 
 ### Updating the server
 
@@ -375,11 +376,12 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   (no rounds / payments / stock in the log; a box's hand-overs don't count) can be deleted from its Edit sheet.
 - **Matches** (`club/match.py`, admin tab *Matches*): a second check on club ammo at a match. The admin adds the
   match (date, number of stages, which boxes are there) – or pastes the match's SSI link and presses *Fetch*: name,
-  date, stages and the participants table are read from the public shootnscoreit.com pages (`club/ssi.py`, one fetch
-  per press; SSI's API needs a key). The table then opens in the column check: pick which column is the name, squad,
-  division and number ("Last, First" becomes "First Last", "Squad 1" becomes "1"). *Fetch from SSI* on the match
-  refreshes the list later; if SSI refuses, copy the participants table and use *Paste from SSI…*. On the server,
-  `venv/bin/python -m club ssi <link>` shows what is read without changing anything. **Officers** (range / stat officers, Setup →
+  date, stages and the competitors with their squads come from SSI's GraphQL API (`club/ssi.py`; needs `SSI_API_KEY`,
+  `SSI_EMAIL`, `SSI_PASSWORD` in `.env` – SSI wants an API key plus a login token, fetched with that account and kept
+  in memory). *Fetch from SSI* on the match fetches again: new competitors are added, changed squads / numbers updated.
+  Without the API: copy the participants table on shootnscoreit.com, *Paste from SSI…* and pick which column is the
+  name, squad, division and number. On the server, `venv/bin/python -m club ssi <link>` shows what the API returns
+  without changing anything. **Officers** (range / stat officers, Setup →
   *+ Officer*, a diary account) get only the officer page `/ammo/<club>/ro`: stage chips, squad filter, and a −/+
   count per competitor and ammo; saved at once, queued on the phone without signal. On the match day the box form
   suggests the competitor names, so a shooter's own entry links to them. *Reconciliation* compares officers' rounds

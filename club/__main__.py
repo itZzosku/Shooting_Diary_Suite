@@ -73,11 +73,10 @@ def main(argv=None):
             r = ssi.fetch(a.url)
         except ssi.SsiError as e:
             sys.exit(str(e))
-        print(f"Name:   {r['name']}\nDate:   {r['date'] or '?'}\nStages: {r['stages'] or '?'}\nRows:   {len(r['rows'])}")
-        if r.get("warning"):
-            print("Participants page:", r["warning"])
-        for row in r["rows"][:4]:
-            print("  | " + " | ".join(row))
+        print(f"Name:   {r['name']}\nDate:   {r['date'] or '?'}\nStages: {r['stages'] or '?'}\n"
+              f"Competitors: {len(r['competitors'])}, squads: {len({c['squad'] for c in r['competitors'] if c['squad']})}")
+        for c in r["competitors"][:3]:
+            print(f"  #{c['num']} {c['name']} · squad {c['squad'] or '-'} · {c['division']}")
         return
     club.init_db()
 

@@ -2,7 +2,8 @@
    (ADMIN_FI). {name} etc. are filled in by T(). A text missing from ADMIN_FI shows in English. */
 "use strict";
 const ADMIN_EN={
-  hintSsiLink:"Paste the match's link from shootnscoreit.com and press Fetch: name, date, stages and the competitor list are read from SSI.",
+  hintSsiLink:"Paste the match's link from shootnscoreit.com and press Fetch: name, date, stages and the competitors with their squads come from SSI's API.",
+  hintSsiSetup:"Fetching from SSI is off: the server needs SSI_API_KEY, SSI_EMAIL and SSI_PASSWORD in its .env. Until then fill in the match by hand and paste the competitor table.",
   hintOfficer:"A range or stat officer with a diary account: sees only the officer page, where they enter each competitor's rounds per stage. No money, no stock.",
   hintMatches:"Add a match for a match day: its stages, which ammo boxes are there and the competitor list from SSI. Officers then enter the rounds of club ammo per competitor and stage, and you see here whether each shooter's own entry matches.",
   hintPaste:"No competitors yet. Open the participants page of the match on shootnscoreit.com, select the table, copy it and paste it here.",
@@ -36,13 +37,16 @@ const ADMIN_EN={
 };
 const ADMIN_FI={
   "SSI link (optional)":"SSI-linkki (valinnainen)","Fetch":"Hae","Fetch from SSI":"Hae SSI:stä","Reading SSI…":"Luetaan SSI:tä…",
-  hintSsiLink:"Liitä ottelun linkki shootnscoreit.comista ja paina Hae: nimi, päivä, rastit ja ampujalista luetaan SSI:stä.",
-  "Read from SSI: {name} · {date} · {s} stages · {n} rows. Check, then Save – the competitors come next.":"Luettu SSI:stä: {name} · {date} · {s} rastia · {n} riviä. Tarkista ja tallenna – ampujat tulevat seuraavaksi.",
+  hintSsiLink:"Liitä ottelun linkki shootnscoreit.comista ja paina Hae: nimi, päivä, rastit ja ampujat ryhmineen tulevat SSI:n rajapinnasta.",
+  hintSsiSetup:"SSI-haku ei ole käytössä: palvelimen .env-tiedostoon tarvitaan SSI_API_KEY, SSI_EMAIL ja SSI_PASSWORD. Siihen asti täytä ottelu käsin ja liitä ampujataulukko.",
+  "From SSI: {name} · {date} · {s} stages · {n} competitors. Tick the boxes and Save – the competitors are added with their squads.":"SSI:stä: {name} · {date} · {s} rastia · {n} ampujaa. Valitse laatikot ja tallenna – ampujat lisätään ryhmineen.",
+  "SSI has no competitors for this match yet.":"SSI:ssä ei ole vielä ampujia tähän otteluun.","{a} added, {u} updated from SSI":"SSI:stä {a} lisätty, {u} päivitetty",
+  "SSI API isn't set up: SSI_API_KEY, SSI_EMAIL and SSI_PASSWORD go in the server's .env.":"SSI-rajapintaa ei ole asetettu: SSI_API_KEY, SSI_EMAIL ja SSI_PASSWORD palvelimen .env-tiedostoon.",
+  "SSI login failed – check SSI_EMAIL / SSI_PASSWORD.":"SSI-kirjautuminen epäonnistui – tarkista SSI_EMAIL / SSI_PASSWORD.",
+  "SSI has no match behind that link (or this account can't see it).":"Linkin takana ei ole SSI:ssä ottelua (tai tämä tunnus ei näe sitä).",
   "You can still fill in the match by hand and paste the table.":"Voit silti täyttää ottelun käsin ja liittää taulukon.",
-  "No participants table found – paste it instead.":"Osallistujataulukkoa ei löytynyt – liitä se käsin.",
   "Paste the match's link from shootnscoreit.com.":"Liitä ottelun linkki shootnscoreit.comista.",
   "Not a shootnscoreit.com event link.":"Tämä ei ole shootnscoreit.comin ottelulinkki.",
-  "Couldn't read the match from SSI – paste the table instead.":"Ottelua ei saatu luettua SSI:stä – liitä taulukko käsin.",
   "Matches":"Ottelut","Match":"Ottelu","+ Match":"+ Ottelu","Admins and officers":"Ylläpitäjät ja toimitsijat","+ Officer":"+ Toimitsija",
   "officer":"toimitsija","admin":"ylläpitäjä","New officer":"Uusi toimitsija",
   hintOfficer:"Ammunnanjohtaja tai tuloslaskija, jolla on Shooting Diary -tunnus: näkee vain toimitsijasivun, jolla kirjataan ampujien patruunat rasteittain. Ei rahaa eikä varastoa.",

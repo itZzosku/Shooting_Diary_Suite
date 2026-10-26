@@ -411,48 +411,69 @@ def test_match_officer_counts_and_report(setup):
     assert a.post(f"{C}/matches/{mid}/competitors", json={"replace": True, "rows": []}).status_code == 400
 
 
-EVENT_HTML = """<html><head><title>Testikisa 2026 | Shoot'n Score It</title>
-<meta property="og:title" content="Testikisa 2026"></head><body><script>var x="Stage 99";</script>
-<h1>Testikisa 2026</h1><dl><dt>Starts</dt><dd>Oct. 27, 2026, 5 p.m.</dd><dt>Stages</dt><dd>5</dd></dl>
-<ul><li>Stage 1 – Alku</li><li>Stage 5 – Loppu</li></ul></body></html>"""
-PART_HTML = """<html><body><table class="nav"><tr><td>Menu</td></tr></table>
-<table><thead><tr><th>#</th><th>Competitor</th><th></th><th>Division</th><th>Squad</th></tr></thead><tbody>
-<tr><td>1</td><td><a href="#">Ampuja,&nbsp;Aatu</a></td><td><i class="icon"></i></td><td>Production</td><td>Squad 1</td></tr>
-<tr><td>2</td><td>Bee Bertta</td><td></td><td>Standard</td><td>Squad 1</td></tr>
-<tr><td>3</td><td>Cee   Cecilia</td><td></td><td>Open</td><td>Squad 2</td></tr></tbody></table></body></html>"""
+
+SSI_EVENT = {"event": {"id": "1", "name": "Testikisa 2026", "starts": "2026-10-27T15:00:00+00:00", "stages_count": 5,
+                       "competitors_approved_w_wo_results_not_dnf": [
+                           {"id": "c1", "first_name": "Aatu", "last_name": "Ampuja", "number": 1, "get_division_display": "Production"},
+                           {"id": "c2", "first_name": "Bertta", "last_name": "Bee", "number": 2, "get_division_display": "Standard"},
+                           {"id": "c3", "first_name": "Cecilia", "last_name": "Cee", "number": 3, "get_division_display": "Open"}],
+                       "squads": [{"id": "s1", "number": 1, "competitors": [{"id": "c1"}, {"id": "c2"}]},
+                                  {"id": "s2", "number": 2, "competitors": [{"id": "c3"}]}]}}
 
 
-def test_ssi_reader(monkeypatch):
+def _fake_ssi(monkeypatch, expire_once=False):
+    from club import ssi
+    for k, v in (("SSI_API_KEY", "test-key"), ("SSI_EMAIL", "svc@example.com"), ("SSI_PASSWORD", "x")):
+        monkeypatch.setenv(k, v)
+    ssi._token.update(jwt="", at=0)
+    calls = {"login": 0, "query": 0, "expired": expire_once}
+
+    def post(q, variables, jwt=None, opener=None):
+        if "token_auth" in q:
+            calls["login"] += 1
+            return {"token_auth": {"success": True, "token": {"token": "jwt-%d" % calls["login"]}}}
+        assert jwt and variables == {"ct": 22, "id": "1"}
+        calls["query"] += 1
+        if calls["expired"]:
+            calls["expired"] = False
+            raise ssi.SsiError("SSI: Signature has expired")
+        return SSI_EVENT
+    monkeypatch.setattr(ssi, "_post", post)
+    return calls
+
+
+def test_ssi_api_reader(monkeypatch):
     from club import ssi
     assert ssi.parse_url("https://shootnscoreit.com/event/22/29338/participants/") == ("22", "29338")
     assert ssi.parse_url("https://evil.example/event/22/1/") is None
-    assert ssi.find_date("Starts 27.10.2026 klo 17") == "2026-10-27"
-    assert ssi.find_date("starts 3 Nov 2026") == "2026-11-03"
-    assert ssi.find_stages("Stage 1 Stage 2 Stage 7 results") == 7
-    pages = {"https://shootnscoreit.com/event/22/1/": EVENT_HTML, "https://shootnscoreit.com/event/22/1/participants/": PART_HTML}
-    monkeypatch.setattr(ssi, "_get", lambda url, opener=None: pages[url])
-    r = ssi.fetch("https://shootnscoreit.com/event/22/1/participants/")
-    assert (r["name"], r["date"], r["stages"]) == ("Testikisa 2026", "2026-10-27", 5)
-    assert r["rows"][0] == ["#", "Competitor", "Division", "Squad"]          # the empty icon column is dropped
-    assert r["rows"][1] == ["1", "Ampuja, Aatu", "Production", "Squad 1"] and r["rows"][3][1] == "Cee Cecilia"
-
-    def down(url, opener=None):
-        raise ssi.SsiError("SSI answered 403.")
-    monkeypatch.setattr(ssi, "_get", down)
+    monkeypatch.delenv("SSI_API_KEY", raising=False)
     with pytest.raises(ssi.SsiError):
         ssi.fetch("https://shootnscoreit.com/event/22/1/")
+    calls = _fake_ssi(monkeypatch, expire_once=True)
+    r = ssi.fetch("https://shootnscoreit.com/event/22/1/participants/")
+    assert (r["name"], r["date"], r["stages"]) == ("Testikisa 2026", "2026-10-27", 5)
+    assert r["competitors"][0] == {"num": "1", "name": "Aatu Ampuja", "squad": "1", "division": "Production"}
+    assert [c["squad"] for c in r["competitors"]] == ["1", "1", "2"]
+    assert calls == {"login": 2, "query": 2, "expired": False}            # expired token: logged in again once
+    ssi.fetch("https://shootnscoreit.com/event/22/1/")
+    assert calls["login"] == 2                                             # token kept in memory
 
 
 def test_ssi_endpoint_and_match_link(setup, monkeypatch):
-    from club import ssi
     app, a, _ids, _codes = setup
     C = "/ammo/api/c/testclub"
-    monkeypatch.setattr(ssi, "_get", lambda url, opener=None: PART_HTML if url.endswith("participants/") else EVENT_HTML)
+    assert a.get(f"{C}/matches").json["ssi"] in (True, False)
+    _fake_ssi(monkeypatch)
+    assert a.get(f"{C}/matches").json["ssi"] is True
     r = a.post(f"{C}/ssi", json={"url": "https://shootnscoreit.com/event/22/1/"}).json
-    assert r["name"] == "Testikisa 2026" and len(r["rows"]) == 4
+    assert r["name"] == "Testikisa 2026" and len(r["competitors"]) == 3
     assert a.post(f"{C}/ssi", json={"url": "https://example.com/"}).status_code == 400
     mid = a.post(f"{C}/matches", json={"name": r["name"], "date": r["date"], "stages": r["stages"],
                                        "ssi_url": "https://shootnscoreit.com/event/22/1/participants/?x=1"}).json["id"]
     assert a.get(f"{C}/matches/{mid}").json["match"]["ssi_url"] == "https://shootnscoreit.com/event/22/1/"
-    anon = app.test_client()
-    assert anon.post(f"{C}/ssi", json={"url": "https://shootnscoreit.com/event/22/1/"}).status_code in (401, 403)
+    assert a.post(f"{C}/matches/{mid}/competitors", json={"rows": r["competitors"]}).json["added"] == 3
+    moved = [dict(c, squad="3") if c["name"] == "Cecilia Cee" else c for c in r["competitors"]]   # re-squadded in SSI
+    c = a.post(f"{C}/matches/{mid}/competitors", json={"rows": moved}).json
+    assert (c["added"], c["updated"]) == (0, 1)
+    assert {x["name"]: x["squad"] for x in a.get(f"{C}/matches/{mid}").json["competitors"]}["Cecilia Cee"] == "3"
+    assert app.test_client().post(f"{C}/ssi", json={"url": "https://shootnscoreit.com/event/22/1/"}).status_code in (401, 403)
