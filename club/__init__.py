@@ -395,7 +395,7 @@ def warnings(conn, club_id):
     """Boxes below their refill level and calibres below their buy-more level."""
     bcs = box_cal_stock(conn, club_id)
     out, per_cal = [], cal_stock(conn, club_id)
-    for b in conn.execute("SELECT * FROM boxes WHERE club_id=? AND NOT archived", (club_id,)):
+    for b in conn.execute("SELECT * FROM boxes WHERE club_id=? AND NOT archived ORDER BY name COLLATE NOCASE", (club_id,)):
         multi = len(box_cals(b)) > 1
         for c, low in box_lows(b).items():
             n = bcs.get(b["id"], {}).get(c, 0)
@@ -754,7 +754,7 @@ def api_state(slug):
     items = [dict(r) for r in conn.execute("SELECT * FROM items WHERE club_id=? ORDER BY calibre, archived, name",
                                            (club["id"],))]
     boxes = []
-    for r in conn.execute("SELECT * FROM boxes WHERE club_id=? ORDER BY calibre, name", (club["id"],)):
+    for r in conn.execute("SELECT * FROM boxes WHERE club_id=? ORDER BY name COLLATE NOCASE, id", (club["id"],)):
         b = dict(r)
         b["stock"] = {str(i): n for (bx, i), n in st.items() if bx == b["id"] and n}
         b["total"] = sum(n for (bx, _i), n in st.items() if bx == b["id"])

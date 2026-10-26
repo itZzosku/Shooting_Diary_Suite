@@ -72,14 +72,15 @@ def _match(conn, club, mid):
 
 
 def _box_ids(conn, club, m):
-    return m["boxes"] or [r["id"] for r in conn.execute("SELECT id FROM boxes WHERE club_id=? AND NOT archived",
+    return m["boxes"] or [r["id"] for r in conn.execute("SELECT id FROM boxes WHERE club_id=? AND NOT archived ORDER BY name COLLATE NOCASE",
                                                        (club["id"],))]
 
 
 def match_items(conn, club, m):
     """The ammo officers can enter: every ammo of the calibres in the match's boxes."""
     cals = []
-    for b in conn.execute(f"SELECT * FROM boxes WHERE id IN ({','.join('?' * len(_box_ids(conn, club, m))) or 'NULL'})",
+    for b in conn.execute(f"SELECT * FROM boxes WHERE id IN ({','.join('?' * len(_box_ids(conn, club, m))) or 'NULL'}) "
+                          "ORDER BY name COLLATE NOCASE",
                           _box_ids(conn, club, m)):
         cals += [c for c in box_cals(b) if c not in cals]
     if not cals:

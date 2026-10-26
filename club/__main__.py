@@ -117,7 +117,7 @@ def main(argv=None):
         for c in conn.execute("SELECT * FROM clubs ORDER BY slug"):
             print(f"{c['slug']}: {c['name']}  (MobilePay {c['mobilepay'] or '-'})")
             bs = club.box_stock(conn, c["id"])
-            for bx in conn.execute("SELECT * FROM boxes WHERE club_id=? ORDER BY calibre, name", (c["id"],)):
+            for bx in conn.execute("SELECT * FROM boxes WHERE club_id=? ORDER BY name COLLATE NOCASE", (c["id"],)):
                 print(f"  {bx['name']:<14} {bx['calibre']:<14} {bs.get(bx['id'], 0):>6}  {bx['holder_name']}"
                       f"{'  (archived)' if bx['archived'] else ''}")
             for w in club.warnings(conn, c["id"]):
