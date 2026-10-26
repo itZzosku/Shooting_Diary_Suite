@@ -488,3 +488,31 @@ def test_ssi_endpoint_and_match_link(setup, monkeypatch):
     got = {x["name"]: x for x in a.get(f"{C}/matches/{mid}").json["competitors"]}
     assert got["Cecilia Cee"]["squad"] == "3" and got["Bertta Bee"]["category"] == "Special 2"
     assert app.test_client().post(f"{C}/ssi", json={"url": "https://shootnscoreit.com/event/22/1/"}).status_code in (401, 403)
+
+
+def test_ssi_query_adapts_to_schema(monkeypatch):
+    """SSI's docs show event(content_type, event_id) and a plain competitors list: the query adapts, field by field."""
+    from club import ssi
+    _fake_ssi(monkeypatch)
+    sent = []
+
+    def post(q, variables, jwt=None, opener=None):
+        if "token_auth" in q:
+            return {"token_auth": {"success": True, "token": {"token": "t"}}}
+        sent.append(q)
+        if "id: $id" in q and "event_id" not in q:
+            raise ssi.SsiError("SSI: Unknown argument 'id' on field 'Query.event'.")
+        if "competitors_approved" in q:
+            raise ssi.SsiError("SSI: Cannot query field 'competitors_approved_w_wo_results_not_dnf' on type 'IpscMatchNode'.")
+        if "get_category_display" in q:
+            raise ssi.SsiError('SSI: Cannot query field "get_category_display" on type "IpscCompetitorNode".')
+        assert variables == {"ct": 22, "id": 1}                  # event_id is an Int
+        ev = dict(SSI_EVENT["event"])
+        ev["competitors"] = [dict(c, category="S2" if c["id"] == "c2" else "") for c in ev.pop("competitors_approved_w_wo_results_not_dnf")]
+        return {"event": ev}
+    monkeypatch.setattr(ssi, "_post", post)
+    r = ssi.fetch("https://shootnscoreit.com/event/22/1/")
+    assert len(sent) == 4 and len(r["competitors"]) == 3 and r["competitors"][1]["category"] == "S2"
+    with pytest.raises(ssi.SsiError):                            # other errors are not retried
+        monkeypatch.setattr(ssi, "_post", lambda q, v, jwt=None, opener=None: (_ for _ in ()).throw(ssi.SsiError("SSI: Permission denied")))
+        ssi.fetch("https://shootnscoreit.com/event/22/1/")

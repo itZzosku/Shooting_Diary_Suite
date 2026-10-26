@@ -26,19 +26,22 @@ EXPIRED = ("Signature has expired", "Error decoding signature", "expired", "Inva
 
 LOGIN = ("mutation Login($email: String!, $pwd: String!) { token_auth(email: $email, password: $pwd) "
          "{ success errors token { token } } }")
-MATCH = """query ClubMatch($ct: Int!, $id: String!) {
-  event(content_type: $ct, id: $id) {
-    id name starts
-    ... on IpscMatchNode {
-      stages_count
-      competitors_approved_w_wo_results_not_dnf {
-        id
-        ... on IpscCompetitorNode { first_name last_name number get_division_display category }
-      }
-      squads { id ... on IpscSquadNode { number get_squad_display competitors { id } } }
-    }
-  }
-}"""
+# The match query is built from parts, so a field SSI doesn't know (the API is a release candidate and its docs show
+# both event(content_type, event_id) and event(content_type, id)) can be dropped or swapped instead of failing.
+# Asked once per Fetch; another try only when SSI answers "Unknown argument" / "Cannot query field".
+OPTIONAL = ("get_category_display", "category", "get_division_display", "squads", "starts", "stages_count")
+
+
+def match_query(arg="id", comps="competitors_approved_w_wo_results_not_dnf", drop=()):
+    has = lambda f: f not in drop  # noqa: E731
+    cfields = " ".join(f for f in ("first_name", "last_name", "number", "get_division_display", "category",
+                                   "get_category_display") if has(f))
+    squads = "squads { id ... on IpscSquadNode { number get_squad_display competitors { id } } }" if has("squads") else ""
+    var = "$id: String!" if arg == "id" else "$id: Int!"
+    return (f"query ClubMatch($ct: Int!, {var}) {{ event(content_type: $ct, {arg}: $id) {{ id name "
+            f"{'starts' if has('starts') else ''} ... on IpscMatchNode {{ {'stages_count' if has('stages_count') else ''} "
+            f"{comps} {{ id ... on IpscCompetitorNode {{ {cfields} }} }} {squads} }} }} }}")
+
 
 _lock = threading.Lock()
 _token = {"jwt": "", "at": 0.0}
@@ -116,12 +119,36 @@ def _local_date(starts):
         return s[:10] if re.match(r"\d{4}-\d{2}-\d{2}", s) else ""
 
 
+def _category(c):
+    """The readable category ("Special 2"), with the stored value when it differs ("Special 2 / S2")."""
+    shown, raw = str(c.get("get_category_display") or "").strip(), str(c.get("category") or "").strip()
+    return (shown + (" / " + raw if raw and raw.lower() != shown.lower() else "") if shown else raw)[:60]
+
+
 def fetch(url, opener=None):
     """{url, name, date, stages, competitors: [{num, name, squad, division}]} for an SSI event link."""
     ids = parse_url(url)
     if not ids:
         raise SsiError("Not a shootnscoreit.com event link.")
-    ev = query(MATCH, {"ct": int(ids[0]), "id": ids[1]}, opener).get("event")
+    arg, cfield, drop, ev = "id", "competitors_approved_w_wo_results_not_dnf", set(), None
+    for _try in range(6):
+        try:
+            ev = query(match_query(arg, cfield, drop), {"ct": int(ids[0]), "id": ids[1] if arg == "id" else int(ids[1])},
+                       opener).get("event")
+            break
+        except SsiError as e:
+            msg = str(e)
+            bad = re.search(r"Cannot query field ['\"]?(\w+)", msg)
+            if re.search(r"Unknown argument ['\"]?id\b", msg) and arg == "id":
+                arg = "event_id"                               # the docs' example form
+            elif bad and bad.group(1) == cfield and cfield != "competitors":
+                cfield = "competitors"                          # the docs' plain competitor list
+            elif bad and bad.group(1) in OPTIONAL and bad.group(1) not in drop:
+                drop.add(bad.group(1))
+            else:
+                raise
+    else:
+        raise SsiError("SSI didn't accept the match query – tell the developer what `python -m club ssi` says.")
     if not ev:
         raise SsiError("SSI has no match behind that link (or this account can't see it).")
     squad_of = {}
@@ -131,12 +158,12 @@ def fetch(url, opener=None):
         for c in sq.get("competitors") or []:
             squad_of[str(c.get("id"))] = label
     comps = []
-    for c in ev.get("competitors_approved_w_wo_results_not_dnf") or []:
+    for c in ev.get(cfield) or []:
         name = " ".join(x for x in (str(c.get("first_name") or "").strip(), str(c.get("last_name") or "").strip()) if x)
         if len(name) >= 2:
             comps.append({"num": str(c.get("number") or ""), "name": name, "squad": squad_of.get(str(c.get("id")), ""),
                           "division": str(c.get("get_division_display") or ""),
-                          "category": str(c.get("category") or "")[:60]})       # e.g. Special 2 = borrows a pistol
+                          "category": _category(c)})                             # e.g. Special 2 = borrows a pistol
     comps.sort(key=lambda c: (c["squad"] == "", int(c["squad"]) if c["squad"].isdigit() else 0, c["squad"], c["name"]))
     return {"url": "https://shootnscoreit.com/event/%s/%s/" % ids, "name": str(ev.get("name") or "")[:80],
             "date": _local_date(ev.get("starts")), "stages": int(ev.get("stages_count") or 0), "competitors": comps}
