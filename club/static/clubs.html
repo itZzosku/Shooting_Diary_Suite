@@ -30,8 +30,8 @@ const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;"
 async function load(){
   const r=await fetch("/ammo/api/clubs",{credentials:"same-origin"});if(r.status===401){location.href="/diary/login";return}
   const j=await r.json();
-  $("list").innerHTML=j.clubs.length?j.clubs.map(c=>`<a class="row" style="color:inherit;text-decoration:none" href="/ammo/${esc(c.slug)}/admin">
-    <span><b>${esc(c.name)}</b><br><small>${c.role==="admin"?"Admin":"Box holder"}</small></span><span class="r">${c.low?`<span class="tag warn">${c.low} low</span>`:""} ›</span></a>`).join("")
+  $("list").innerHTML=j.clubs.length?j.clubs.map(c=>`<a class="row" style="color:inherit;text-decoration:none" href="/ammo/${esc(c.slug)}/${c.role==="officer"?"ro":"admin"}">
+    <span><b>${esc(c.name)}</b><br><small>${c.role==="admin"?"Admin":c.role==="officer"?"Officer (range / stat)":"Box holder"}</small></span><span class="r">${c.low?`<span class="tag warn">${c.low} low</span>`:""} ›</span></a>`).join("")
     :`<div class="hint">You don't manage any club's ammo.${j.site_admin?" Create one below.":""}</div>`;
   $("new").hidden=!j.site_admin;
 }

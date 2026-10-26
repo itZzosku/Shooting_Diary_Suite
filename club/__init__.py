@@ -308,7 +308,8 @@ def my_clubs(user):
         for r in c.execute("SELECT * FROM clubs ORDER BY name"):
             role = role_of(dict(r), user, c)
             if role:
-                out.append({"slug": r["slug"], "name": r["name"], "role": role, "low": len(warnings(c, r["id"]))})
+                out.append({"slug": r["slug"], "name": r["name"], "role": role,
+                            "low": 0 if role == "officer" else len(warnings(c, r["id"]))})   # officers: no stock
         return out
 
 

@@ -626,7 +626,8 @@ function renderMatch(){
       <h2>${T("Reconciliation")}</h2>
       <p class="hint" style="margin:0">${T("hintRecon")}</p>
       <div class="hint">${T("Officers {a} · shooters {b} rounds",{a:"<b>"+tOff+"</b>",b:"<b>"+tOwn+"</b>"})}${owes?` · <b style="color:var(--accent)">${T("missing {amt}",{amt:eur(owes)})}</b>`:""}</div>
-      <label class="check"><input type="checkbox" id="mProb" ${lsGet("ammo:mprob")?"checked":""}> ${T("Only problems")}</label>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between"><label class="check"><input type="checkbox" id="mProb" ${lsGet("ammo:mprob")?"checked":""}> ${T("Only problems")}</label>
+        ${rep.length?`<span style="display:flex;gap:6px"><button type="button" class="ghost" data-mx="pdf">PDF</button><button type="button" class="ghost" data-mx="csv">CSV</button></span>`:""}</div>
       <div class="rows">${rep.filter(r=>!lsGet("ammo:mprob")||r.status!=="ok").map(r=>`<div class="row"><div class="what"><b>${esc(r.name)}</b> <span class="tag ${ST[r.status][1]}">${T(ST[r.status][0])}</span>
           <br><small>${r.lines.map(l=>`${esc(cal(l.item))}: ${T("officer")} ${l.officer} / ${T("own")} ${l.own}`).join(" · ")}${r.refs.length?" · "+T("ref")+" "+r.refs.map(esc).join(", "):""}</small></div>
           <div class="r num">${r.owes?`<b style="color:var(--accent)">${eur(r.owes)}</b>`:r.unpaid?eur(r.unpaid):""}</div></div>`).join("")||`<div class="hint">${T("Nothing yet.")}</div>`}</div>
@@ -640,6 +641,7 @@ function renderMatch(){
       const c=await api("POST",`c/${SLUG}/matches/${m.id}/competitors`,{rows:r.competitors});toast(T("{a} added, {u} updated from SSI",{a:c.added,u:c.updated}));loadMatch()}
     catch(err){toast(err.message)}finally{b.disabled=false}};
   $("mProb").onchange=e=>{lsSet("ammo:mprob",e.target.checked);renderMatch()};
+  document.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>matchExport(b.dataset.mx).catch(err=>toast(err.message)));
   $("mDel").onclick=async e=>{const b=e.target;if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=T("Tap again: deletes the list and officers' counts");return}
     try{await api("POST",`c/${SLUG}/matches/${m.id}/delete`,{});lsSet("ammo:adminmatch",null);loadMatches()}catch(err){toast(err.message)}};
 }
@@ -669,6 +671,29 @@ function matchSheet(m){
     catch(err){$("maInfo").textContent=err.message+" "+T("You can still fill in the match by hand and paste the table.")}finally{b.disabled=false}};
 }
 $("mNew").addEventListener("click",()=>matchSheet(null));
+
+/* The reconciliation for the treasurer / match director: one row per competitor and ammo */
+async function matchExport(fmt){
+  const m=MD.match,cal=id=>{const i=MD.items.find(x=>x.id===id);return i?i.calibre+(i.name?" "+i.name:""):"?"},price=id=>(MD.items.find(x=>x.id===id)||{}).price||0;
+  const head=[T("Name"),T("Number"),T("Squad"),T("Ammo"),T("Officers"),T("Own entry"),T("Difference"),T("Missing €"),T("Not paid €"),T("Status"),T("Code")];
+  const rows=[];MD.report.forEach(r=>r.lines.forEach((l,i)=>rows.push([r.name,r.num,r.squad,cal(l.item),l.officer,l.own,l.own-l.officer,
+    Math.max(0,l.officer-l.own)*price(l.item),i?0:r.unpaid,T(ST[r.status][0]),r.refs.join(" ")])));
+  const tot=[T("Total"),"","","",rows.reduce((a,r)=>a+r[4],0),rows.reduce((a,r)=>a+r[5],0),"",rows.reduce((a,r)=>a+r[7],0),rows.reduce((a,r)=>a+r[8],0),"",""];
+  const file=`${SLUG}-${m.date}-${m.name.replace(/[^\w\-]+/g,"_").replace(/^_+|_+$/g,"").slice(0,30)}`,money=n=>typeof n==="number"&&n?(Math.round(n*100)/100).toFixed(2):"";
+  if(fmt==="csv"){
+    const q=c=>{c=String(c==null?"":c);return/[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c},dec=n=>LANG==="fi"?String(n).replace(".",","):String(n);
+    const out=[head].concat(rows.map(r=>r.map((c,i)=>i===7||i===8?dec(money(c)):c)),[tot.map((c,i)=>i===7||i===8?dec(money(c)):c)]).map(r=>r.map(q).join(";")).join("\r\n");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+out],{type:"text/csv;charset=utf-8"}));a.download=file+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);return}
+  await loadScript("/diary/static/vendor/jspdf.umd.min.js");await loadScript("/diary/static/vendor/jspdf.plugin.autotable.min.js");
+  const doc=new window.jspdf.jsPDF({unit:"pt",format:"a4",orientation:"landscape"}),M=36,num=n=>money(n)?eur(n).replace(" €",""):"";
+  doc.setFont("helvetica","bold");doc.setFontSize(15);doc.text(`${S.club.name} · ${m.name}`,M,M+8);
+  doc.setFont("helvetica","normal");doc.setFontSize(10);
+  doc.text(`${T("Reconciliation")} · ${LANG==="fi"?fiDate(m.date):m.date} · ${T("{n} stages",{n:m.stages})} · ${T("made {d}",{d:LANG==="fi"?fiDate(today()):today()})}`,M,M+26);
+  doc.autoTable({startY:M+38,margin:{left:M,right:M},theme:"grid",styles:{fontSize:8,cellPadding:3},headStyles:{fillColor:[60,60,60]},
+    head:[head],body:rows.map(r=>r.map((c,i)=>i===7||i===8?num(c):c)),foot:[tot.map((c,i)=>i===7||i===8?num(c):c)],
+    footStyles:{fillColor:[230,230,230],textColor:20,fontStyle:"bold"},columnStyles:{4:{halign:"right"},5:{halign:"right"},6:{halign:"right"},7:{halign:"right"},8:{halign:"right"}}});
+  doc.save(file+".pdf");
+}
 
 /* Paste from SSI: copy the participants table on shootnscoreit.com, paste here, pick which column is which */
 const COLS=[["","—"],["name","Name"],["first","First name"],["last","Last name"],["squad","Squad"],["division","Division"],["num","Number"]];

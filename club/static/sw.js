@@ -1,7 +1,7 @@
 /* Club ammo service worker (scope /ammo/): the box form opens at the range without signal.
    - Box and payments pages and their info (GET /ammo/api/b/…, /ammo/api/p/…): network first, last good copy when offline.
    - Styles and fonts: cache first. Entries are queued by the page itself, never here. */
-const VERSION = "a18";
+const VERSION = "a19";
 const PAGE = "ammo-page", ASSETS = "ammo-assets-" + VERSION;
 
 self.addEventListener("install", e => e.waitUntil(self.skipWaiting()));
@@ -42,6 +42,8 @@ self.addEventListener("fetch", e => {
   } else if (p.startsWith("/ammo/api/b/") || p.startsWith("/ammo/api/p/") || /^\/ammo\/api\/c\/[a-z0-9-]+\/(ro|matches\/\d+)$/.test(p)) {
     e.respondWith(networkFirst(req, p, true).catch(() =>
       new Response(JSON.stringify({error: "offline"}), {status: 503, headers: {"Content-Type": "application/json"}})));
+  } else if (p.startsWith("/ammo/static/") && /\.(js|css)$/.test(p) && !p.includes("/vendor/")) {
+    e.respondWith(networkFirst(req));        // our own scripts (texts): fresh when online, so an update shows at once
   } else if (p.startsWith("/ammo/static/") || p.startsWith("/diary/static/fonts/") || p.startsWith("/diary/static/icons/")) {
     e.respondWith(cacheFirst(req));
   }

@@ -317,7 +317,7 @@ async function loadClubs(){
   const low=j.clubs.reduce((a,c)=>a+c.low,0);
   $("clubTile").hidden=false;
   $("nClub").innerHTML=!j.clubs.length?"<span>No club yet – create one</span>":
-    j.clubs.map(c=>esc(c.name)).join(", ")+(low?` · <b style="color:var(--accent)">${low} low</b>`:" · <span>stock OK</span>");
+    j.clubs.map(c=>esc(c.name)+(c.role==="officer"?" (officer)":"")).join(", ")+(j.clubs.every(c=>c.role==="officer")?"":low?` · <b style="color:var(--accent)">${low} low</b>`:" · <span>stock OK</span>");
 }
 async function load(){
   let r,j;

@@ -385,7 +385,8 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   *+ Officer*, a diary account) get only the officer page `/ammo/<club>/ro`: stage chips, squad filter, and a −/+
   count per competitor and ammo; saved at once, queued on the phone without signal. On the match day the box form
   suggests the competitor names, so a shooter's own entry links to them. *Reconciliation* compares officers' rounds
-  with the shooters' own entries (✓ ok · fewer · no own entry · not paid) and shows the missing €. Officers never see
+  with the shooters' own entries (✓ ok · fewer · no own entry · not paid) and shows the missing €; PDF / CSV for
+  the treasurer. The officer page shows who entered each count and reloads others' entries every 45 s. Officers never see
   money, stock or names outside the competitor list. The list can't be replaced once officers have entered rounds.
 - **Languages**: admin pages in Finnish or English (FI · EN at the top, remembered per phone; Finnish texts in
   `club/static/admin_fi.js`); stickers in Finnish, Swedish or English; shooter forms in Finnish, Swedish or English.

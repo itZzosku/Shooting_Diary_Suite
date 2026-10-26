@@ -87,7 +87,7 @@ async function api(method,path,body){
 }
 
 /* ---- state: counts[comp|stage|item] = rounds; queue = entries not sent yet (offline) ---- */
-let M=null,COUNTS={},STAGE=1,SQUAD="",PICK={};
+let M=null,COUNTS={},BY={},STAGE=1,SQUAD="",PICK={};
 const QK="ammo:roqueue",key=(c,s,i)=>c+"|"+s+"|"+i;
 const queue=()=>lsGet(QK)||[];
 function rounds(c,s){return M.items.reduce((a,i)=>a+(COUNTS[key(c,s,i.id)]||0),0)}
@@ -103,13 +103,13 @@ async function loadMatches(){
   $("matchRow").hidden=r.matches.length<2;
   await loadMatch();
 }
-async function loadMatch(){
+async function loadMatch(quiet){
   const id=+$("match").value;lsSet("ammo:romatch",id);
   try{M=await api("GET",`c/${SLUG}/matches/${id}`);lsSet("ammo:romdata:"+id,M)}
-  catch(e){M=lsGet("ammo:romdata:"+id);if(!M){$("msg").textContent=e.message;$("msg").hidden=false;return}note(T("Offline – entries wait on this phone and are sent later."))}
-  COUNTS={};M.counts.forEach(c=>COUNTS[key(c.competitor_id,c.stage,c.item_id)]=c.qty);
+  catch(e){if(quiet)return;M=lsGet("ammo:romdata:"+id);if(!M){$("msg").textContent=e.message;$("msg").hidden=false;return}note(T("Offline – entries wait on this phone and are sent later."))}
+  COUNTS={};BY={};M.counts.forEach(c=>{COUNTS[key(c.competitor_id,c.stage,c.item_id)]=c.qty;BY[key(c.competitor_id,c.stage,c.item_id)]=c.by});
   queue().filter(q=>q.mid===M.match.id).forEach(q=>COUNTS[key(q.comp,q.stage,q.item)]=q.qty);    // not sent yet
-  const st=lsGet("ammo:rostage:"+M.match.id);STAGE=st&&st<=M.match.stages?st:1;
+  if(!quiet){const st=lsGet("ammo:rostage:"+M.match.id);STAGE=st&&st<=M.match.stages?st:1}
   $("main").hidden=false;render();
 }
 $("match").addEventListener("change",loadMatch);
@@ -124,7 +124,7 @@ function render(){
   const list=M.competitors.filter(c=>(!SQUAD||c.squad===SQUAD)&&(!q||c.name.toLowerCase().includes(q)||c.num===q));
   const pend=new Set(queue().filter(x=>x.mid===M.match.id).map(x=>key(x.comp,x.stage,x.item)));
   $("list").innerHTML=list.length?list.map(c=>{const it=itemFor(c.id,STAGE),n=COUNTS[key(c.id,STAGE,it)]||0,tot=Array.from({length:M.match.stages},(_,i)=>rounds(c.id,i+1)).reduce((a,b)=>a+b,0);
-    return`<div class="comp${n?" has":""}" data-c="${c.id}"><div class="who"><b>${esc(c.name)}</b><small>${[c.num&&"#"+esc(c.num),c.squad&&T("Squad")+" "+esc(c.squad),tot?T("total {n}",{n:tot}):""].filter(Boolean).join(" · ")}</small></div>
+    return`<div class="comp${n?" has":""}" data-c="${c.id}"><div class="who"><b>${esc(c.name)}</b><small>${[c.num&&"#"+esc(c.num),c.squad&&T("Squad")+" "+esc(c.squad),tot?T("total {n}",{n:tot}):"",n&&BY[key(c.id,STAGE,it)]&&BY[key(c.id,STAGE,it)]!==M.me?"✎ "+esc(BY[key(c.id,STAGE,it)]):""].filter(Boolean).join(" · ")}</small></div>
       <div class="q"><button type="button" data-d="-1" aria-label="${T("fewer")}">−</button><input type="number" inputmode="numeric" min="0" max="2000" value="${n||""}" placeholder="0"><button type="button" data-d="1" aria-label="${T("more")}">+</button>
         <span class="state${pend.has(key(c.id,STAGE,it))?" wait":""}">${pend.has(key(c.id,STAGE,it))?"⏳":n?"✓":""}</span></div>
       ${M.items.length>1?`<select data-item>${M.items.map(i=>`<option value="${i.id}" ${i.id===it?"selected":""}>${esc(i.calibre)}${i.name?" "+esc(i.name):""}</option>`).join("")}</select>`:""}</div>`}).join("")
@@ -138,7 +138,7 @@ $("find").addEventListener("input",render);
 
 /* ---- entering: saved at once; queued on the phone when offline ---- */
 function set(c,item,qty){
-  COUNTS[key(c,STAGE,item)]=qty;
+  COUNTS[key(c,STAGE,item)]=qty;BY[key(c,STAGE,item)]=M.me;
   const q=queue().filter(x=>!(x.mid===M.match.id&&x.comp===c&&x.stage===STAGE&&x.item===item));
   q.push({mid:M.match.id,comp:c,stage:STAGE,item,qty});lsSet(QK,q);
   clearTimeout(set.t);set.t=setTimeout(flush,500);
@@ -159,6 +159,8 @@ async function flush(){
   if(M)render();
 }
 window.addEventListener("online",flush);setInterval(flush,20000);
+// Other officers' entries: reload now and then, when nothing waits to be sent and no number is being typed
+setInterval(()=>{if(M&&!queue().length&&document.visibilityState==="visible"&&!(document.activeElement&&document.activeElement.type==="number"))loadMatch(true)},45000);
 if("serviceWorker" in navigator)navigator.serviceWorker.register("/ammo/sw.js",{scope:"/ammo/"}).catch(()=>{});
 applyLang();loadMatches().then(flush);
 </script>

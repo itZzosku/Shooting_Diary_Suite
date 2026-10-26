@@ -36,6 +36,7 @@ const ADMIN_EN={
   hintExport:"Ammo and payments, voided entries left out. PDF for printing, Excel (entries + summary) and CSV for the books."
 };
 const ADMIN_FI={
+  "Officers":"Toimitsijat","Own entry":"Oma kirjaus","Difference":"Erotus","Missing €":"Puuttuu €","Status":"Tila",
   "SSI link (optional)":"SSI-linkki (valinnainen)","Fetch":"Hae","Fetch from SSI":"Hae SSI:stä","Reading SSI…":"Luetaan SSI:tä…",
   hintSsiLink:"Liitä ottelun linkki shootnscoreit.comista ja paina Hae: nimi, päivä, rastit ja ampujat ryhmineen tulevat SSI:n rajapinnasta.",
   hintSsiSetup:"SSI-haku ei ole käytössä: palvelimen .env-tiedostoon tarvitaan SSI_API_KEY, SSI_EMAIL ja SSI_PASSWORD. Siihen asti täytä ottelu käsin ja liitä ampujataulukko.",
