@@ -36,7 +36,7 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div><div class="kicker" id="clubName"></div><h1 data-t="Officer"></h1></div>
+    <div><div class="kicker" id="clubName"></div><h1 data-t="Officer"></h1><div class="hint" id="matchName" style="margin-top:4px;font-weight:600"></div></div>
     <div style="display:flex;gap:8px;align-items:center"><div class="langs" id="langs"><button type="button" data-lang="fi">FI</button><button type="button" data-lang="en">EN</button></div></div>
   </header>
   <div class="banner" id="note" hidden></div>
@@ -107,7 +107,7 @@ async function loadMatches(){
   let r;try{r=await api("GET",`c/${SLUG}/ro`)}catch(e){$("msg").textContent=e.message;$("msg").hidden=false;return}
   $("clubName").textContent=r.club.name;
   if(!r.matches.length){$("msg").textContent=T("No matches yet – an admin adds them on the admin page (Matches).");$("msg").hidden=false;return}
-  const want=lsGet("ammo:romatch");
+  const fromLink=+new URLSearchParams(location.search).get("m"),want=r.matches.some(m=>m.id===fromLink)?fromLink:lsGet("ammo:romatch");   // ?m= from the admin's link wins
   $("match").innerHTML=r.matches.map(m=>`<option value="${m.id}">${esc(m.name)} · ${m.date.split("-").reverse().map(Number).join(".")}</option>`).join("");
   $("match").value=r.matches.some(m=>m.id===want)?want:r.matches[0].id;
   $("matchRow").hidden=r.matches.length<2;
@@ -115,6 +115,8 @@ async function loadMatches(){
 }
 async function loadMatch(quiet){
   const id=+$("match").value;lsSet("ammo:romatch",id);
+  try{history.replaceState(null,"",location.pathname+"?m="+id)}catch(e){}         // the address names the match (shareable)
+  $("matchName").textContent=$("match").selectedOptions[0]?$("match").selectedOptions[0].textContent:"";
   try{M=await api("GET",`c/${SLUG}/matches/${id}`);lsSet("ammo:romdata:"+id,M)}
   catch(e){if(quiet)return;M=lsGet("ammo:romdata:"+id);if(!M){$("msg").textContent=e.message;$("msg").hidden=false;return}note(T("Offline – entries wait on this phone and are sent later."))}
   COUNTS={};BY={};M.counts.forEach(c=>{COUNTS[key(c.competitor_id,c.stage,c.item_id)]=c.qty;BY[key(c.competitor_id,c.stage,c.item_id)]=c.by});

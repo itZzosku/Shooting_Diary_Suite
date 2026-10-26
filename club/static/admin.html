@@ -609,7 +609,7 @@ $("mSel").addEventListener("change",loadMatch);
 const ST={ok:["✓ ok",""],unpaid:["not paid","warn"],less:["fewer by the shooter","warn"],more:["more by the shooter",""],missing:["no own entry","warn"]};
 function renderMatch(){
   if(!MD){$("mBody").innerHTML=`<div class="card"><p class="hint" style="margin:0">${T("hintMatches")}</p></div>`;return}
-  const m=MD.match,bx=(m.boxes||[]).map(id=>(boxOf(id)||{}).name).filter(Boolean),ro=location.origin+"/ammo/"+SLUG+"/ro";
+  const m=MD.match,bx=(m.boxes||[]).map(id=>(boxOf(id)||{}).name).filter(Boolean),ro=location.origin+"/ammo/"+SLUG+"/ro?m="+m.id;   // the link opens this match
   const cal=id=>{const i=MD.items.find(x=>x.id===id);return i?i.calibre+(i.name?" "+i.name:""):"?"};
   const rep=MD.report||[],tOff=rep.reduce((a,r)=>a+r.officer,0),tOwn=rep.reduce((a,r)=>a+r.own,0),owes=rep.reduce((a,r)=>a+r.owes,0);
   const squads=[...new Set(MD.competitors.map(c=>c.squad).filter(Boolean))];
