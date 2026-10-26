@@ -33,7 +33,7 @@ MATCH = """query ClubMatch($ct: Int!, $id: String!) {
       stages_count
       competitors_approved_w_wo_results_not_dnf {
         id
-        ... on IpscCompetitorNode { first_name last_name number get_division_display }
+        ... on IpscCompetitorNode { first_name last_name number get_division_display category }
       }
       squads { id ... on IpscSquadNode { number get_squad_display competitors { id } } }
     }
@@ -135,7 +135,8 @@ def fetch(url, opener=None):
         name = " ".join(x for x in (str(c.get("first_name") or "").strip(), str(c.get("last_name") or "").strip()) if x)
         if len(name) >= 2:
             comps.append({"num": str(c.get("number") or ""), "name": name, "squad": squad_of.get(str(c.get("id")), ""),
-                          "division": str(c.get("get_division_display") or "")})
+                          "division": str(c.get("get_division_display") or ""),
+                          "category": str(c.get("category") or "")[:60]})       # e.g. Special 2 = borrows a pistol
     comps.sort(key=lambda c: (c["squad"] == "", int(c["squad"]) if c["squad"].isdigit() else 0, c["squad"], c["name"]))
     return {"url": "https://shootnscoreit.com/event/%s/%s/" % ids, "name": str(ev.get("name") or "")[:80],
             "date": _local_date(ev.get("starts")), "stages": int(ev.get("stages_count") or 0), "competitors": comps}

@@ -424,7 +424,7 @@ def test_match_officer_counts_and_report(setup):
 SSI_EVENT = {"event": {"id": "1", "name": "Testikisa 2026", "starts": "2026-10-27T15:00:00+00:00", "stages_count": 5,
                        "competitors_approved_w_wo_results_not_dnf": [
                            {"id": "c1", "first_name": "Aatu", "last_name": "Ampuja", "number": 1, "get_division_display": "Production"},
-                           {"id": "c2", "first_name": "Bertta", "last_name": "Bee", "number": 2, "get_division_display": "Standard"},
+                           {"id": "c2", "first_name": "Bertta", "last_name": "Bee", "number": 2, "get_division_display": "Standard", "category": "Special 2"},
                            {"id": "c3", "first_name": "Cecilia", "last_name": "Cee", "number": 3, "get_division_display": "Open"}],
                        "squads": [{"id": "s1", "number": 1, "competitors": [{"id": "c1"}, {"id": "c2"}]},
                                   {"id": "s2", "number": 2, "competitors": [{"id": "c3"}]}]}}
@@ -461,7 +461,8 @@ def test_ssi_api_reader(monkeypatch):
     calls = _fake_ssi(monkeypatch, expire_once=True)
     r = ssi.fetch("https://shootnscoreit.com/event/22/1/participants/")
     assert (r["name"], r["date"], r["stages"]) == ("Testikisa 2026", "2026-10-27", 5)
-    assert r["competitors"][0] == {"num": "1", "name": "Aatu Ampuja", "squad": "1", "division": "Production"}
+    assert r["competitors"][0] == {"num": "1", "name": "Aatu Ampuja", "squad": "1", "division": "Production", "category": ""}
+    assert r["competitors"][1]["category"] == "Special 2"
     assert [c["squad"] for c in r["competitors"]] == ["1", "1", "2"]
     assert calls == {"login": 2, "query": 2, "expired": False}            # expired token: logged in again once
     ssi.fetch("https://shootnscoreit.com/event/22/1/")
@@ -484,5 +485,6 @@ def test_ssi_endpoint_and_match_link(setup, monkeypatch):
     moved = [dict(c, squad="3") if c["name"] == "Cecilia Cee" else c for c in r["competitors"]]   # re-squadded in SSI
     c = a.post(f"{C}/matches/{mid}/competitors", json={"rows": moved}).json
     assert (c["added"], c["updated"]) == (0, 1)
-    assert {x["name"]: x["squad"] for x in a.get(f"{C}/matches/{mid}").json["competitors"]}["Cecilia Cee"] == "3"
+    got = {x["name"]: x for x in a.get(f"{C}/matches/{mid}").json["competitors"]}
+    assert got["Cecilia Cee"]["squad"] == "3" and got["Bertta Bee"]["category"] == "Special 2"
     assert app.test_client().post(f"{C}/ssi", json={"url": "https://shootnscoreit.com/event/22/1/"}).status_code in (401, 403)

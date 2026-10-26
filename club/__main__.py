@@ -76,7 +76,9 @@ def main(argv=None):
         print(f"Name:   {r['name']}\nDate:   {r['date'] or '?'}\nStages: {r['stages'] or '?'}\n"
               f"Competitors: {len(r['competitors'])}, squads: {len({c['squad'] for c in r['competitors'] if c['squad']})}")
         for c in r["competitors"][:3]:
-            print(f"  #{c['num']} {c['name']} · squad {c['squad'] or '-'} · {c['division']}")
+            print(f"  #{c['num']} {c['name']} · squad {c['squad'] or '-'} · {c['division']} · category {c['category'] or '-'}")
+        cats = sorted({c["category"] for c in r["competitors"] if c["category"]})
+        print("Categories:", ", ".join(cats) or "none")
         return
     club.init_db()
 

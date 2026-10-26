@@ -55,6 +55,8 @@ def init_db(conn):
         conn.execute("ALTER TABLE moves ADD COLUMN comp_id INTEGER")        # shooter's entry → competitor
     if "ssi_url" not in {r[1] for r in conn.execute("PRAGMA table_info(matches)")}:
         conn.execute("ALTER TABLE matches ADD COLUMN ssi_url TEXT NOT NULL DEFAULT ''")   # where it was read from
+    if "category" not in {r[1] for r in conn.execute("PRAGMA table_info(competitors)")}:
+        conn.execute("ALTER TABLE competitors ADD COLUMN category TEXT NOT NULL DEFAULT ''")  # SSI category (loan gun)
     if "stage_ammo" not in {r[1] for r in conn.execute("PRAGMA table_info(matches)")}:
         conn.execute("ALTER TABLE matches ADD COLUMN stage_ammo TEXT NOT NULL DEFAULT '{}'")  # {"3": [item ids]}
 
@@ -215,7 +217,8 @@ def api_competitors(slug, mid):
             continue
         name = _clean(r.get("name"), 80)
         if len(name) >= 2:
-            clean.append((_clean(r.get("num"), 12), name, _clean(r.get("squad"), 30), _clean(r.get("division"), 40)))
+            clean.append((_clean(r.get("num"), 12), name, _clean(r.get("squad"), 30), _clean(r.get("division"), 40),
+                          _clean(r.get("category"), 60)))
     if b.get("replace"):
         if conn.execute("SELECT 1 FROM officer_counts WHERE match_id=? LIMIT 1", (mid,)).fetchone():
             return _err("Officers have already entered rounds – add competitors instead of replacing the list.")
@@ -223,17 +226,17 @@ def api_competitors(slug, mid):
         conn.execute("DELETE FROM competitors WHERE match_id=?", (mid,))
     have = {r["name"].lower(): r["id"] for r in conn.execute("SELECT id, name FROM competitors WHERE match_id=?", (mid,))}
     added = updated = 0
-    for num, name, squad, div in clean:
+    for num, name, squad, div, cat in clean:
         if name.lower() in have:              # already on the list: take the new number / squad / division (re-fetch)
             if have[name.lower()]:
-                updated += conn.execute("UPDATE competitors SET num=?, squad=?, division=? WHERE id=? AND "
-                                        "(num!=? OR squad!=? OR division!=?)",
-                                        (num, squad, div, have[name.lower()], num, squad, div)).rowcount
+                updated += conn.execute("UPDATE competitors SET num=?, squad=?, division=?, category=? WHERE id=? AND "
+                                        "(num!=? OR squad!=? OR division!=? OR category!=?)",
+                                        (num, squad, div, cat, have[name.lower()], num, squad, div, cat)).rowcount
                 have[name.lower()] = None
             continue
         have[name.lower()] = None
-        conn.execute("INSERT INTO competitors(match_id,num,name,squad,division) VALUES(?,?,?,?,?)",
-                     (mid, num, name, squad, div))
+        conn.execute("INSERT INTO competitors(match_id,num,name,squad,division,category) VALUES(?,?,?,?,?,?)",
+                     (mid, num, name, squad, div, cat))
         added += 1
     conn.commit()
     return jsonify(ok=True, added=added, updated=updated)

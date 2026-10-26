@@ -624,7 +624,7 @@ function renderMatch(){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>${T("Competitors")} (${MD.competitors.length})</h2>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${m.ssi_url&&MS.ssi?`<button type="button" class="ghost" id="mSsi">${T("Fetch from SSI")}</button>`:""}<button type="button" class="ghost" id="mPaste">${T("Paste from SSI…")}</button></div></div>
       ${MD.competitors.length?`<details><summary class="hint" style="cursor:pointer">${T("Show list")}${squads.length?" · "+T("{n} squads",{n:squads.length}):""}</summary>
-        ${MD.competitors.map(c=>`<div class="irow"><span>${c.num?`<span class="num">#${esc(c.num)}</span> `:""}<b>${esc(c.name)}</b><br><small class="hint">${[c.squad&&T("Squad")+" "+esc(c.squad),esc(c.division)].filter(Boolean).join(" · ")}</small></span>
+        ${MD.competitors.map(c=>`<div class="irow"><span>${c.num?`<span class="num">#${esc(c.num)}</span> `:""}<b>${esc(c.name)}</b><br><small class="hint">${[c.squad&&T("Squad")+" "+esc(c.squad),esc(c.division),c.category&&esc(c.category)].filter(Boolean).join(" · ")}</small></span>
           <button class="link" type="button" data-rmcomp="${c.id}">${T("Remove")}</button></div>`).join("")}</details>`:`<p class="hint" style="margin:0">${T("hintPaste")}</p>`}
     </div>
     <div class="card" style="display:flex;flex-direction:column;gap:6px">
@@ -720,7 +720,7 @@ async function matchExport(fmt){
 }
 
 /* Paste from SSI: copy the participants table on shootnscoreit.com, paste here, pick which column is which */
-const COLS=[["","—"],["name","Name"],["first","First name"],["last","Last name"],["squad","Squad"],["division","Division"],["num","Number"]];
+const COLS=[["","—"],["name","Name"],["first","First name"],["last","Last name"],["squad","Squad"],["division","Division"],["category","Category"],["num","Number"]];
 function parsePaste(t){
   let rows=t.split(/\r?\n/).map(l=>l.replace(/\s+$/,"")).filter(l=>l.trim());
   const tab=rows.some(l=>l.includes("\t"));
@@ -732,7 +732,7 @@ function guessCols(rows){
   for(let i=0;i<w;i++){
     const h=(head[i]||"").toLowerCase(),vals=rows.slice(1,30).map(r=>r[i]||"");
     let g=/^(competitor|name|nimi|shooter|ampuja)$/.test(h)?"name":/first|etunimi/.test(h)?"first":/last|sukunimi/.test(h)?"last":
-      /squad|ryhmä|sq/.test(h)?"squad":/division|divisioona|luokka|class/.test(h)?"division":/^(#|no\.?|nr|num|number|numero|id)$/.test(h)?"num":"";
+      /squad|ryhmä|sq/.test(h)?"squad":/categor|kategoria/.test(h)?"category":/division|divisioona|luokka|class/.test(h)?"division":/^(#|no\.?|nr|num|number|numero|id)$/.test(h)?"num":"";
     if(g)hdr=true;
     if(!g&&vals.length&&vals.filter(x=>/^\d{1,4}$/.test(x)).length>=vals.length*.8)g=out.includes("num")?"":"num";
     if(!g&&vals.length&&vals.filter(x=>/^[^\d\s]+(?:[ -][^\d\s]+)+$/.test(x)).length>=vals.length*.7&&!out.includes("name"))g="name";
@@ -755,7 +755,7 @@ function pasteSheet(){
       toast(T("{n} competitors added",{n:r.added}));setTimeout(loadMatch,0)},T("Import"));
   const build=()=>rows.slice(hdr?1:0).map(r=>{const o={};cols.forEach((c,i)=>{if(c)o[c]=(o[c]?o[c]+" ":"")+(r[i]||"")});
     if(!o.name&&(o.first||o.last))o.name=[o.first,o.last].filter(Boolean).join(" ");let nm=(o.name||"").trim();const lf=nm.match(/^([^,]+),\s*([^,]+)$/);if(lf)nm=lf[2]+" "+lf[1];           // "Last, First" → "First Last"
-    return{name:nm,squad:(o.squad||"").replace(/^(squad|ryhmä|sq)\.?\s*/i,""),division:o.division||"",num:o.num||""}}).filter(r=>r.name.length>=2);
+    return{name:nm,squad:(o.squad||"").replace(/^(squad|ryhmä|sq)\.?\s*/i,""),division:o.division||"",category:o.category||"",num:o.num||""}}).filter(r=>r.name.length>=2);
   const draw=()=>{if(!rows.length){$("pMap").innerHTML="";return}
     const w=cols.length,show=rows.slice(0,6);
     $("pMap").innerHTML=`<label class="check"><input type="checkbox" id="pHdr" ${hdr?"checked":""}> ${T("First row is the headings")}</label>

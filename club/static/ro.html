@@ -29,6 +29,8 @@
 .comp .q input{width:62px;text-align:center;font-family:var(--f-mono);font-weight:600;font-size:1.1rem;padding:8px 4px}
 .comp select{font-size:.85rem;padding:6px 8px;min-width:0}
 .comp.has{box-shadow:inset 4px 0 0 var(--accent);padding-left:10px}
+.loan{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--accent);color:#fff;font-size:.7rem;font-weight:700;vertical-align:2px}
+.divider{margin:18px 0 0;padding-bottom:6px;border-bottom:2px solid var(--line);font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .state{font-size:.75rem;color:var(--muted);min-width:14px;text-align:center}
 .state.wait{color:var(--accent)}
 </style>
@@ -70,7 +72,8 @@ const FI={Officer:"Toimitsija",Match:"Ottelu",Stage:"Rasti",Squad:"Ryhmä",All:"
   "Stage {s}: {n} rounds · all stages {t}":"Rasti {s}: {n} patruunaa · kaikki rastit {t}","total {n}":"yht. {n}",
   "No matches yet – an admin adds them on the admin page (Matches).":"Ei vielä otteluita – ylläpitäjä lisää ne hallintasivulla (Ottelut).",
   "No competitors yet.":"Ei vielä ampujia.","Offline – entries wait on this phone and are sent later.":"Ei yhteyttä – kirjaukset odottavat puhelimessa ja lähtevät myöhemmin.",
-  "Sent {n} saved entries":"Lähetetty {n} tallennettua kirjausta","Not saved:":"Ei tallentunut:",fewer:"Vähemmän",more:"Enemmän",Ammo:"Patruuna","+ another ammo":"+ Toinen patruuna"};
+  "Sent {n} saved entries":"Lähetetty {n} tallennettua kirjausta","Not saved:":"Ei tallentunut:",fewer:"Vähemmän",more:"Enemmän","Loan rifle":"Lainakivääri","Loan pistol":"Lainapistooli","Loan shotgun":"Lainahaulikko",
+  "Other competitors ({n})":"Muut ampujat ({n})","Competitors ({n})":"Ampujat ({n})",Ammo:"Patruuna","+ another ammo":"+ Toinen patruuna"};
 let LANG=lsGet("ammo:adminlang")||((navigator.language||"").toLowerCase().startsWith("fi")?"fi":"en");
 const T=(s,v)=>{let r=(LANG==="fi"&&FI[s])||{hintRo:"For every competitor who used club ammo, enter the rounds they shot on this stage. Saved at once – also without signal; sent when the connection is back.",fewer:"Fewer",more:"More"}[s]||s;
   if(v)for(const k in v)r=r.split("{"+k+"}").join(v[k]);return r};
@@ -102,6 +105,10 @@ function lines(c){
   const def=((M.match.stage_ammo||{})[STAGE]||[]).filter(id=>M.items.some(i=>i.id===id));   // the stage's default ammo (match setup)
   return def.length?M.items.filter(i=>def.includes(i.id)).map(i=>i.id):[M.items.some(i=>i.id===PICK[c])?PICK[c]:M.items[0].id]}
 const ammo=i=>esc(i.calibre)+(i.name?" "+esc(i.name):"");
+// SSI category → loan gun: Special 1 = rifle, Special 2 = pistol, Special 3 = shotgun (also "S1", "Erikois 2" …)
+const LOAN=["","Loan rifle","Loan pistol","Loan shotgun"];
+function loans(c){const out=new Set(),t=String(c.category||"");
+  for(const m of t.matchAll(/(?:special|spec\.?|erikois)\s*([123])\b|\bS([123])\b/gi))out.add(LOAN[+(m[1]||m[2])]);return[...out]}
 
 async function loadMatches(){
   let r;try{r=await api("GET",`c/${SLUG}/ro`)}catch(e){$("msg").textContent=e.message;$("msg").hidden=false;return}
@@ -133,11 +140,15 @@ function render(){
   $("squadRow").hidden=!squads.length;
   $("squads").innerHTML=`<button type="button" data-sq="" aria-pressed="${!SQUAD}">${T("All")}</button>`+squads.map(s=>`<button type="button" data-sq="${esc(s)}" aria-pressed="${SQUAD===s}">${esc(s)}</button>`).join("");
   const q=$("find").value.trim().toLowerCase();
-  const list=M.competitors.filter(c=>(!SQUAD||c.squad===SQUAD)&&(!q||c.name.toLowerCase().includes(q)||c.num===q));
+  // Loan-gun competitors (SSI category Special 1/2/3) and anyone with club ammo rounds first; the rest below
+  const inUse=c=>loans(c).length||M.items.some(i=>Array.from({length:M.match.stages},(_,k)=>COUNTS[key(c.id,k+1,i.id)]).some(Boolean));
+  const list=M.competitors.filter(c=>(!SQUAD||c.squad===SQUAD)&&(!q||c.name.toLowerCase().includes(q)||c.num===q))
+    .map((c,i)=>[c,i]).sort((a,b)=>(inUse(b[0])?1:0)-(inUse(a[0])?1:0)||a[1]-b[1]).map(x=>x[0]);
+  const firstOther=list.findIndex(c=>!inUse(c));
   const pend=new Set(queue().filter(x=>x.mid===M.match.id).map(x=>key(x.comp,x.stage,x.item)));
-  $("list").innerHTML=list.length?list.map(c=>{const ls=lines(c.id),stN=rounds(c.id,STAGE),tot=Array.from({length:M.match.stages},(_,i)=>rounds(c.id,i+1)).reduce((a,b)=>a+b,0);
+  $("list").innerHTML=list.length?list.map((c,ix)=>{const ls=lines(c.id),stN=rounds(c.id,STAGE),tot=Array.from({length:M.match.stages},(_,i)=>rounds(c.id,i+1)).reduce((a,b)=>a+b,0);
     const by=[...new Set(ls.map(it=>COUNTS[key(c.id,STAGE,it)]&&BY[key(c.id,STAGE,it)]).filter(x=>x&&x!==M.me))];
-    return`<div class="comp${stN?" has":""}" data-c="${c.id}"><div class="who"><b>${esc(c.name)}</b><small>${[c.num&&"#"+esc(c.num),c.squad&&T("Squad")+" "+esc(c.squad),tot?T("total {n}",{n:tot}):"",by.length?"✎ "+by.map(esc).join(", "):""].filter(Boolean).join(" · ")}</small></div>
+    return`${ix===firstOther?`<div class="divider">${T(firstOther?"Other competitors ({n})":"Competitors ({n})",{n:list.length-firstOther})}</div>`:""}<div class="comp${stN?" has":""}" data-c="${c.id}"><div class="who"><b>${esc(c.name)}</b>${loans(c).map(w=>`<span class="loan">${T(w)}</span>`).join("")}<small>${[c.num&&"#"+esc(c.num),c.squad&&T("Squad")+" "+esc(c.squad),tot?T("total {n}",{n:tot}):"",by.length?"✎ "+by.map(esc).join(", "):""].filter(Boolean).join(" · ")}</small></div>
       ${ls.map(it=>{const n=COUNTS[key(c.id,STAGE,it)]||0,k=key(c.id,STAGE,it);
         return`<div class="ln" data-it="${it}">${M.items.length>1?`<select data-item aria-label="${T("Ammo")}">${M.items.filter(i=>i.id===it||!ls.includes(i.id)).map(i=>`<option value="${i.id}" ${i.id===it?"selected":""}>${ammo(i)}</option>`).join("")}</select>`:`<span class="lab">${ammo(M.items[0])}</span>`}
         <div class="q"><button type="button" data-d="-1" aria-label="${T("fewer")}">−</button><input type="number" inputmode="numeric" min="0" max="2000" value="${n||""}" placeholder="0"><button type="button" data-d="1" aria-label="${T("more")}">+</button>

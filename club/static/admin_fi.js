@@ -40,6 +40,7 @@ const ADMIN_FI={
   "Officers":"Toimitsijat","Own entry":"Oma kirjaus","Difference":"Erotus","Missing €":"Puuttuu €","Status":"Tila",
   "Default ammo per stage (optional)":"Oletuspatruuna rasteittain (valinnainen)","All stages":"Kaikki rastit","Stage":"Rasti","No ammo in these boxes.":"Näissä laatikoissa ei ole patruunoita.",
   hintStageAmmo:"Toimitsijasivu avaa rastin näillä patruunoilla valmiiksi (esim. pistooli + kivääri -rastilla molemmat). Ilman valintaa ampujan edellisellä rastilla käyttämä patruuna.",
+  "Category":"Kategoria",
   "SSI link (optional)":"SSI-linkki (valinnainen)","Fetch":"Hae","Fetch from SSI":"Hae SSI:stä","Reading SSI…":"Luetaan SSI:tä…",
   hintSsiLink:"Liitä ottelun linkki shootnscoreit.comista ja paina Hae: nimi, päivä, rastit ja ampujat ryhmineen tulevat SSI:n rajapinnasta.",
   hintSsiSetup:"SSI-haku ei ole käytössä: palvelimen .env-tiedostoon tarvitaan SSI_API_KEY, SSI_EMAIL ja SSI_PASSWORD. Siihen asti täytä ottelu käsin ja liitä ampujataulukko.",

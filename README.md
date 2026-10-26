@@ -387,7 +387,9 @@ in, their name, "add to my diary"). Moving it to its own repository means rewrit
   suggests the competitor names, so a shooter's own entry links to them. *Reconciliation* compares officers' rounds
   with the shooters' own entries (✓ ok · fewer · no own entry · not paid) and shows the missing €; PDF / CSV for
   the treasurer. *Default ammo per stage* (match setup, optional; several on a pistol + rifle stage) opens each stage
-  on the officer page with those ammo lines; *+ another ammo* adds one. The officer page shows who entered each count and reloads others' entries every 45 s. Officers never see
+  on the officer page with those ammo lines; *+ another ammo* adds one. SSI's competitor *category* is read too: Special 1 / 2 / 3 = loan rifle / pistol / shotgun –
+  those competitors (and anyone with rounds) are listed first on the officer page with a tag, the rest under *Other
+  competitors*. The officer page shows who entered each count and reloads others' entries every 45 s. Officers never see
   money, stock or names outside the competitor list. The list can't be replaced once officers have entered rounds.
 - **Languages**: admin pages in Finnish or English (FI · EN at the top, remembered per phone; Finnish texts in
   `club/static/admin_fi.js`); stickers in Finnish, Swedish or English; shooter forms in Finnish, Swedish or English.
