@@ -140,8 +140,9 @@ def init_db():
         conn.execute("ALTER TABLE boxes ADD COLUMN cals TEXT NOT NULL DEFAULT '[]'")    # more calibres in the same box
     if "lows" not in {r[1] for r in conn.execute("PRAGMA table_info(boxes)")}:
         conn.execute("ALTER TABLE boxes ADD COLUMN lows TEXT NOT NULL DEFAULT '{}'")    # refill level per calibre
-    from . import shop
+    from . import shop, match
     shop.init_db(conn)                        # fees and merch
+    match.init_db(conn)                       # matches: competitors and officers' counts
     conn.commit()
     conn.close()
 
@@ -240,7 +241,9 @@ def delete_club(slug, conn=None):
         if not r:
             return None
         out = {}
-        for t in ("moves", "boxes", "items", "levels", "club_roles", "sales", "products"):
+        for t in ("officer_counts", "competitors"):
+            c.execute(f"DELETE FROM {t} WHERE match_id IN (SELECT id FROM matches WHERE club_id=?)", (r["id"],))
+        for t in ("moves", "boxes", "items", "levels", "club_roles", "sales", "products", "matches"):
             out[t] = c.execute(f"DELETE FROM {t} WHERE club_id=?", (r["id"],)).rowcount
         c.execute("DELETE FROM clubs WHERE id=?", (r["id"],))
         c.commit()
@@ -281,7 +284,7 @@ def all_clubs():
 
 
 def role_of(club, user, conn=None):
-    """'admin', 'holder' (holds a box) or None."""
+    """'admin', 'officer' (range / stat officer: enters rounds per competitor), 'holder' (holds a box) or None."""
     if not user or not club:
         return None
     if user.get("is_admin"):
@@ -420,7 +423,7 @@ def index():
         return redirect(bridge.login_url())
     clubs = my_clubs(u)
     if len(clubs) == 1:
-        return redirect(f"/ammo/{clubs[0]['slug']}/admin")
+        return redirect(f"/ammo/{clubs[0]['slug']}/{'ro' if clubs[0]['role'] == 'officer' else 'admin'}")
     return _page("clubs.html")
 
 
@@ -437,8 +440,11 @@ def admin_page(slug):
     if not u:
         return redirect(bridge.login_url())
     club = club_by_slug(slug)
-    if not club or not role_of(club, u):
+    role = role_of(club, u) if club else None
+    if not role:
         abort(404)
+    if role == "officer":
+        return redirect(f"/ammo/{slug}/ro")
     return _page("admin.html")
 
 
@@ -537,13 +543,21 @@ def api_box(code):
     if not box:
         return _err("not_found", 404)
     u = current_user()
+    from . import match
+    m = match.active_match_for_box(conn, club["id"], box["id"], _local_today())
+    mout = {"id": m["id"], "name": m["name"], "competitors": [{"id": c["id"], "name": c["name"], "squad": c["squad"]}
+                                                             for c in match.competitors(conn, m["id"])]} if m else None
     return jsonify(club={"name": club["name"], "slug": club["slug"], "mobilepay": club["mobilepay"],
-                         "pay_msg": club["pay_msg"]},
+                         "pay_msg": club["pay_msg"]}, match=mout,
                    box={"name": box["name"], "calibre": " + ".join(box_cals(box)), "cals": box_cals(box),
                         "pay_url": box["pay_url"]},
                    items=_box_items(conn, club, box),
                    me={"name": bridge.display_name(u), "user": u["username"]} if u else None,
                    withdraw_min=WITHDRAW_MIN)
+
+
+def _local_today():
+    return time.strftime("%Y-%m-%d", time.localtime())
 
 
 def _valid_date(s):
@@ -573,7 +587,14 @@ def api_use(code):
             return jsonify(ok=True, **_entry_out(conn, prev["grp"]))
     if _limited():
         return _err("Too many entries from here – try again later.", 429)
-    name = _clean(body.get("name"), 60)
+    comp = None
+    if body.get("comp"):                       # picked from the match's competitor list
+        try:
+            comp = conn.execute("SELECT c.id, c.name FROM competitors c JOIN matches m ON m.id=c.match_id "
+                                "WHERE c.id=? AND m.club_id=?", (int(body["comp"]), club["id"])).fetchone()
+        except (TypeError, ValueError):
+            comp = None
+    name = comp["name"] if comp else _clean(body.get("name"), 60)
     if len(name) < 2:
         return _err("Write your name.")
     d = str(body.get("date") or "")
@@ -600,9 +621,9 @@ def api_use(code):
     paid = 1 if body.get("paid", True) else 0
     for i, (it, q) in enumerate(rows):
         conn.execute("INSERT INTO moves(club_id,grp,kind,box_id,item_id,qty,price,name,uid,date,at,paid,ref,device,"
-                     "client_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                     (club["id"], grp, "use", box["id"], it["id"], -q, it["price"], name, u["id"] if u else None,
-                      d, at, paid, ref, device, cid if i == 0 else None))
+                     "client_id,comp_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     (club["id"], grp, "use", box["id"], it["id"], -q, it["price"], comp["name"] if comp else name,
+                      u["id"] if u else None, d, at, paid, ref, device, cid if i == 0 else None, comp["id"] if comp else None))
     conn.commit()
     out = _entry_out(conn, grp)
     if u and body.get("diary"):
@@ -680,7 +701,8 @@ def _club_for(slug, need="admin"):
         abort(401)
     club = club_by_slug(slug)
     role = role_of(club, u) if club else None
-    if not role or (need == "admin" and role != "admin"):
+    ok = {"admin": ("admin",), "any": ("admin", "holder"), "officer": ("admin", "officer")}[need]
+    if role not in ok:
         abort(404 if not role else 403)
     return club, u, role
 
@@ -744,7 +766,7 @@ def api_state(slug):
     levels = {r["calibre"]: r["low"] for r in conn.execute("SELECT * FROM levels WHERE club_id=?", (club["id"],))}
     cal_totals = cal_stock(conn, club["id"])
     people = [{"user_id": r["user_id"], "role": r["role"]}
-              for r in conn.execute("SELECT * FROM club_roles WHERE club_id=?", (club["id"],))]
+              for r in conn.execute("SELECT * FROM club_roles WHERE club_id=? ORDER BY role", (club["id"],))]
     names = _user_names({p["user_id"] for p in people} | {b["holder_uid"] for b in boxes if b["holder_uid"]})
     for p in people:
         p["username"] = names.get(p["user_id"], "?")
@@ -1054,15 +1076,16 @@ def api_paid(slug, grp):
 
 @cbp.post("/api/c/<slug>/people")
 def api_people(slug):
-    """Make a diary account an admin of the club (role "admin"), or remove it (role "")."""
+    """Give a diary account a role in the club – "admin" or "officer" (range / stat officer) – or remove it ("")."""
     club, me, _r = _club_for(slug)
     b = _body()
     u = bridge.user_by_name(str(b.get("username") or "").strip().lower())
     if not u:
         return _err("No diary account with that name.")
-    if u["id"] == me["id"] and not b.get("role"):
+    role = b.get("role") if b.get("role") in ("admin", "officer") else None
+    if u["id"] == me["id"] and role != "admin":
         return _err("Not yourself – ask another admin.")
-    set_role(club["id"], u["id"], "admin" if b.get("role") else None, cdb())
+    set_role(club["id"], u["id"], role, cdb())
     return jsonify(ok=True)
 
 
@@ -1070,3 +1093,5 @@ def api_people(slug):
 from . import shop  # noqa: E402,F401
 # Treasurer's export (CSV / Excel / data for the PDF)
 from . import export  # noqa: E402,F401
+# Matches: competitors from SSI, range / stat officers' counts per stage, reconciliation
+from . import match  # noqa: E402,F401

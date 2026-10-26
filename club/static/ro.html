@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Toimitsija</title>
+<meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141714" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="32x32" href="/diary/static/icons/favicon-32.png">
+<link rel="stylesheet" href="/diary/static/fonts/fonts.css">
+<link rel="stylesheet" href="/ammo/static/club.css">
+<style>
+.langs{display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px}
+.langs button{background:none;border:0;border-radius:999px;padding:6px 11px;font-weight:600;font-size:.85rem;color:var(--fg);min-width:40px}
+.langs button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.95rem;font-weight:600;min-width:44px}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.sticky{position:sticky;top:0;z-index:2;background:var(--bg);padding:10px 0;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.comp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.comp .who b{font-weight:600}
+.comp .who small{display:block;color:var(--muted);font-size:.8rem}
+.comp .q{display:flex;align-items:center;gap:4px}
+.comp .q button{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:1.2rem;line-height:1}
+.comp .q input{width:62px;text-align:center;font-family:var(--f-mono);font-weight:600;font-size:1.1rem;padding:8px 4px}
+.comp select{grid-column:1/-1;font-size:.85rem;padding:6px 8px}
+.comp.has{box-shadow:inset 4px 0 0 var(--accent);padding-left:10px}
+.state{font-size:.75rem;color:var(--muted);min-width:14px;text-align:center}
+.state.wait{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div><div class="kicker" id="clubName"></div><h1 data-t="Officer"></h1></div>
+    <div style="display:flex;gap:8px;align-items:center"><div class="langs" id="langs"><button type="button" data-lang="fi">FI</button><button type="button" data-lang="en">EN</button></div></div>
+  </header>
+  <div class="banner" id="note" hidden></div>
+  <label class="f" id="matchRow" hidden><span data-t="Match"></span><select id="match"></select></label>
+  <div class="msg" id="msg" hidden></div>
+
+  <section id="main" hidden>
+    <div class="sticky">
+      <div><div class="kicker" style="margin-bottom:6px" data-t="Stage"></div><div class="seg" id="stages"></div></div>
+      <div id="squadRow"><div class="kicker" style="margin-bottom:6px" data-t="Squad"></div><div class="seg" id="squads"></div></div>
+      <input type="search" id="find" data-tp="Find a name or number">
+      <div class="hint" id="sum"></div>
+    </div>
+    <p class="hint" data-t="hintRo" style="margin:10px 0 0"></p>
+    <div id="list"></div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const SLUG=location.pathname.split("/")[2];
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const lsGet=k=>{try{return JSON.parse(localStorage.getItem(k)||"null")}catch(e){return null}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+function toast(s){const el=$("toast");el.textContent=s;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2200)}
+
+const FI={Officer:"Toimitsija",Match:"Ottelu",Stage:"Rasti",Squad:"Ryhmä",All:"Kaikki","Find a name or number":"Etsi nimi tai numero",
+  hintRo:"Kirjaa jokaiselle seuran patruunoita käyttäneelle ampujalle tällä rastilla ammutut patruunat. Tallentuu heti – myös ilman verkkoa, ja lähtee kun yhteys palaa.",
+  "Stage {s}: {n} rounds · all stages {t}":"Rasti {s}: {n} patruunaa · kaikki rastit {t}","total {n}":"yht. {n}",
+  "No matches yet – an admin adds them on the admin page (Matches).":"Ei vielä otteluita – ylläpitäjä lisää ne hallintasivulla (Ottelut).",
+  "No competitors yet.":"Ei vielä ampujia.","Offline – entries wait on this phone and are sent later.":"Ei yhteyttä – kirjaukset odottavat puhelimessa ja lähtevät myöhemmin.",
+  "Sent {n} saved entries":"Lähetetty {n} tallennettua kirjausta","Not saved:":"Ei tallentunut:",fewer:"Vähemmän",more:"Enemmän"};
+let LANG=lsGet("ammo:adminlang")||((navigator.language||"").toLowerCase().startsWith("fi")?"fi":"en");
+const T=(s,v)=>{let r=(LANG==="fi"&&FI[s])||{hintRo:"For every competitor who used club ammo, enter the rounds they shot on this stage. Saved at once – also without signal; sent when the connection is back.",fewer:"Fewer",more:"More"}[s]||s;
+  if(v)for(const k in v)r=r.split("{"+k+"}").join(v[k]);return r};
+function applyLang(){document.documentElement.lang=LANG;
+  document.querySelectorAll("#langs [data-lang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lang===LANG));
+  document.querySelectorAll("[data-t]").forEach(el=>el.textContent=T(el.dataset.t));
+  document.querySelectorAll("[data-tp]").forEach(el=>el.placeholder=T(el.dataset.tp));
+  if(M)render()}
+$("langs").addEventListener("click",e=>{const b=e.target.closest("[data-lang]");if(!b)return;LANG=b.dataset.lang;lsSet("ammo:adminlang",LANG);applyLang()});
+
+async function api(method,path,body){
+  const r=await fetch("/ammo/api/"+path,{method,credentials:"same-origin",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});
+  let j=null;try{j=await r.json()}catch(e){}
+  if(r.status===401){location.href="/diary/login";throw new Error("login")}
+  if(!r.ok){const e=new Error((j&&j.error)||("HTTP "+r.status));e.status=r.status;throw e}
+  return j;
+}
+
+/* ---- state: counts[comp|stage|item] = rounds; queue = entries not sent yet (offline) ---- */
+let M=null,COUNTS={},STAGE=1,SQUAD="",PICK={};
+const QK="ammo:roqueue",key=(c,s,i)=>c+"|"+s+"|"+i;
+const queue=()=>lsGet(QK)||[];
+function rounds(c,s){return M.items.reduce((a,i)=>a+(COUNTS[key(c,s,i.id)]||0),0)}
+function itemFor(c,s){const has=M.items.find(i=>COUNTS[key(c,s,i.id)]);return has?has.id:(PICK[c]||M.items[0].id)}
+
+async function loadMatches(){
+  let r;try{r=await api("GET",`c/${SLUG}/ro`)}catch(e){$("msg").textContent=e.message;$("msg").hidden=false;return}
+  $("clubName").textContent=r.club.name;
+  if(!r.matches.length){$("msg").textContent=T("No matches yet – an admin adds them on the admin page (Matches).");$("msg").hidden=false;return}
+  const want=lsGet("ammo:romatch");
+  $("match").innerHTML=r.matches.map(m=>`<option value="${m.id}">${esc(m.name)} · ${m.date.split("-").reverse().map(Number).join(".")}</option>`).join("");
+  $("match").value=r.matches.some(m=>m.id===want)?want:r.matches[0].id;
+  $("matchRow").hidden=r.matches.length<2;
+  await loadMatch();
+}
+async function loadMatch(){
+  const id=+$("match").value;lsSet("ammo:romatch",id);
+  try{M=await api("GET",`c/${SLUG}/matches/${id}`);lsSet("ammo:romdata:"+id,M)}
+  catch(e){M=lsGet("ammo:romdata:"+id);if(!M){$("msg").textContent=e.message;$("msg").hidden=false;return}note(T("Offline – entries wait on this phone and are sent later."))}
+  COUNTS={};M.counts.forEach(c=>COUNTS[key(c.competitor_id,c.stage,c.item_id)]=c.qty);
+  queue().filter(q=>q.mid===M.match.id).forEach(q=>COUNTS[key(q.comp,q.stage,q.item)]=q.qty);    // not sent yet
+  const st=lsGet("ammo:rostage:"+M.match.id);STAGE=st&&st<=M.match.stages?st:1;
+  $("main").hidden=false;render();
+}
+$("match").addEventListener("change",loadMatch);
+function note(s){$("note").textContent=s;$("note").hidden=!s}
+
+function render(){
+  const squads=[...new Set(M.competitors.map(c=>c.squad).filter(Boolean))];
+  $("stages").innerHTML=Array.from({length:M.match.stages},(_,i)=>`<button type="button" data-st="${i+1}" aria-pressed="${STAGE===i+1}">${i+1}</button>`).join("");
+  $("squadRow").hidden=!squads.length;
+  $("squads").innerHTML=`<button type="button" data-sq="" aria-pressed="${!SQUAD}">${T("All")}</button>`+squads.map(s=>`<button type="button" data-sq="${esc(s)}" aria-pressed="${SQUAD===s}">${esc(s)}</button>`).join("");
+  const q=$("find").value.trim().toLowerCase();
+  const list=M.competitors.filter(c=>(!SQUAD||c.squad===SQUAD)&&(!q||c.name.toLowerCase().includes(q)||c.num===q));
+  const pend=new Set(queue().filter(x=>x.mid===M.match.id).map(x=>key(x.comp,x.stage,x.item)));
+  $("list").innerHTML=list.length?list.map(c=>{const it=itemFor(c.id,STAGE),n=COUNTS[key(c.id,STAGE,it)]||0,tot=Array.from({length:M.match.stages},(_,i)=>rounds(c.id,i+1)).reduce((a,b)=>a+b,0);
+    return`<div class="comp${n?" has":""}" data-c="${c.id}"><div class="who"><b>${esc(c.name)}</b><small>${[c.num&&"#"+esc(c.num),c.squad&&T("Squad")+" "+esc(c.squad),tot?T("total {n}",{n:tot}):""].filter(Boolean).join(" · ")}</small></div>
+      <div class="q"><button type="button" data-d="-1" aria-label="${T("fewer")}">−</button><input type="number" inputmode="numeric" min="0" max="2000" value="${n||""}" placeholder="0"><button type="button" data-d="1" aria-label="${T("more")}">+</button>
+        <span class="state${pend.has(key(c.id,STAGE,it))?" wait":""}">${pend.has(key(c.id,STAGE,it))?"⏳":n?"✓":""}</span></div>
+      ${M.items.length>1?`<select data-item>${M.items.map(i=>`<option value="${i.id}" ${i.id===it?"selected":""}>${esc(i.calibre)}${i.name?" "+esc(i.name):""}</option>`).join("")}</select>`:""}</div>`}).join("")
+    :`<div class="hint" style="padding:12px 0">${T("No competitors yet.")}</div>`;
+  const stageN=M.competitors.reduce((a,c)=>a+rounds(c.id,STAGE),0),all=M.competitors.reduce((a,c)=>a+Array.from({length:M.match.stages},(_,i)=>rounds(c.id,i+1)).reduce((x,y)=>x+y,0),0);
+  $("sum").textContent=T("Stage {s}: {n} rounds · all stages {t}",{s:STAGE,n:stageN,t:all});
+}
+$("stages").addEventListener("click",e=>{const b=e.target.closest("[data-st]");if(!b)return;STAGE=+b.dataset.st;lsSet("ammo:rostage:"+M.match.id,STAGE);render()});
+$("squads").addEventListener("click",e=>{const b=e.target.closest("[data-sq]");if(!b)return;SQUAD=b.dataset.sq;render()});
+$("find").addEventListener("input",render);
+
+/* ---- entering: saved at once; queued on the phone when offline ---- */
+function set(c,item,qty){
+  COUNTS[key(c,STAGE,item)]=qty;
+  const q=queue().filter(x=>!(x.mid===M.match.id&&x.comp===c&&x.stage===STAGE&&x.item===item));
+  q.push({mid:M.match.id,comp:c,stage:STAGE,item,qty});lsSet(QK,q);
+  clearTimeout(set.t);set.t=setTimeout(flush,500);
+}
+$("list").addEventListener("click",e=>{const b=e.target.closest("[data-d]");if(!b)return;const row=b.closest("[data-c]"),c=+row.dataset.c,it=itemFor(c,STAGE);
+  const n=Math.max(0,(COUNTS[key(c,STAGE,it)]||0)+ +b.dataset.d);set(c,it,n);render()});
+$("list").addEventListener("change",e=>{const row=e.target.closest("[data-c]");if(!row)return;const c=+row.dataset.c;
+  if(e.target.matches("[data-item]")){            // another ammo for this competitor on this stage: move the rounds over
+    const old=itemFor(c,STAGE),nw=+e.target.value,n=COUNTS[key(c,STAGE,old)]||0;PICK[c]=nw;
+    if(old!==nw&&n){set(c,old,0);set(c,nw,n)}render();return}
+  if(e.target.type==="number"){const n=Math.max(0,Math.min(2000,parseInt(e.target.value,10)||0));set(c,itemFor(c,STAGE),n);render()}});
+async function flush(){
+  const q=queue();if(!q.length)return;const left=[];let sent=0;
+  for(const x of q){
+    try{await api("POST",`c/${SLUG}/matches/${x.mid}/count`,{comp:x.comp,stage:x.stage,item:x.item,qty:x.qty});sent++}
+    catch(e){if(e.status&&e.status!==429){toast(T("Not saved:")+" "+e.message)}else left.push(x)}}
+  lsSet(QK,left);note(left.length?T("Offline – entries wait on this phone and are sent later."):"");
+  if(M)render();
+}
+window.addEventListener("online",flush);setInterval(flush,20000);
+if("serviceWorker" in navigator)navigator.serviceWorker.register("/ammo/sw.js",{scope:"/ammo/"}).catch(()=>{});
+applyLang();loadMatches().then(flush);
+</script>
+</body>
+</html>

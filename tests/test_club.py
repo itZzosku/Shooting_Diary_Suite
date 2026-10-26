@@ -30,7 +30,7 @@ def setup():
     """Club 'testclub': admin 'cadmin', holder 'chold' of 9 mm B; boxes 9 mm A/B, 7.62 A."""
     club.init_db()
     with sqlite3.connect(club.db_path()) as c:
-        for t in ("clubs", "club_roles", "items", "boxes", "levels", "moves", "products", "sales"):
+        for t in ("clubs", "club_roles", "items", "boxes", "levels", "moves", "products", "sales", "matches", "competitors", "officer_counts"):
             c.execute(f"DELETE FROM {t}")
     club._posts.clear()
     for n in ("cadmin", "chold", "cshooter"):
@@ -361,3 +361,51 @@ def test_refill_level_per_calibre(setup):
     # An old single level stays on the box's main calibre
     old = next(b for b in st["boxes"] if b["name"] == "9 mm A")
     assert old["lows"] == {"9 mm Luger": 200}
+
+
+def test_match_officer_counts_and_report(setup):
+    app, a, ids, codes = setup
+    C = "/ammo/api/c/testclub"
+    if not users.by_name("cofficer"):
+        users.create("cofficer", "cofficer-password-1")
+    assert a.post(f"{C}/people", json={"username": "cofficer", "role": "officer"}).status_code == 200
+    a.post(f"{C}/moves", json={"kind": "buy", "box": ids["9 mm A"], "item": ids["Geco"], "qty": 1000})
+    mid = a.post(f"{C}/matches", json={"name": "Test match", "date": _today(), "stages": 4,
+                                       "boxes": [ids["9 mm A"]]}).json["id"]
+    r = a.post(f"{C}/matches/{mid}/competitors", json={"replace": True, "rows": [
+        {"num": "1", "name": "Aatu Ampuja", "squad": "1", "division": "Production"},
+        {"num": "2", "name": "Bertta Bee", "squad": "1"}, {"num": "3", "name": "Cecilia Cee", "squad": "2"},
+        {"name": "Aatu Ampuja"}, {"name": "x"}]}).json
+    assert r["added"] == 3
+    st = a.get(f"{C}/matches/{mid}").json
+    comp = {c["name"]: c["id"] for c in st["competitors"]}
+    assert [i["name"] for i in st["items"]] == ["Geco", "S&B"]          # the 9 mm ammo
+    # The officer: only the officer page and its API
+    o = _login(app, "cofficer", "cofficer-password-1")
+    assert o.get("/ammo/testclub/admin").status_code == 302 and o.get("/ammo/testclub/ro").status_code == 200
+    assert o.get(C).status_code == 403 and o.get(f"{C}/matches").status_code == 403
+    assert o.get(f"{C}/ro").json["matches"][0]["id"] == mid
+    for cname, stage, q in (("Aatu Ampuja", 1, 30), ("Aatu Ampuja", 2, 20), ("Bertta Bee", 1, 25), ("Cecilia Cee", 3, 40)):
+        assert o.post(f"{C}/matches/{mid}/count", json={"comp": comp[cname], "stage": stage, "item": ids["Geco"],
+                                                        "qty": q}).status_code == 200
+    assert o.post(f"{C}/matches/{mid}/count", json={"comp": comp["Aatu Ampuja"], "stage": 9, "item": ids["Geco"],
+                                                    "qty": 5}).status_code == 400            # no stage 9
+    assert "report" not in o.get(f"{C}/matches/{mid}").json                                  # officers: no money
+    # Shooters: the box form offers the competitor list; one picks their name, one types it
+    anon = app.test_client()
+    info = anon.get(f"/ammo/api/b/{codes['9 mm A']}").json
+    assert info["match"]["id"] == mid and len(info["match"]["competitors"]) == 3
+    anon.post(f"/ammo/api/b/{codes['9 mm A']}/use", json={"name": "", "comp": comp["Aatu Ampuja"], "date": _today(),
+                                                          "lines": [{"item": ids["Geco"], "qty": 50}]})
+    anon.post(f"/ammo/api/b/{codes['9 mm A']}/use", json={"name": "bertta bee", "date": _today(), "paid": False,
+                                                          "lines": [{"item": ids["Geco"], "qty": 20}]})
+    rep = {x["name"]: x for x in a.get(f"{C}/matches/{mid}").json["report"]}
+    assert (rep["Aatu Ampuja"]["officer"], rep["Aatu Ampuja"]["own"], rep["Aatu Ampuja"]["status"]) == (50, 50, "ok")
+    assert (rep["Bertta Bee"]["officer"], rep["Bertta Bee"]["own"], rep["Bertta Bee"]["status"]) == (25, 20, "less")
+    assert rep["Bertta Bee"]["owes"] == 1.5
+    assert (rep["Cecilia Cee"]["own"], rep["Cecilia Cee"]["status"]) == (0, "missing")
+    # 0 removes an officer entry
+    o.post(f"{C}/matches/{mid}/count", json={"comp": comp["Cecilia Cee"], "stage": 3, "item": ids["Geco"], "qty": 0})
+    assert "Cecilia Cee" not in {x["name"] for x in a.get(f"{C}/matches/{mid}").json["report"]}
+    # The list can't be replaced once officers have entered rounds
+    assert a.post(f"{C}/matches/{mid}/competitors", json={"replace": True, "rows": []}).status_code == 400

@@ -38,9 +38,11 @@ header.top{align-items:flex-start}
   <!-- The form -->
   <form id="form" class="wrap" style="gap:16px" autocomplete="on" novalidate hidden>
     <div class="grid2">
-      <label class="f"><span data-t="name">Your name</span><input type="text" id="fName" name="name" autocomplete="name" maxlength="60" required></label>
+      <label class="f"><span data-t="name">Your name</span><input type="text" id="fName" name="name" autocomplete="name" maxlength="60" required list="compList"></label>
+      <datalist id="compList"></datalist>
       <label class="f"><span data-t="date">Date</span><input type="date" id="fDate" required></label>
     </div>
+    <div class="banner" id="matchNote" hidden></div>
     <div id="lines" style="display:flex;flex-direction:column;gap:10px"></div>
 
     <div class="total"><span class="hint" id="totalTxt">Total</span><b id="total">0.00 €</b></div>
@@ -86,7 +88,7 @@ const S={info:null,lines:[],done:null};
 
 /* ---- languages: Finnish, Swedish, English; the choice is remembered on the phone ---- */
 const L={
-fi:{title:"Seuran patruunat",name:"Nimesi",date:"Päivämäärä",ammo:"Patruuna",rounds:"Patruunoita (kpl)",perRound:"€ / kpl",
+fi:{matchNote:"Tänään {name}: valitse nimesi ampujalistalta – toimitsijat kirjaavat ammutut patruunat rasteittain.",squad:"Ryhmä",title:"Seuran patruunat",name:"Nimesi",date:"Päivämäärä",ammo:"Patruuna",rounds:"Patruunoita (kpl)",perRound:"€ / kpl",
   another:"+ toinen patruuna",total:"Yhteensä",nRounds:"{n} kpl",payNow:"Maksan nyt MobilePaylla",paid:"Maksettu",
   diary:"Lisää myös ampumapäiväkirjaani",save:"Tallenna",
   loginHint:'Onko sinulla <a href="/diary/login">Shooting Diary</a> -tunnus? Kirjaudu, niin nimesi täyttyy itsestään.',
@@ -104,7 +106,7 @@ fi:{title:"Seuran patruunat",name:"Nimesi",date:"Päivämäärä",ammo:"Patruuna
   diaryOk:"Lisätty päiväkirjaasi.",diaryFail:"Päiväkirjaan lisääminen ei onnistunut.",sentN:"Lähetetty {n} tallennettua kirjausta",
   waiting:"odottaa lähetystä",notPaid:"maksamatta",takenBack:"peruttu",ref:"koodi",takeBack:"Peru",tapAgain:"Napauta uudelleen perutaksesi",
   takenToast:"Peruttu",remove:"Poista",fewer:"Vähemmän",more:"Enemmän"},
-sv:{title:"Föreningens patroner",name:"Ditt namn",date:"Datum",ammo:"Patron",rounds:"Patroner (st)",perRound:"€ / st",
+sv:{matchNote:"I dag {name}: välj ditt namn ur skyttelistan – funktionärerna antecknar skotten per station.",squad:"Patrull",title:"Föreningens patroner",name:"Ditt namn",date:"Datum",ammo:"Patron",rounds:"Patroner (st)",perRound:"€ / st",
   another:"+ annan patron",total:"Totalt",nRounds:"{n} st",payNow:"Jag betalar nu med MobilePay",paid:"Betalt",
   diary:"Lägg också till i min skjutdagbok",save:"Spara",
   loginHint:'Har du ett <a href="/diary/login">Shooting Diary</a>-konto? Logga in så fylls ditt namn i automatiskt.',
@@ -122,7 +124,7 @@ sv:{title:"Föreningens patroner",name:"Ditt namn",date:"Datum",ammo:"Patron",ro
   diaryOk:"Tillagt i din dagbok.",diaryFail:"Kunde inte läggas till i dagboken.",sentN:"Skickade {n} sparade registreringar",
   waiting:"väntar på att skickas",notPaid:"obetald",takenBack:"ångrad",ref:"kod",takeBack:"Ångra",tapAgain:"Tryck igen för att ångra",
   takenToast:"Ångrad",remove:"Ta bort",fewer:"Färre",more:"Fler"},
-en:{title:"Club ammo",name:"Your name",date:"Date",ammo:"Ammo",rounds:"Rounds",perRound:"€ / round",
+en:{matchNote:"Today {name}: pick your name from the competitor list – officers record the rounds per stage.",squad:"Squad",title:"Club ammo",name:"Your name",date:"Date",ammo:"Ammo",rounds:"Rounds",perRound:"€ / round",
   another:"+ another ammo",total:"Total",nRounds:"{n} rounds",payNow:"I'm paying now with MobilePay",paid:"Paid",
   diary:"Also add to my diary",save:"Save",
   loginHint:'Have a <a href="/diary/login">Shooting Diary</a> account? Log in and your name fills in by itself.',
@@ -153,7 +155,7 @@ function applyLang(){
   document.querySelectorAll("[data-t]").forEach(el=>el.textContent=t(el.dataset.t));
   document.querySelectorAll("[data-th]").forEach(el=>el.innerHTML=t(el.dataset.th));
   if(!S.info){$("clubName").textContent=t("title");return}
-  paidLabel();renderLines();if(S.done)showDone(S.done.r,S.done.q,true);loadMine();
+  paidLabel();renderLines();if(S.info.match)$("matchNote").textContent=t("matchNote",{name:S.info.match.name});if(S.done)showDone(S.done.r,S.done.q,true);loadMine();
   if(!$("note").hidden)note(t("offline"));
 }
 $("langs").addEventListener("click",e=>{const b=e.target.closest("[data-lang]");if(!b)return;LANG=b.dataset.lang;lsSet("ammo:lang",LANG);applyLang()});
@@ -184,6 +186,10 @@ async function load(){
   const remembered=lsGet("ammo:name");
   $("fName").value=(info.me&&info.me.name)||remembered||"";
   $("fDate").value=today();$("fDate").max=today();
+  // A match today with this box: the name field suggests the competitor list, so officers' counts match up
+  const mt=info.match;$("matchNote").hidden=!mt;
+  $("compList").innerHTML=mt?mt.competitors.map(c=>`<option value="${esc(c.name)}">${c.squad?esc(t("squad")+" "+c.squad):""}</option>`).join(""):"";
+  if(mt)$("matchNote").textContent=t("matchNote",{name:mt.name});
   if(S.lines.length!==info.items.length||S.lines.some((l,i)=>l.item!==info.items[i].id))S.lines=freshLines();
   paidLabel();
   $("diaryRow").hidden=!info.me;$("loginHint").hidden=!!info.me;
@@ -234,7 +240,8 @@ $("form").addEventListener("submit",async e=>{
   const err=name.length<2?t("errName"):!lines.length?t("errRounds"):lines.some(l=>l.qty>5000)?t("errMax"):"";
   if(err){$("msg").textContent=err;$("msg").hidden=false;return}
   lsSet("ammo:name",name);
-  const body={name,date:$("fDate").value||today(),lines,paid:$("fPaid").checked,diary:!!(S.info.me&&$("fDiary").checked),
+  const mt=S.info.match,cp=mt&&mt.competitors.find(c=>c.name.toLowerCase()===name.toLowerCase());
+  const body={name,comp:cp?cp.id:undefined,date:$("fDate").value||today(),lines,paid:$("fPaid").checked,diary:!!(S.info.me&&$("fDiary").checked),
     device:DEVICE,client_id:rid(),website:$("fWebsite").value};
   $("saveBtn").disabled=true;
   try{showDone(await api("POST","b/"+CODE+"/use",body))}

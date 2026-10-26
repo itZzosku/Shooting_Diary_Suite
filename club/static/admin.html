@@ -69,6 +69,7 @@
     <button class="tab" data-tab="stock" aria-pressed="true" data-t="Stock"></button>
     <button class="tab" data-tab="log" aria-pressed="false" data-t="Log & payments"></button>
     <button class="tab" data-tab="fees" aria-pressed="false" id="feesTab" data-t="Season fees"></button>
+    <button class="tab" data-tab="match" aria-pressed="false" id="matchTab" data-t="Matches"></button>
     <button class="tab" data-tab="setup" aria-pressed="false" id="setupTab" data-t="Setup"></button>
   </div>
 
@@ -101,6 +102,15 @@
     </div>
     <div class="hint" id="fSum"></div>
     <div class="rows" id="fees"></div>
+  </section>
+
+  <!-- Matches (admins): competitors from SSI, officers' counts per stage, reconciliation -->
+  <section id="tMatch" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <label class="f" style="flex:1;min-width:0"><span data-t="Match"></span><select id="mSel"></select></label>
+      <button type="button" class="ghost" id="mNew" data-t="+ Match"></button>
+    </div>
+    <div id="mBody" style="display:flex;flex-direction:column;gap:14px"></div>
   </section>
 
   <!-- Setup (admins) -->
@@ -138,7 +148,7 @@
         <a class="ghost" href="qr?pay=1" data-t="Print sticker"></a><button type="button" class="ghost" id="payNew" data-t="New link…"></button></div>
     </div>
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 data-t="Admins"></h2><button class="ghost" id="addAdmin" type="button" data-t="+ Admin"></button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 data-t="Admins and officers"></h2><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="ghost" id="addAdmin" type="button" data-t="+ Admin"></button><button class="ghost" id="addOfficer" type="button" data-t="+ Officer"></button></div></div>
       <p class="hint" style="margin:6px 0 4px" data-t="hintAdmins"></p>
       <div id="people"></div>
     </div>
@@ -179,7 +189,7 @@ function applyLang(){
   document.querySelectorAll("[data-th]").forEach(el=>el.innerHTML=T(el.dataset.th));
   document.querySelectorAll("[data-tp]").forEach(el=>el.placeholder=T(el.dataset.tp));
   $("sSave").textContent=T("Save");
-  if(S.club){renderHead();renderWarn();renderStock();if(isAdmin())renderSetup();if(LOG&&!$("tLog").hidden)renderLog();if(FEES&&!$("tFees").hidden)renderFees()}
+  if(S.club){renderHead();renderWarn();renderStock();if(isAdmin())renderSetup();if(LOG&&!$("tLog").hidden)renderLog();if(FEES&&!$("tFees").hidden)renderFees();if(MS&&!$("tMatch").hidden)renderMatch()}
 }
 $("langs").addEventListener("click",e=>{const b=e.target.closest("[data-lang]");if(!b)return;LANG=b.dataset.lang;lsSet("ammo:adminlang",LANG);applyLang()});
 
@@ -207,7 +217,7 @@ async function load(){
 function renderHead(){
   document.title=S.club.name+" · "+T("Club ammo");$("clubName").textContent=S.club.name;
   $("roleTxt").textContent=" · "+T(isAdmin()?"admin":"box holder");
-  $("setupTab").hidden=!isAdmin();$("feesTab").hidden=!isAdmin();
+  $("setupTab").hidden=!isAdmin();$("matchTab").hidden=!isAdmin();$("feesTab").hidden=!isAdmin();
 }
 
 /* ---- warnings ---- */
@@ -495,7 +505,7 @@ function renderSetup(){
       <br><small class="hint">${p.deal_qty>1?T("{n} for {amt}",{n:p.deal_qty,amt:eur(p.deal_price)})+" · ":""}${T(p.pay_url?"MobilePay link set":"No MobilePay link")}${p.pay_msg?" · "+T("message {m} + code",{m:esc(p.pay_msg)}):""}${p.track?" · "+T("stock {n}",{n:fmt(p.stock)}):""}</small></span>
     <span><span class="num">${eur(p.price)}</span> <button class="link" type="button" data-prod="${p.id}">${T("Edit")}</button></span></div>`).join(""):none)+archToggle("prods",S.products||[]);
   const pu=location.origin+"/ammo/"+SLUG+"/pay/"+S.pay_code;$("payUrl").textContent=pu;$("payOpen").href=pu;
-  $("people").innerHTML=S.people.map(p=>`<div class="irow"><span>${esc(p.username)}${p.username===S.me?` <span class="tag">${T("you")}</span>`:""}</span>
+  $("people").innerHTML=S.people.map(p=>`<div class="irow"><span>${esc(p.username)} <span class="tag">${T(p.role==="officer"?"officer":"admin")}</span>${p.username===S.me?` <span class="tag">${T("you")}</span>`:""}</span>
     ${p.username===S.me?"":`<button class="link" type="button" data-rmadmin="${esc(p.username)}">${T("Remove")}</button>`}</div>`).join("")||`<div class="hint">${T("Only site admins.")}</div>`;
 }
 $("tSetup").addEventListener("click",e=>{const b=e.target.closest("[data-arch]");if(b){SHOW[b.dataset.arch]=!SHOW[b.dataset.arch];renderSetup()}});
@@ -553,6 +563,8 @@ $("payNew").addEventListener("click",async e=>{const b=e.target;if(b.dataset.arm
   b.dataset.armed="";b.textContent=T("New link…");await api("POST",`c/${SLUG}/paycode`,{});await load();toast(T("New link – print a new sticker"))});
 $("addAdmin").addEventListener("click",()=>sheet(T("New admin"),`<label class="f">${T("Diary username")}<input type="text" id="pUser" maxlength="32" autocapitalize="none"></label>`,
   async()=>{await api("POST",`c/${SLUG}/people`,{username:v("pUser"),role:"admin"});toast(T("Added"))}));
+$("addOfficer").addEventListener("click",()=>sheet(T("New officer"),`<p class="hint" style="margin:0">${T("hintOfficer")}</p><label class="f">${T("Diary username")}<input type="text" id="pUser" maxlength="32" autocapitalize="none"></label>`,
+  async()=>{await api("POST",`c/${SLUG}/people`,{username:v("pUser"),role:"officer"});toast(T("Added"))}));
 $("people").addEventListener("click",async e=>{const b=e.target.closest("[data-rmadmin]");if(!b)return;
   if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=T("Tap again to remove");return}
   try{await api("POST",`c/${SLUG}/people`,{username:b.dataset.rmadmin,role:""});load()}catch(err){toast(err.message)}});
@@ -573,14 +585,127 @@ function renderFees(){
 }
 $("fYear").addEventListener("change",loadFees);$("fFind").addEventListener("input",renderFees);
 
+
+/* ---- matches: competitors (pasted from SSI), officers' counts per stage, the reconciliation ---- */
+let MS=null,MD=null;
+async function loadMatches(keep){
+  MS=await api("GET",`c/${SLUG}/matches`);
+  const want=keep||lsGet("ammo:adminmatch");
+  $("mSel").innerHTML=MS.matches.map(m=>`<option value="${m.id}">${esc(m.name)} · ${fiDate(m.date)}</option>`).join("")||`<option value="">${T("None yet.")}</option>`;
+  if(MS.matches.some(m=>m.id===want))$("mSel").value=want;
+  await loadMatch();
+}
+async function loadMatch(){
+  const id=+$("mSel").value;MD=null;
+  if(id){lsSet("ammo:adminmatch",id);MD=await api("GET",`c/${SLUG}/matches/${id}`)}
+  renderMatch();
+}
+$("mSel").addEventListener("change",loadMatch);
+const ST={ok:["✓ ok",""],unpaid:["not paid","warn"],less:["fewer by the shooter","warn"],more:["more by the shooter",""],missing:["no own entry","warn"]};
+function renderMatch(){
+  if(!MD){$("mBody").innerHTML=`<div class="card"><p class="hint" style="margin:0">${T("hintMatches")}</p></div>`;return}
+  const m=MD.match,bx=(m.boxes||[]).map(id=>(boxOf(id)||{}).name).filter(Boolean),ro=location.origin+"/ammo/"+SLUG+"/ro";
+  const cal=id=>{const i=MD.items.find(x=>x.id===id);return i?i.calibre+(i.name?" "+i.name:""):"?"};
+  const rep=MD.report||[],tOff=rep.reduce((a,r)=>a+r.officer,0),tOwn=rep.reduce((a,r)=>a+r.own,0),owes=rep.reduce((a,r)=>a+r.owes,0);
+  const squads=[...new Set(MD.competitors.map(c=>c.squad).filter(Boolean))];
+  $("mBody").innerHTML=`<div class="card" style="display:flex;flex-direction:column;gap:8px">
+      <div class="row"><div class="what"><b>${esc(m.name)}</b><br><small>${fiDate(m.date)} · ${T("{n} stages",{n:m.stages})} · ${bx.length?T("boxes {b}",{b:esc(bx.join(", "))}):T("all boxes")}</small></div>
+        <button class="link" type="button" id="mEdit">${T("Edit")}</button></div>
+      <div class="hint">${T("Officer page")}: <span class="lnk">${esc(ro)}</span></div>
+      <div class="hint">${MS.officers.length?T("Officers: {names}",{names:esc(MS.officers.join(", "))}):T("No officers yet – add them in Setup.")}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="ghost" href="${ro}" target="_blank" rel="noopener">${T("Open officer page")}</a><button type="button" class="ghost" id="mCopy">${T("Copy link")}</button></div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>${T("Competitors")} (${MD.competitors.length})</h2>
+        <button type="button" class="ghost" id="mPaste">${T("Paste from SSI…")}</button></div>
+      ${MD.competitors.length?`<details><summary class="hint" style="cursor:pointer">${T("Show list")}${squads.length?" · "+T("{n} squads",{n:squads.length}):""}</summary>
+        ${MD.competitors.map(c=>`<div class="irow"><span>${c.num?`<span class="num">#${esc(c.num)}</span> `:""}<b>${esc(c.name)}</b><br><small class="hint">${[c.squad&&T("Squad")+" "+esc(c.squad),esc(c.division)].filter(Boolean).join(" · ")}</small></span>
+          <button class="link" type="button" data-rmcomp="${c.id}">${T("Remove")}</button></div>`).join("")}</details>`:`<p class="hint" style="margin:0">${T("hintPaste")}</p>`}
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:6px">
+      <h2>${T("Reconciliation")}</h2>
+      <p class="hint" style="margin:0">${T("hintRecon")}</p>
+      <div class="hint">${T("Officers {a} · shooters {b} rounds",{a:"<b>"+tOff+"</b>",b:"<b>"+tOwn+"</b>"})}${owes?` · <b style="color:var(--accent)">${T("missing {amt}",{amt:eur(owes)})}</b>`:""}</div>
+      <label class="check"><input type="checkbox" id="mProb" ${lsGet("ammo:mprob")?"checked":""}> ${T("Only problems")}</label>
+      <div class="rows">${rep.filter(r=>!lsGet("ammo:mprob")||r.status!=="ok").map(r=>`<div class="row"><div class="what"><b>${esc(r.name)}</b> <span class="tag ${ST[r.status][1]}">${T(ST[r.status][0])}</span>
+          <br><small>${r.lines.map(l=>`${esc(cal(l.item))}: ${T("officer")} ${l.officer} / ${T("own")} ${l.own}`).join(" · ")}${r.refs.length?" · "+T("ref")+" "+r.refs.map(esc).join(", "):""}</small></div>
+          <div class="r num">${r.owes?`<b style="color:var(--accent)">${eur(r.owes)}</b>`:r.unpaid?eur(r.unpaid):""}</div></div>`).join("")||`<div class="hint">${T("Nothing yet.")}</div>`}</div>
+    </div>
+    <div style="display:flex;justify-content:flex-end"><button type="button" class="link" id="mDel">${T("Delete match…")}</button></div>`;
+  $("mEdit").onclick=()=>matchSheet(m);
+  $("mCopy").onclick=async()=>{try{await navigator.clipboard.writeText(ro);toast(T("Link copied"))}catch(e){toast(T("Select the link and copy it"))}};
+  $("mPaste").onclick=pasteSheet;
+  $("mProb").onchange=e=>{lsSet("ammo:mprob",e.target.checked);renderMatch()};
+  $("mDel").onclick=async e=>{const b=e.target;if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=T("Tap again: deletes the list and officers' counts");return}
+    try{await api("POST",`c/${SLUG}/matches/${m.id}/delete`,{});lsSet("ammo:adminmatch",null);loadMatches()}catch(err){toast(err.message)}};
+}
+$("mBody").addEventListener("click",async e=>{const b=e.target.closest("[data-rmcomp]");if(!b)return;
+  if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=T("Tap again to remove");return}
+  try{await api("POST",`c/${SLUG}/matches/${MD.match.id}/competitors/${b.dataset.rmcomp}/delete`,{});loadMatch()}catch(err){toast(err.message)}});
+function matchSheet(m){
+  const n=!m;m=m||{name:"",date:today(),stages:6,boxes:[]};
+  const boxes=S.boxes.filter(b=>!b.archived);
+  sheet(n?T("New match"):T("Edit {name}",{name:m.name}),`<label class="f">${T("Name")}<input type="text" id="maName" maxlength="80" value="${esc(m.name)}" placeholder="${T("e.g. SRA tiistai")}"></label>
+    <div class="grid2"><label class="f">${T("Date")}<input type="date" id="maDate" value="${m.date}"></label>
+      <label class="f">${T("Stages")}<input type="number" inputmode="numeric" min="1" max="30" id="maSt" value="${m.stages}"></label></div>
+    <div class="f">${T("Club ammo boxes at the match")}${boxes.map(b=>`<label class="check"><input type="checkbox" data-mbox="${b.id}" ${m.boxes.includes(b.id)?"checked":""}> ${esc(b.name)} · ${esc(b.cals.join(" + "))}</label>`).join("")}</div>
+    <p class="hint" style="margin:-6px 0 0">${T("hintMatchBoxes")}</p>`,
+    async()=>{const r=await api("POST",`c/${SLUG}/matches`,{id:m.id,name:v("maName"),date:v("maDate"),stages:v("maSt"),
+      boxes:[...document.querySelectorAll("[data-mbox]:checked")].map(x=>+x.dataset.mbox)});toast(T("Saved"));lsSet("ammo:adminmatch",r.id);setTimeout(()=>loadMatches(r.id),0)});
+}
+$("mNew").addEventListener("click",()=>matchSheet(null));
+
+/* Paste from SSI: copy the participants table on shootnscoreit.com, paste here, pick which column is which */
+const COLS=[["","—"],["name","Name"],["first","First name"],["last","Last name"],["squad","Squad"],["division","Division"],["num","Number"]];
+function parsePaste(t){
+  let rows=t.split(/\r?\n/).map(l=>l.replace(/\s+$/,"")).filter(l=>l.trim());
+  const tab=rows.some(l=>l.includes("\t"));
+  rows=rows.map(l=>(tab?l.split("\t"):l.split(/\s{2,}/)).map(c=>c.trim()));
+  return rows.filter(r=>r.some(Boolean));
+}
+function guessCols(rows){
+  const head=rows[0]||[],w=Math.max(0,...rows.map(r=>r.length)),out=[];let hdr=false;
+  for(let i=0;i<w;i++){
+    const h=(head[i]||"").toLowerCase(),vals=rows.slice(1,30).map(r=>r[i]||"");
+    let g=/^(competitor|name|nimi|shooter|ampuja)$/.test(h)?"name":/first|etunimi/.test(h)?"first":/last|sukunimi/.test(h)?"last":
+      /squad|ryhmä|sq/.test(h)?"squad":/division|divisioona|luokka|class/.test(h)?"division":/^(#|no\.?|nr|num|number|numero|id)$/.test(h)?"num":"";
+    if(g)hdr=true;
+    if(!g&&vals.length&&vals.filter(x=>/^\d{1,4}$/.test(x)).length>=vals.length*.8)g=out.includes("num")?"":"num";
+    if(!g&&vals.length&&vals.filter(x=>/^[^\d\s]+(?:[ -][^\d\s]+)+$/.test(x)).length>=vals.length*.7&&!out.includes("name"))g="name";
+    out.push(g);
+  }
+  return{cols:out,hdr};
+}
+function pasteSheet(){
+  let rows=[],cols=[],hdr=false;
+  const has=MD.competitors.length,locked=MD.counts.some(c=>c.qty>0);
+  sheet(T("Paste from SSI"),`<p class="hint" style="margin:0">${T("hintPasteHow")}</p>
+    <textarea id="pTxt" rows="6" style="font-family:var(--f-mono);font-size:.8rem" placeholder="${T("Paste the table here")}"></textarea>
+    <div id="pMap"></div>
+    ${has?`<label class="check"><input type="checkbox" id="pRep" ${locked?"disabled":""}> ${T("Replace the current list ({n})",{n:has})}</label>${locked?`<p class="hint" style="margin:-6px 0 0">${T("Officers have entered rounds – new names are added to the list.")}</p>`:""}`:""}`,
+    async()=>{const out=build();if(!out.length)throw new Error(T("No names found – pick the name column."));
+      const r=await api("POST",`c/${SLUG}/matches/${MD.match.id}/competitors`,{replace:!!($("pRep")&&$("pRep").checked),rows:out});
+      toast(T("{n} competitors added",{n:r.added}));setTimeout(loadMatch,0)},T("Import"));
+  const build=()=>rows.slice(hdr?1:0).map(r=>{const o={};cols.forEach((c,i)=>{if(c)o[c]=(o[c]?o[c]+" ":"")+(r[i]||"")});
+    if(!o.name&&(o.first||o.last))o.name=[o.first,o.last].filter(Boolean).join(" ");return{name:(o.name||"").trim(),squad:o.squad||"",division:o.division||"",num:o.num||""}}).filter(r=>r.name.length>=2);
+  const draw=()=>{if(!rows.length){$("pMap").innerHTML="";return}
+    const w=cols.length,show=rows.slice(0,6);
+    $("pMap").innerHTML=`<label class="check"><input type="checkbox" id="pHdr" ${hdr?"checked":""}> ${T("First row is the headings")}</label>
+      <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:.8rem;min-width:100%"><thead><tr>${cols.map((c,i)=>`<th style="padding:4px"><select data-col="${i}" style="font-size:.8rem;padding:4px">${COLS.map(([k,l])=>`<option value="${k}" ${k===c?"selected":""}>${T(l)}</option>`).join("")}</select></th>`).join("")}</tr></thead>
+      <tbody>${show.map((r,j)=>`<tr style="${j===0&&hdr?"opacity:.5":""}">${Array.from({length:w},(_,i)=>`<td style="padding:4px;border-top:1px solid var(--line);white-space:nowrap">${esc(r[i]||"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="hint" style="margin:0">${T("{n} competitors, e.g. {ex}",{n:build().length,ex:esc(build().slice(0,3).map(r=>r.name+(r.squad?" ("+r.squad+")":"")).join(", "))})}</p>`};
+  $("sBody").oninput=e=>{if(e.target.id!=="pTxt")return;rows=parsePaste(e.target.value);const g=guessCols(rows);cols=g.cols;hdr=g.hdr;draw()};
+  $("sBody").onchange=e=>{if(e.target.dataset.col!=null){cols[+e.target.dataset.col]=e.target.value;draw()}else if(e.target.id==="pHdr"){hdr=e.target.checked;draw()}};
+}
+
 /* ---- tabs ---- */
 function tab(t){document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tab===t));
-  $("tStock").hidden=t!=="stock";$("tLog").hidden=t!=="log";$("tSetup").hidden=t!=="setup";$("tFees").hidden=t!=="fees";
+  $("tStock").hidden=t!=="stock";$("tLog").hidden=t!=="log";$("tSetup").hidden=t!=="setup";$("tFees").hidden=t!=="fees";$("tMatch").hidden=t!=="match";
   $("exportRow").hidden=!isAdmin();
-  if(t==="log"&&!LOG)loadLog();if(t==="fees")loadFees();try{sessionStorage.setItem("ammo:tab",t)}catch(e){}}
+  if(t==="log"&&!LOG)loadLog();if(t==="fees")loadFees();if(t==="match")loadMatches();try{sessionStorage.setItem("ammo:tab",t)}catch(e){}}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="log")LOG_BOX=null,LOG=null;tab(b.dataset.tab)}));
 applyLang();
-load().then(()=>{let t="stock";try{t=sessionStorage.getItem("ammo:tab")||"stock"}catch(e){}if((t==="setup"||t==="fees")&&!isAdmin())t="stock";tab(t)}).catch(e=>{$("warn").innerHTML=`<div class="msg">${esc(e.message)}</div>`});
+load().then(()=>{let t="stock";try{t=sessionStorage.getItem("ammo:tab")||"stock"}catch(e){}if((t==="setup"||t==="fees"||t==="match")&&!isAdmin())t="stock";tab(t)}).catch(e=>{$("warn").innerHTML=`<div class="msg">${esc(e.message)}</div>`});
 </script>
 </body>
 </html>
