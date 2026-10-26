@@ -409,3 +409,50 @@ def test_match_officer_counts_and_report(setup):
     assert "Cecilia Cee" not in {x["name"] for x in a.get(f"{C}/matches/{mid}").json["report"]}
     # The list can't be replaced once officers have entered rounds
     assert a.post(f"{C}/matches/{mid}/competitors", json={"replace": True, "rows": []}).status_code == 400
+
+
+EVENT_HTML = """<html><head><title>Testikisa 2026 | Shoot'n Score It</title>
+<meta property="og:title" content="Testikisa 2026"></head><body><script>var x="Stage 99";</script>
+<h1>Testikisa 2026</h1><dl><dt>Starts</dt><dd>Oct. 27, 2026, 5 p.m.</dd><dt>Stages</dt><dd>5</dd></dl>
+<ul><li>Stage 1 – Alku</li><li>Stage 5 – Loppu</li></ul></body></html>"""
+PART_HTML = """<html><body><table class="nav"><tr><td>Menu</td></tr></table>
+<table><thead><tr><th>#</th><th>Competitor</th><th></th><th>Division</th><th>Squad</th></tr></thead><tbody>
+<tr><td>1</td><td><a href="#">Ampuja,&nbsp;Aatu</a></td><td><i class="icon"></i></td><td>Production</td><td>Squad 1</td></tr>
+<tr><td>2</td><td>Bee Bertta</td><td></td><td>Standard</td><td>Squad 1</td></tr>
+<tr><td>3</td><td>Cee   Cecilia</td><td></td><td>Open</td><td>Squad 2</td></tr></tbody></table></body></html>"""
+
+
+def test_ssi_reader(monkeypatch):
+    from club import ssi
+    assert ssi.parse_url("https://shootnscoreit.com/event/22/29338/participants/") == ("22", "29338")
+    assert ssi.parse_url("https://evil.example/event/22/1/") is None
+    assert ssi.find_date("Starts 27.10.2026 klo 17") == "2026-10-27"
+    assert ssi.find_date("starts 3 Nov 2026") == "2026-11-03"
+    assert ssi.find_stages("Stage 1 Stage 2 Stage 7 results") == 7
+    pages = {"https://shootnscoreit.com/event/22/1/": EVENT_HTML, "https://shootnscoreit.com/event/22/1/participants/": PART_HTML}
+    monkeypatch.setattr(ssi, "_get", lambda url, opener=None: pages[url])
+    r = ssi.fetch("https://shootnscoreit.com/event/22/1/participants/")
+    assert (r["name"], r["date"], r["stages"]) == ("Testikisa 2026", "2026-10-27", 5)
+    assert r["rows"][0] == ["#", "Competitor", "Division", "Squad"]          # the empty icon column is dropped
+    assert r["rows"][1] == ["1", "Ampuja, Aatu", "Production", "Squad 1"] and r["rows"][3][1] == "Cee Cecilia"
+
+    def down(url, opener=None):
+        raise ssi.SsiError("SSI answered 403.")
+    monkeypatch.setattr(ssi, "_get", down)
+    with pytest.raises(ssi.SsiError):
+        ssi.fetch("https://shootnscoreit.com/event/22/1/")
+
+
+def test_ssi_endpoint_and_match_link(setup, monkeypatch):
+    from club import ssi
+    app, a, _ids, _codes = setup
+    C = "/ammo/api/c/testclub"
+    monkeypatch.setattr(ssi, "_get", lambda url, opener=None: PART_HTML if url.endswith("participants/") else EVENT_HTML)
+    r = a.post(f"{C}/ssi", json={"url": "https://shootnscoreit.com/event/22/1/"}).json
+    assert r["name"] == "Testikisa 2026" and len(r["rows"]) == 4
+    assert a.post(f"{C}/ssi", json={"url": "https://example.com/"}).status_code == 400
+    mid = a.post(f"{C}/matches", json={"name": r["name"], "date": r["date"], "stages": r["stages"],
+                                       "ssi_url": "https://shootnscoreit.com/event/22/1/participants/?x=1"}).json["id"]
+    assert a.get(f"{C}/matches/{mid}").json["match"]["ssi_url"] == "https://shootnscoreit.com/event/22/1/"
+    anon = app.test_client()
+    assert anon.post(f"{C}/ssi", json={"url": "https://shootnscoreit.com/event/22/1/"}).status_code in (401, 403)

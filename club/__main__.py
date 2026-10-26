@@ -64,7 +64,21 @@ def main(argv=None):
     b = sub.add_parser("backup")
     b.add_argument("directory")
     b.add_argument("--keep", type=int, default=12)
+    sp = sub.add_parser("ssi", help="show what is read from an SSI event link (no changes)")
+    sp.add_argument("url")
     a = p.parse_args(argv)
+    if a.cmd == "ssi":
+        from . import ssi
+        try:
+            r = ssi.fetch(a.url)
+        except ssi.SsiError as e:
+            sys.exit(str(e))
+        print(f"Name:   {r['name']}\nDate:   {r['date'] or '?'}\nStages: {r['stages'] or '?'}\nRows:   {len(r['rows'])}")
+        if r.get("warning"):
+            print("Participants page:", r["warning"])
+        for row in r["rows"][:4]:
+            print("  | " + " | ".join(row))
+        return
     club.init_db()
 
     if a.cmd in ("club-add", "admin"):

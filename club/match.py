@@ -14,6 +14,7 @@ from flask import abort, jsonify
 
 from . import (DATE_RE, _body, _clean, _club_for, _err, _int, _now, _page, _user_names, bridge, box_cals, cbp, cdb,
                current_user, club_by_slug, role_of, SLUG_RE)
+from . import ssi
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS matches (
@@ -52,6 +53,8 @@ def init_db(conn):
     conn.executescript(SCHEMA)
     if "comp_id" not in {r[1] for r in conn.execute("PRAGMA table_info(moves)")}:
         conn.execute("ALTER TABLE moves ADD COLUMN comp_id INTEGER")        # shooter's entry → competitor
+    if "ssi_url" not in {r[1] for r in conn.execute("PRAGMA table_info(matches)")}:
+        conn.execute("ALTER TABLE matches ADD COLUMN ssi_url TEXT NOT NULL DEFAULT ''")   # where it was read from
 
 
 def _match(conn, club, mid):
@@ -145,19 +148,31 @@ def api_match_save(slug):
     b, conn = _body(), cdb()
     try:
         name, d, stages, boxes = _clean_match(b)
+        ids = ssi.parse_url(b.get("ssi_url"))
+        ssi_url = "https://shootnscoreit.com/event/%s/%s/" % ids if ids else ""
     except ValueError as e:
         return _err(str(e) if "needed" in str(e) else "Stages: 1–%d." % MAX_STAGES)
     if b.get("id"):
-        n = conn.execute("UPDATE matches SET name=?, date=?, stages=?, boxes=? WHERE id=? AND club_id=?",
-                         (name, d, stages, boxes, b["id"], club["id"])).rowcount
+        n = conn.execute("UPDATE matches SET name=?, date=?, stages=?, boxes=?, ssi_url=? WHERE id=? AND club_id=?",
+                         (name, d, stages, boxes, ssi_url, b["id"], club["id"])).rowcount
         if not n:
             return _err("not_found", 404)
         mid = b["id"]
     else:
-        mid = conn.execute("INSERT INTO matches(club_id,name,date,stages,boxes,created) VALUES(?,?,?,?,?,?)",
-                           (club["id"], name, d, stages, boxes, _now())).lastrowid
+        mid = conn.execute("INSERT INTO matches(club_id,name,date,stages,boxes,created,ssi_url) VALUES(?,?,?,?,?,?,?)",
+                           (club["id"], name, d, stages, boxes, _now(), ssi_url)).lastrowid
     conn.commit()
     return jsonify(ok=True, id=mid)
+
+
+@cbp.post("/api/c/<slug>/ssi")
+def api_ssi(slug):
+    """Read a match from its SSI link: name, date, stages and the participants table (checked on the admin page)."""
+    _club_for(slug)
+    try:
+        return jsonify(ok=True, **ssi.fetch(str(_body().get("url") or "")))
+    except ssi.SsiError as e:
+        return _err(str(e))
 
 
 @cbp.post("/api/c/<slug>/matches/<int:mid>/delete")

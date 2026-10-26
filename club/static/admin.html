@@ -617,7 +617,7 @@ function renderMatch(){
     </div>
     <div class="card" style="display:flex;flex-direction:column;gap:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>${T("Competitors")} (${MD.competitors.length})</h2>
-        <button type="button" class="ghost" id="mPaste">${T("Paste from SSI…")}</button></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${m.ssi_url?`<button type="button" class="ghost" id="mSsi">${T("Fetch from SSI")}</button>`:""}<button type="button" class="ghost" id="mPaste">${T("Paste from SSI…")}</button></div></div>
       ${MD.competitors.length?`<details><summary class="hint" style="cursor:pointer">${T("Show list")}${squads.length?" · "+T("{n} squads",{n:squads.length}):""}</summary>
         ${MD.competitors.map(c=>`<div class="irow"><span>${c.num?`<span class="num">#${esc(c.num)}</span> `:""}<b>${esc(c.name)}</b><br><small class="hint">${[c.squad&&T("Squad")+" "+esc(c.squad),esc(c.division)].filter(Boolean).join(" · ")}</small></span>
           <button class="link" type="button" data-rmcomp="${c.id}">${T("Remove")}</button></div>`).join("")}</details>`:`<p class="hint" style="margin:0">${T("hintPaste")}</p>`}
@@ -634,7 +634,10 @@ function renderMatch(){
     <div style="display:flex;justify-content:flex-end"><button type="button" class="link" id="mDel">${T("Delete match…")}</button></div>`;
   $("mEdit").onclick=()=>matchSheet(m);
   $("mCopy").onclick=async()=>{try{await navigator.clipboard.writeText(ro);toast(T("Link copied"))}catch(e){toast(T("Select the link and copy it"))}};
-  $("mPaste").onclick=pasteSheet;
+  $("mPaste").onclick=()=>pasteSheet();
+  if($("mSsi"))$("mSsi").onclick=async e=>{const b=e.target;b.disabled=true;
+    try{const r=await ssiFetch(m.ssi_url);if(!r.rows.length)throw new Error(T("No participants table found – paste it instead."));pasteSheet(r.rows)}
+    catch(err){toast(err.message)}finally{b.disabled=false}};
   $("mProb").onchange=e=>{lsSet("ammo:mprob",e.target.checked);renderMatch()};
   $("mDel").onclick=async e=>{const b=e.target;if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=T("Tap again: deletes the list and officers' counts");return}
     try{await api("POST",`c/${SLUG}/matches/${m.id}/delete`,{});lsSet("ammo:adminmatch",null);loadMatches()}catch(err){toast(err.message)}};
@@ -643,15 +646,25 @@ $("mBody").addEventListener("click",async e=>{const b=e.target.closest("[data-rm
   if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent=T("Tap again to remove");return}
   try{await api("POST",`c/${SLUG}/matches/${MD.match.id}/competitors/${b.dataset.rmcomp}/delete`,{});loadMatch()}catch(err){toast(err.message)}});
 function matchSheet(m){
-  const n=!m;m=m||{name:"",date:today(),stages:6,boxes:[]};
-  const boxes=S.boxes.filter(b=>!b.archived);
-  sheet(n?T("New match"):T("Edit {name}",{name:m.name}),`<label class="f">${T("Name")}<input type="text" id="maName" maxlength="80" value="${esc(m.name)}" placeholder="${T("e.g. SRA tiistai")}"></label>
+  const n=!m;m=m||{name:"",date:today(),stages:6,boxes:[],ssi_url:""};
+  const boxes=S.boxes.filter(b=>!b.archived);let got=null;
+  sheet(n?T("New match"):T("Edit {name}",{name:m.name}),`<div class="f">${T("SSI link (optional)")}<div style="display:flex;gap:8px">
+      <input type="url" id="maSsi" inputmode="url" autocapitalize="none" maxlength="200" style="flex:1;min-width:0" value="${esc(m.ssi_url||"")}" placeholder="https://shootnscoreit.com/event/22/…">
+      <button type="button" class="ghost" id="maFetch">${T("Fetch")}</button></div></div>
+    <p class="hint" style="margin:-6px 0 0" id="maInfo">${T("hintSsiLink")}</p>
+    <label class="f">${T("Name")}<input type="text" id="maName" maxlength="80" value="${esc(m.name)}" placeholder="${T("e.g. SRA tiistai")}"></label>
     <div class="grid2"><label class="f">${T("Date")}<input type="date" id="maDate" value="${m.date}"></label>
       <label class="f">${T("Stages")}<input type="number" inputmode="numeric" min="1" max="30" id="maSt" value="${m.stages}"></label></div>
     <div class="f">${T("Club ammo boxes at the match")}${boxes.map(b=>`<label class="check"><input type="checkbox" data-mbox="${b.id}" ${m.boxes.includes(b.id)?"checked":""}> ${esc(b.name)} · ${esc(b.cals.join(" + "))}</label>`).join("")}</div>
     <p class="hint" style="margin:-6px 0 0">${T("hintMatchBoxes")}</p>`,
-    async()=>{const r=await api("POST",`c/${SLUG}/matches`,{id:m.id,name:v("maName"),date:v("maDate"),stages:v("maSt"),
-      boxes:[...document.querySelectorAll("[data-mbox]:checked")].map(x=>+x.dataset.mbox)});toast(T("Saved"));lsSet("ammo:adminmatch",r.id);setTimeout(()=>loadMatches(r.id),0)});
+    async()=>{const r=await api("POST",`c/${SLUG}/matches`,{id:m.id,name:v("maName"),date:v("maDate"),stages:v("maSt"),ssi_url:(v("maSsi")||"").trim(),
+      boxes:[...document.querySelectorAll("[data-mbox]:checked")].map(x=>+x.dataset.mbox)});toast(T("Saved"));lsSet("ammo:adminmatch",r.id);
+      const rows=got&&got.rows;setTimeout(async()=>{await loadMatches(r.id);if(rows&&rows.length)pasteSheet(rows)},0)});
+  $("maFetch").onclick=async()=>{const b=$("maFetch");b.disabled=true;$("maInfo").textContent=T("Reading SSI…");
+    try{got=await ssiFetch(v("maSsi"));if(got.name)$("maName").value=got.name;if(got.date)$("maDate").value=got.date;if(got.stages)$("maSt").value=got.stages;
+      $("maInfo").textContent=T("Read from SSI: {name} · {date} · {s} stages · {n} rows. Check, then Save – the competitors come next.",
+        {name:got.name||"?",date:got.date?fiDate(got.date):"?",s:got.stages||"?",n:Math.max(0,got.rows.length-1)})}
+    catch(err){$("maInfo").textContent=err.message+" "+T("You can still fill in the match by hand and paste the table.")}finally{b.disabled=false}};
 }
 $("mNew").addEventListener("click",()=>matchSheet(null));
 
@@ -676,7 +689,10 @@ function guessCols(rows){
   }
   return{cols:out,hdr};
 }
-function pasteSheet(){
+async function ssiFetch(url){
+  if(!/shootnscoreit\.com\/event\/\d+\/\d+/.test(url||""))throw new Error(T("Paste the match's link from shootnscoreit.com."));
+  return api("POST",`c/${SLUG}/ssi`,{url})}
+function pasteSheet(pre){
   let rows=[],cols=[],hdr=false;
   const has=MD.competitors.length,locked=MD.counts.some(c=>c.qty>0);
   sheet(T("Paste from SSI"),`<p class="hint" style="margin:0">${T("hintPasteHow")}</p>
@@ -687,13 +703,15 @@ function pasteSheet(){
       const r=await api("POST",`c/${SLUG}/matches/${MD.match.id}/competitors`,{replace:!!($("pRep")&&$("pRep").checked),rows:out});
       toast(T("{n} competitors added",{n:r.added}));setTimeout(loadMatch,0)},T("Import"));
   const build=()=>rows.slice(hdr?1:0).map(r=>{const o={};cols.forEach((c,i)=>{if(c)o[c]=(o[c]?o[c]+" ":"")+(r[i]||"")});
-    if(!o.name&&(o.first||o.last))o.name=[o.first,o.last].filter(Boolean).join(" ");return{name:(o.name||"").trim(),squad:o.squad||"",division:o.division||"",num:o.num||""}}).filter(r=>r.name.length>=2);
+    if(!o.name&&(o.first||o.last))o.name=[o.first,o.last].filter(Boolean).join(" ");let nm=(o.name||"").trim();const lf=nm.match(/^([^,]+),\s*([^,]+)$/);if(lf)nm=lf[2]+" "+lf[1];           // "Last, First" → "First Last"
+    return{name:nm,squad:(o.squad||"").replace(/^(squad|ryhmä|sq)\.?\s*/i,""),division:o.division||"",num:o.num||""}}).filter(r=>r.name.length>=2);
   const draw=()=>{if(!rows.length){$("pMap").innerHTML="";return}
     const w=cols.length,show=rows.slice(0,6);
     $("pMap").innerHTML=`<label class="check"><input type="checkbox" id="pHdr" ${hdr?"checked":""}> ${T("First row is the headings")}</label>
       <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:.8rem;min-width:100%"><thead><tr>${cols.map((c,i)=>`<th style="padding:4px"><select data-col="${i}" style="font-size:.8rem;padding:4px">${COLS.map(([k,l])=>`<option value="${k}" ${k===c?"selected":""}>${T(l)}</option>`).join("")}</select></th>`).join("")}</tr></thead>
       <tbody>${show.map((r,j)=>`<tr style="${j===0&&hdr?"opacity:.5":""}">${Array.from({length:w},(_,i)=>`<td style="padding:4px;border-top:1px solid var(--line);white-space:nowrap">${esc(r[i]||"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
       <p class="hint" style="margin:0">${T("{n} competitors, e.g. {ex}",{n:build().length,ex:esc(build().slice(0,3).map(r=>r.name+(r.squad?" ("+r.squad+")":"")).join(", "))})}</p>`};
+  if(pre){rows=pre;const g=guessCols(rows);cols=g.cols;hdr=g.hdr;$("pTxt").value=rows.map(r=>r.join("\t")).join("\n");draw()}
   $("sBody").oninput=e=>{if(e.target.id!=="pTxt")return;rows=parsePaste(e.target.value);const g=guessCols(rows);cols=g.cols;hdr=g.hdr;draw()};
   $("sBody").onchange=e=>{if(e.target.dataset.col!=null){cols[+e.target.dataset.col]=e.target.value;draw()}else if(e.target.id==="pHdr"){hdr=e.target.checked;draw()}};
 }

@@ -2,6 +2,7 @@
    (ADMIN_FI). {name} etc. are filled in by T(). A text missing from ADMIN_FI shows in English. */
 "use strict";
 const ADMIN_EN={
+  hintSsiLink:"Paste the match's link from shootnscoreit.com and press Fetch: name, date, stages and the competitor list are read from SSI.",
   hintOfficer:"A range or stat officer with a diary account: sees only the officer page, where they enter each competitor's rounds per stage. No money, no stock.",
   hintMatches:"Add a match for a match day: its stages, which ammo boxes are there and the competitor list from SSI. Officers then enter the rounds of club ammo per competitor and stage, and you see here whether each shooter's own entry matches.",
   hintPaste:"No competitors yet. Open the participants page of the match on shootnscoreit.com, select the table, copy it and paste it here.",
@@ -34,6 +35,14 @@ const ADMIN_EN={
   hintExport:"Ammo and payments, voided entries left out. PDF for printing, Excel (entries + summary) and CSV for the books."
 };
 const ADMIN_FI={
+  "SSI link (optional)":"SSI-linkki (valinnainen)","Fetch":"Hae","Fetch from SSI":"Hae SSI:stä","Reading SSI…":"Luetaan SSI:tä…",
+  hintSsiLink:"Liitä ottelun linkki shootnscoreit.comista ja paina Hae: nimi, päivä, rastit ja ampujalista luetaan SSI:stä.",
+  "Read from SSI: {name} · {date} · {s} stages · {n} rows. Check, then Save – the competitors come next.":"Luettu SSI:stä: {name} · {date} · {s} rastia · {n} riviä. Tarkista ja tallenna – ampujat tulevat seuraavaksi.",
+  "You can still fill in the match by hand and paste the table.":"Voit silti täyttää ottelun käsin ja liittää taulukon.",
+  "No participants table found – paste it instead.":"Osallistujataulukkoa ei löytynyt – liitä se käsin.",
+  "Paste the match's link from shootnscoreit.com.":"Liitä ottelun linkki shootnscoreit.comista.",
+  "Not a shootnscoreit.com event link.":"Tämä ei ole shootnscoreit.comin ottelulinkki.",
+  "Couldn't read the match from SSI – paste the table instead.":"Ottelua ei saatu luettua SSI:stä – liitä taulukko käsin.",
   "Matches":"Ottelut","Match":"Ottelu","+ Match":"+ Ottelu","Admins and officers":"Ylläpitäjät ja toimitsijat","+ Officer":"+ Toimitsija",
   "officer":"toimitsija","admin":"ylläpitäjä","New officer":"Uusi toimitsija",
   hintOfficer:"Ammunnanjohtaja tai tuloslaskija, jolla on Shooting Diary -tunnus: näkee vain toimitsijasivun, jolla kirjataan ampujien patruunat rasteittain. Ei rahaa eikä varastoa.",
