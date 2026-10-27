@@ -190,24 +190,41 @@ def upsert_session(conn, sid, body):
 
 
 # ------------------------------------------------------------------ auth
-_fails = {}            # ip -> [count, first_fail_time]
+_fails = {}            # ip -> [count, first_fail_time, {username tried: its password stamp then}]
 _fails_lock = threading.Lock()
 MAX_FAILS, LOCK_SECONDS = 5, 15 * 60
 
 
-def _too_many(ip):
+def _pw_stamp(username):
+    from . import users
+    u = users.by_name(username) if username else None
+    return users.stamp(u) if u else None
+
+
+def _too_many(ip, username=""):
+    """5 wrong passwords from one address → 15 minutes' wait. The wait ends early for an account an admin has
+    given a new password (or cleared it) since it was tried from here – web page or command line alike."""
     with _fails_lock:
-        count, first = _fails.get(ip, (0, 0))
+        count, first, tried = _fails.get(ip, (0, 0, {}))
         if time.time() - first >= LOCK_SECONDS:
             _fails.pop(ip, None)
             return False
-        return count >= MAX_FAILS
+        if count < MAX_FAILS:
+            return False
+    if username in tried and _pw_stamp(username) != tried[username]:
+        with _fails_lock:
+            _fails.pop(ip, None)
+        return False
+    return True
 
 
-def _note_fail(ip):
+def _note_fail(ip, username=""):
+    st = _pw_stamp(username)
     with _fails_lock:
-        entry = _fails.setdefault(ip, [0, time.time()])
+        entry = _fails.setdefault(ip, [0, time.time(), {}])
         entry[0] += 1
+        if username and len(entry[2]) < 50:
+            entry[2].setdefault(username, st)
 
 
 def current_user():
@@ -242,7 +259,7 @@ def login():
     if request.method == "POST":
         ip = request.remote_addr or "?"
         username = request.form.get("username", "").strip().lower()[:32]
-        if _too_many(ip):
+        if _too_many(ip, username):
             error = "Too many wrong attempts. Wait 15 minutes."
         elif users.verify_setup(username, request.form.get("password", "")):
             # New account, empty password: on to choosing one (not logged in until then)
@@ -259,7 +276,7 @@ def login():
             if users.verify_pending(username, request.form.get("password", "")):
                 error = "Your account is waiting for an admin to approve it."
             else:
-                _note_fail(ip)
+                _note_fail(ip, username)
                 time.sleep(1)
                 error = "Wrong username or password."
     from .demo import demo_user

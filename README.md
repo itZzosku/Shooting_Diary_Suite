@@ -151,7 +151,9 @@ another's data. Three ways in:
 In *Accounts* an admin can also *Reset password* (back to "choose one at next login"), *Disable* / *Enable* and
 *Delete* (the data goes; a final copy is kept in `diary_data/deleted/` for 30 days) – never on their own
 account. Everyone changes their own password with *Password* and downloads all their data with *My data*
-(one JSON file). Five wrong passwords from one address lock logins for 15 minutes.
+(one JSON file). Five wrong passwords from one address lock logins for 15 minutes; when an admin
+resets or clears the password of an account tried from there (admin page or `python -m diary`), that account can log
+in again at once.
 
 ```bash
 python -m diary user-add mikko             # new account, no password yet – tell them to log in soon

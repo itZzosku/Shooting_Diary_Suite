@@ -396,3 +396,33 @@ def test_gun_with_two_calibres(two):
     assert g["cal"] == ".357 Magnum" and g["cals"] == [".38 Special"]
     assert o.put("/diary/api/guns/g-sw19", json=dict(body, cals=".38")).status_code == 400   # must be a list
     o.delete("/diary/api/guns/g-sw19", headers=H)
+
+
+def test_lockout_ends_when_admin_resets_password(two, monkeypatch):
+    """5 wrong passwords lock the address for 15 min – unless an admin gives that account a new password."""
+    app, o, _m = two
+    monkeypatch.setattr(diary.time, "sleep", lambda s: None)
+    diary._fails.clear()
+    phone = app.test_client()
+    env = {"REMOTE_ADDR": "10.9.8.7"}
+    for _ in range(5):
+        phone.post("/diary/login", data={"username": "mikko", "password": "wrong-guess-1"}, environ_base=env)
+    r = phone.post("/diary/login", data={"username": "mikko", "password": "mikko-password-1"}, environ_base=env)
+    assert r.status_code == 200 and "Too many wrong attempts" in r.get_data(as_text=True)          # locked, even with the right one
+    other = phone.post("/diary/login", data={"username": "nobody", "password": "x"}, environ_base=env)
+    assert "Too many wrong attempts" in other.get_data(as_text=True)                                # other names stay locked
+    # Admin web page: clear the password → mikko can log in with an empty password and choose a new one
+    assert o.post("/diary/api/admin/users/mikko/clear-password", json={}).status_code == 200
+    r = phone.post("/diary/login", data={"username": "mikko", "password": ""}, environ_base=env)
+    assert "Too many wrong attempts" not in r.get_data(as_text=True) and "Save and log in" in r.get_data(as_text=True)
+    # Command line (another process: only the database changes): set_password lifts it too
+    diary._fails.clear()
+    users.set_password("mikko", "mikko-password-1")
+    for _ in range(5):
+        phone.post("/diary/login", data={"username": "mikko", "password": "wrong-guess-2"}, environ_base=env)
+    assert "Too many wrong attempts" in phone.post("/diary/login", data={"username": "mikko", "password": "mikko-password-1"},
+                                    environ_base=env).get_data(as_text=True)
+    users.set_password("mikko", "mikko-password-2")
+    assert phone.post("/diary/login", data={"username": "mikko", "password": "mikko-password-2"},
+                      environ_base=env).status_code == 302
+    diary._fails.clear()
