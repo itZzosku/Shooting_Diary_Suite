@@ -1532,6 +1532,17 @@ function sizeMarker(ret,R,k){
          texts:[{x:-(a+b)/2,y:y1+(moa?2.4:0.55)*k,text:`${cm.toFixed(1)} cm`,color:BLUE,size:13,anchor:"middle"}]};
 }
 
+/** The marks to draw: compiled from the spec with this page's compiler, so a reticle saved by an older version of
+    the app (or an older cached copy on a phone) still draws with today's features, e.g. gaps in the stadia.
+    The stored elements are the fallback when the spec doesn't compile. Cached per reticle revision. */
+const RET_ELS=new Map();
+function retElements(ret){
+  const key=ret.id+"@"+ret.rev+"@"+(typeof ret.spec==="string"?ret.spec.length:"");
+  if(RET_ELS.has(key))return RET_ELS.get(key);
+  let els=ret.elements;
+  try{const spec=typeof ret.spec==="string"?JSON.parse(ret.spec):ret.spec;if(spec){const r=RT.compile(spec);if(r.elements&&r.elements.length)els=r.elements}}catch(e){}
+  RET_ELS.set(key,els);return els;
+}
 function viewSvg(box,Z,full){
   const p=prof(),ret=retOf(p);if(!ret)return null;
   const sc=retScene(p,ret),k=RT.sfpFactor(ret,num($("vMag").value)),field=fieldOf(ret);
@@ -1539,7 +1550,7 @@ function viewSvg(box,Z,full){
   const night=full&&RV.night;
   const marks=ready(p)?rangeMarks(p,ret,sc.dialled,k,pxPer,night?"#0b0d0b":"#fff"):[];
   const size=full&&sc.mode==="shot"?sizeMarker(ret,sc.R,k):{lines:[],texts:[]};
-  const svg=RT.svg(ret.elements,{half:Z.half,cx:Z.cx,cy:Z.cy,px:1/pxPer,k,holds:sc.holds,targets:sc.targets,
+  const svg=RT.svg(retElements(ret),{half:Z.half,cx:Z.cx,cy:Z.cy,px:1/pxPer,k,holds:sc.holds,targets:sc.targets,
     texts:marks.concat(size.texts),lines:size.lines,accent:"#e2590f",ink:night?"#ff4a3a":"#111",
     scope:{r:field*1.04,fill:night?"#0b0d0b":"#fff",outside:"#000"}});
   return{svg,sc,ret,k};
