@@ -1616,7 +1616,17 @@ function renderReticle(){
 // ------------------------------------------------------------ target drawn at the point of impact (this shot)
 // Sizes in cm, drawn to scale at the range: cm / range = angle. Presets are outlines in cm from the target's
 // centre (x right, y down); the first part is the outline, the rest zone lines.
-const TARGET_PRESETS={};
+// SRA cardboard targets from the SRA rules ver. 8.1 (RESUL), Annex 1 (2024) and Annex 2 (older), mm → cm.
+// Origin of the drawing: the shoulder line's centre; shifted so the aim point is the centre of the body A zone.
+// Outline = the cut edge (the scoring line is 5 mm inside it); then the C zone and the A zone(s).
+const SRA_OUTLINE=[[-75,-150],[75,-150],[75,0],[175,0],[225,50],[225,450],[150,600],[-150,600],[-225,450],[-225,50],[-175,0],[-75,0]];
+const SRA_C=[[-75,0],[75,0],[150,50],[150,330],[100,450],[-100,450],[-150,330],[-150,50]];
+const sraParts=(aimY,zones)=>[SRA_OUTLINE,SRA_C,...zones].map(pts=>({t:"poly",points:pts.map(([x,y])=>[x/10,(y-aimY)/10])}));
+const TARGET_PRESETS={
+  sra2024:{name:"SRA target (2024)",size:"45 × 75 cm, A 15 × 33",parts:sraParts(165,[[[-75,0],[75,0],[75,330],[-75,330]]])},
+  sra:{name:"SRA target (older, A in the head)",size:"45 × 75 cm, A 15 × 28 + head 10 × 5",
+       parts:sraParts(190,[[[-75,50],[75,50],[75,330],[-75,330]],[[-50,-125],[50,-125],[50,-75],[-50,-75]]])},
+};
 function tgtState(){return Object.assign({kind:"",d:30,w:30,h:45},U.tgt||{})}
 function fillTargetUI(){
   const t=tgtState();
