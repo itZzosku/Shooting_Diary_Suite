@@ -333,6 +333,31 @@ def test_service_worker_precache_files_exist():
     assert fonts <= {p.split("/")[-1] for p in paths}          # every font is precached
 
 
+def _precache_hash():
+    """Hash of every precached file's content (they are served cache-first, so a change needs a new VERSION)."""
+    import hashlib
+    import re
+    here = os.path.join(os.path.dirname(diary.__file__), "static")
+    bal = os.path.join(os.path.dirname(os.path.dirname(diary.__file__)), "ballistics", "static")
+    sw = open(os.path.join(here, "sw.js"), encoding="utf-8").read()
+    block = sw[sw.index("const PRECACHE"):sw.index("];", sw.index("const PRECACHE"))]
+    h = hashlib.sha256()
+    for p in sorted(re.findall(r'"static/([^"]+)"', block)):
+        f = os.path.join(bal, p[len("ballistics/"):]) if p.startswith("ballistics/") else os.path.join(here, p)
+        h.update(p.encode() + b"\0" + open(f, "rb").read() + b"\0")
+    return h.hexdigest()[:16], sw
+
+
+def test_service_worker_version_bumped_with_cached_files():
+    """Phones keep serving the old copy of a cache-first file until VERSION changes. sw.js records the hash
+    of the precached files it was last bumped for; change a file → bump VERSION and update the hash."""
+    import re
+    digest, sw = _precache_hash()
+    m = re.search(r'CACHED_FILES_HASH = "([0-9a-f]+)"', sw)
+    assert m and m.group(1) == digest, (
+        f"A precached file changed: bump VERSION in diary/static/sw.js and set CACHED_FILES_HASH = \"{digest}\"")
+
+
 def test_demo_account(two):
     app, o, m = two
     from diary import demo
