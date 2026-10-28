@@ -268,6 +268,15 @@ header.top{padding-top:6px!important}
 .mm-nav{display:flex;gap:10px;margin-top:16px}
 .mm-nav button{flex:1;background:#1d211d;border:1px solid #3a413a;color:#f2f4f0;border-radius:10px;padding:16px;font-size:1.1rem}
 .req{color:var(--danger)}
+.wxbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}
+.wxbtn{display:flex;gap:10px;align-items:center;text-align:left;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-width:0;color:var(--fg)}
+.wxbtn .chev{color:var(--muted);transition:transform .15s}
+.wxbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.wxt{display:flex;flex-direction:column;min-width:0}
+.wxt b{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.05em;font-size:1rem}
+.wxsum{font-family:var(--f-mono);font-size:.8rem;color:var(--muted);line-height:1.35;white-space:pre-line}
+#aFetch{flex:none;padding:9px 16px}
+.wxpanel{display:flex;flex-direction:column;gap:12px}
 .retbox{background:#f4f5f2;border:1px solid var(--line);border-radius:var(--r);aspect-ratio:1/1;width:100%;max-width:560px;margin:0 auto;color:#111;overflow:hidden;touch-action:none}
 .retbox svg{width:100%;height:100%;display:block}
 :root[data-theme="dark"] .retbox,.retbox.night{background:#0b0d0b;color:#ff5544}
@@ -312,36 +321,41 @@ details summary{cursor:pointer;list-style:revert}
   </section>
 
   <section class="card" aria-label="Conditions">
-    <div class="g4">
-      <label class="f">Temp °C<input type="text" inputmode="decimal" id="aT" placeholder="15"></label>
-      <label class="f">Pressure hPa<input type="text" inputmode="decimal" id="aP" placeholder="1013"></label>
-      <label class="f">Humidity %<input type="text" inputmode="decimal" id="aRH" placeholder="50"></label>
-      <label class="f">Powder °C<input type="text" inputmode="decimal" id="aPow" placeholder="= air"></label>
+    <div class="wxbar">
+      <button type="button" class="wxbtn" id="wxToggle" aria-expanded="false" aria-controls="wxPanel">
+        <span class="chev" aria-hidden="true">▸</span><span class="wxt"><b>Weather</b><span class="wxsum" id="wxSum"></span></span>
+      </button>
+      <button class="primary" type="button" id="aFetch">Fetch weather</button>
+    </div>
+    <div id="wxPanel" class="wxpanel" hidden>
+      <div class="g4">
+        <label class="f">Temp °C<input type="text" inputmode="decimal" id="aT" placeholder="15"></label>
+        <label class="f">Pressure hPa<input type="text" inputmode="decimal" id="aP" placeholder="1013"></label>
+        <label class="f">Humidity %<input type="text" inputmode="decimal" id="aRH" placeholder="50"></label>
+        <label class="f">Powder °C<input type="text" inputmode="decimal" id="aPow" placeholder="= air"></label>
+      </div>
+      <label class="f">Place<select id="aPlace"></select></label>
+      <div class="src" id="aSrc"></div>
+      <details id="aMore">
+        <summary class="hint">Location, altitude, direction of fire</summary>
+        <div class="g4" style="margin-top:10px">
+          <label class="f">Latitude<input type="text" inputmode="decimal" id="aLat"></label>
+          <label class="f">Longitude<input type="text" inputmode="decimal" id="aLon"></label>
+          <label class="f">Altitude m<input type="text" inputmode="decimal" id="aAlt"></label>
+          <label class="f">Firing ° (N=0)<span class="inbtn"><input type="text" inputmode="decimal" id="aAz"><button type="button" id="aCmp" aria-label="Read the compass" title="Point the top of the phone at the target">⌖</button></span></label>
+        </div>
+        <div class="actions" style="margin-top:10px"><button class="ghost" type="button" id="aGps">Use phone location</button><button class="ghost" type="button" id="aSavePlace">Save as a place</button><button class="ghost" type="button" id="aDelPlace" hidden>Forget this place</button></div>
+        <p class="hint" style="margin:6px 0 0">Latitude and direction of fire are only used for Coriolis; altitude turns the weather service's sea-level pressure into station pressure.</p>
+      </details>
+      <div class="actions" style="justify-content:space-between">
+        <span class="hint" style="margin:0">Pressure is <b>station</b> pressure (Kestrel, phone barometer), not the sea-level value weather services give.</span>
+        <button class="ghost" type="button" id="aStd">Standard air</button>
+      </div>
     </div>
     <div class="g3">
       <label class="f">Wind m/s<input type="text" inputmode="decimal" id="wMs" placeholder="0"></label>
       <label class="f">From o'clock<select id="wClock"></select></label>
       <label class="f">Angle °<span class="inbtn"><input type="text" inputmode="decimal" id="aAng" placeholder="0"><button type="button" id="aTilt" title="Hold the phone flat along the barrel" aria-label="Measure angle with the phone">∠</button></span></label>
-    </div>
-    <div class="prow" style="grid-template-columns:minmax(0,1fr) auto">
-      <label class="f">Place<select id="aPlace"></select></label>
-      <button class="primary" type="button" id="aFetch" style="flex:none;padding:11px 16px">Fetch weather</button>
-    </div>
-    <div class="src" id="aSrc"></div>
-    <details id="aMore">
-      <summary class="hint">Location, altitude, direction of fire</summary>
-      <div class="g4" style="margin-top:10px">
-        <label class="f">Latitude<input type="text" inputmode="decimal" id="aLat"></label>
-        <label class="f">Longitude<input type="text" inputmode="decimal" id="aLon"></label>
-        <label class="f">Altitude m<input type="text" inputmode="decimal" id="aAlt"></label>
-        <label class="f">Firing ° (N=0)<span class="inbtn"><input type="text" inputmode="decimal" id="aAz"><button type="button" id="aCmp" aria-label="Read the compass" title="Point the top of the phone at the target">⌖</button></span></label>
-      </div>
-      <div class="actions" style="margin-top:10px"><button class="ghost" type="button" id="aGps">Use phone location</button><button class="ghost" type="button" id="aSavePlace">Save as a place</button><button class="ghost" type="button" id="aDelPlace" hidden>Forget this place</button></div>
-      <p class="hint" style="margin:6px 0 0">Latitude and direction of fire are only used for Coriolis; altitude turns the weather service's sea-level pressure into station pressure.</p>
-    </details>
-    <div class="actions" style="justify-content:space-between">
-      <span class="hint" style="margin:0">Pressure is <b>station</b> pressure (Kestrel, phone barometer), not the sea-level value weather services give.</span>
-      <button class="ghost" type="button" id="aStd">Standard air</button>
     </div>
   </section>
 
@@ -846,12 +860,13 @@ function loadCond(){
   $("aT").value=c.t??"";$("aP").value=c.p??"";$("aRH").value=c.rh??"";$("aPow").value=c.pow??"";
   $("wMs").value=c.ms??"";$("wClock").value=c.clock??9;$("aAng").value=c.ang??"";
   $("aLat").value=c.lat??"";$("aLon").value=c.lon??"";$("aAlt").value=c.alt??"";$("aAz").value=c.az??"";
-  $("aSrc").innerHTML=c.src||"";renderPlaces(c.place);
+  $("aSrc").innerHTML=c.src||"";renderPlaces(c.place);WX_STAMP=c.stamp||null;wxSummary();
   if(c.range)$("rIn").value=c.range;
 }
 function saveCond(){
   ls.set(COND+(U.profile||""),{t:$("aT").value,p:$("aP").value,rh:$("aRH").value,pow:$("aPow").value,ms:$("wMs").value,clock:$("wClock").value,ang:$("aAng").value,range:$("rIn").value,
-    lat:$("aLat").value,lon:$("aLon").value,alt:$("aAlt").value,az:$("aAz").value,src:$("aSrc").innerHTML,place:$("aPlace").value});
+    lat:$("aLat").value,lon:$("aLon").value,alt:$("aAlt").value,az:$("aAz").value,src:$("aSrc").innerHTML,place:$("aPlace").value,stamp:WX_STAMP});
+  wxSummary();
 }
 function recent(){
   const R=num($("rIn").value);if(!(R>0))return;
@@ -861,12 +876,13 @@ function renderChips(){$("rChips").innerHTML=(ls.get(RECENT)||[]).map(r=>`<butto
 let tmr=null;
 function changed(){saveCond();renderSolution();clearTimeout(tmr);tmr=setTimeout(()=>{renderCard();renderMatch();if(!$("mm").hidden)renderMM();if(U.tab==="ret")renderReticle()},120)}
 document.querySelectorAll("#aT,#aP,#aRH,#aPow,#wMs,#wClock,#aAng,#rIn,#aLat,#aLon,#aAlt,#aAz").forEach(el=>el.addEventListener("input",changed));
+document.querySelectorAll("#aT,#aP,#aRH").forEach(el=>el.addEventListener("input",()=>{if(WX_STAMP){WX_STAMP=null;$("aSrc").innerHTML="";saveCond()}}));
 $("wClock").addEventListener("change",changed);
 $("rIn").addEventListener("change",()=>{recent();renderChips()});
 const stepR=d=>{const v=(num($("rIn").value)||0)+d;$("rIn").value=Math.max(10,Math.round(v));recent();renderChips();changed()};
 $("rMinus").addEventListener("click",()=>stepR(-10));$("rPlus").addEventListener("click",()=>stepR(10));
 $("rChips").addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b){$("rIn").value=b.dataset.r;changed()}});
-$("aStd").addEventListener("click",()=>{$("aT").value=15;$("aP").value=1013;$("aRH").value=0;$("aPow").value="";changed()});
+$("aStd").addEventListener("click",()=>{$("aT").value=15;$("aP").value=1013;$("aRH").value=0;$("aPow").value="";WX_STAMP=null;$("aSrc").innerHTML="";changed()});
 $("pSel").addEventListener("change",()=>{U.profile=$("pSel").value;loadCond();render()});
 $("mSel").addEventListener("change",()=>{U.match=$("mSel").value;render()});
 for(const id of ["cStart","cStep","cEnd"])$(id).addEventListener("change",async()=>{
@@ -875,6 +891,18 @@ for(const id of ["cStart","cStep","cEnd"])$(id).addEventListener("change",async(
 });
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;U.tab=b.dataset.tab;showTab();saveUI()});
 function showTab(){document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===U.tab));$("tabCard").hidden=U.tab!=="card";$("tabMatch").hidden=U.tab!=="match";$("tabRet").hidden=U.tab!=="ret";if(U.tab==="ret")renderReticle()}
+
+// ------------------------------------------------------------ weather panel (closed by default, summary on the button)
+function wxSummary(){
+  const c=cond(),parts=[];
+  if(c.tempC==null&&c.hpa==null&&c.rh==null)parts.push("standard air");
+  else parts.push(`${c.tempC??15} °C`,`${c.hpa??1013} hPa`,`${c.rh??0} %`);
+  if(c.powder!=null)parts.push(`powder ${c.powder} °C`);
+  const st=ls.get(COND+(U.profile||""))||{};
+  $("wxSum").textContent=parts.map(x=>x.replace(/ /g,"\u00a0")).join(" · ")+(st.stamp?"\n"+st.stamp:"");
+}
+function wxOpen(open){U.wxOpen=!!open;$("wxPanel").hidden=!open;$("wxToggle").setAttribute("aria-expanded",!!open);saveUI()}
+$("wxToggle").addEventListener("click",()=>wxOpen($("wxPanel").hidden));
 
 // ------------------------------------------------------------ places, weather and phone sensors
 function renderPlaces(sel){
@@ -887,13 +915,18 @@ $("aPlace").addEventListener("change",()=>{
   if(r){$("aLat").value=r.lat;$("aLon").value=r.lon;$("aAlt").value=r.alt_m??""}
   $("aDelPlace").hidden=!r;changed();
 });
+function kmBetween(a,b,c,d){const r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;return 12742*Math.asin(Math.sqrt(x))}
+function nearestPlace(lat,lon){let best=null,bd=3;for(const r of D.ranges||[]){const d=kmBetween(lat,lon,r.lat,r.lon);if(d<bd){bd=d;best=r}}return best}
 function gps(){return new Promise((ok,no)=>{
   if(!navigator.geolocation)return no(new Error("no_gps"));
   navigator.geolocation.getCurrentPosition(p=>ok(p.coords),no,{enableHighAccuracy:true,timeout:15000,maximumAge:300000});
 })}
 async function useGps(){
   try{const c=await gps();$("aLat").value=c.latitude.toFixed(4);$("aLon").value=c.longitude.toFixed(4);
-    if(c.altitude!=null&&$("aAlt").value==="")$("aAlt").value=Math.round(c.altitude);$("aPlace").value="";changed();return true}
+    const near=nearestPlace(c.latitude,c.longitude);           // at a saved place: its altitude, no need to type it
+    if(near){$("aPlace").value=near.id;$("aDelPlace").hidden=false;if(near.alt_m!=null)$("aAlt").value=near.alt_m}
+    else{$("aPlace").value="";$("aDelPlace").hidden=true;if(c.altitude!=null)$("aAlt").value=Math.round(c.altitude)}
+    changed();return true}
   catch(e){toast("No location from the phone – allow it in the browser, or pick a saved place.");return false}
 }
 $("aGps").addEventListener("click",useGps);
@@ -911,6 +944,7 @@ $("aDelPlace").addEventListener("click",async()=>{
   D.ranges=list;renderPlaces("");saveCond();
 });
 const age=iso=>{const m=Math.round((Date.now()-Date.parse(iso))/60000);return isFinite(m)?(m<60?m+" min":Math.round(m/60)+" h")+" ago":""};
+let WX_STAMP=null;
 $("aFetch").addEventListener("click",async()=>{
   if(num($("aLat").value)==null||num($("aLon").value)==null){if(!(await useGps()))return}
   const q=`lat=${num($("aLat").value)}&lon=${num($("aLon").value)}`+(num($("aAlt").value)!=null?`&alt=${num($("aAlt").value)}`:"");
@@ -925,8 +959,11 @@ $("aFetch").addEventListener("click",async()=>{
   if(j.hpa_station!=null){$("aP").value=j.hpa_station;p=`<b>${j.hpa_station}</b> hPa station (sea level ${j.hpa_sea}, altitude ${j.alt_m} m)`}
   else if(j.hpa_sea!=null)p=`sea-level pressure ${j.hpa_sea} hPa – <b>add the altitude</b> to turn it into station pressure`;
   const w=j.wind_ms!=null?` · station wind ${j.wind_ms} m/s from ${Math.round(j.wind_dir_deg??0)}° (not the range's wind, not applied)`:"";
-  $("aSrc").innerHTML=`FMI · ${src("t2m")}${S.p_sea&&S.p_sea.station!==(S.t2m||{}).station?" · pressure "+src("p_sea"):""} · ${new Date(j.fetched_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}<br>${p}${w}`;
-  if(j.hpa_station==null&&j.hpa_sea!=null){$("aMore").open=true;$("aAlt").focus()}
+  const hm=new Date(j.fetched_at).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+  WX_STAMP=`FMI ${hm}`;
+  $("aSrc").innerHTML=`FMI · ${src("t2m")}${S.p_sea&&S.p_sea.station!==(S.t2m||{}).station?" · pressure "+src("p_sea"):""} · ${hm}<br>${p}${w}`;
+  if(j.hpa_station==null&&j.hpa_sea!=null){wxOpen(true);$("aMore").open=true;$("aAlt").focus()}
+  else toast(`Weather from ${S.t2m?S.t2m.station:"FMI"}${j.hpa_station!=null?"":" (no pressure)"}.`);
   changed();
 });
 async function motionPermission(){
@@ -1415,7 +1452,7 @@ $("pdfStages").addEventListener("click",()=>withPdf($("pdfStages"),async()=>{
 }));
 
 // ------------------------------------------------------------ start
-showTab();applyOutbox();U.profile=(prof()||{}).id||null;loadCond();renderChips();render();
+wxOpen(!!U.wxOpen);showTab();applyOutbox();U.profile=(prof()||{}).id||null;loadCond();renderChips();render();
 load().then(()=>{loadCond();render();flush()});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js",{scope:"./"}).catch(()=>{});
 })();
