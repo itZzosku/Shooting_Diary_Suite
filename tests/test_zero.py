@@ -318,3 +318,20 @@ def test_offline_resend_applies_once(client):
     assert client.post(f"/diary/api/zero/zeros/{ab['id']}/check", json={"op_id": "bad id!"}).status_code == 400
     kinds = [e["kind"] for e in _scope(client)["log"]]
     assert kinds.count("adjust") == 1 and kinds.count("check") == 1 and kinds.count("swap") == 1
+
+
+def test_order_dial_positions(client):
+    """Sort: the scope's positions come back in the order sent; strangers' ids ignored; resending is harmless."""
+    _import()
+    s = _scope(client)
+    ids = [z["id"] for z in s["zeros"]]
+    assert len(ids) >= 3
+    new = list(reversed(ids))
+    url = f"/diary/api/zero/scopes/{s['id']}/order"
+    assert client.post(url, json={"ids": new + ["not-a-position"]}).status_code == 200
+    assert client.post(url, json={"ids": new}).status_code == 200            # sent again from the offline queue
+    assert [z["id"] for z in _scope(client)["zeros"]] == new
+    assert client.post(url, json={"ids": [ids[1]]}).status_code == 200       # only one listed: it goes first
+    assert [z["id"] for z in _scope(client)["zeros"]][0] == ids[1]
+    assert client.post(url, json={"ids": "x"}).status_code == 400
+    assert client.post("/diary/api/zero/scopes/nope/order", json={"ids": []}).status_code == 404

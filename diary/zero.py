@@ -322,6 +322,20 @@ def undo(conn, log_id):
     return True
 
 
+def order_zeros(conn, sid, ids):
+    """The scope's dial positions in this order (the list, the swap menu, the PDF). Ids of other scopes are
+    ignored; positions not in the list keep their place after the listed ones. Safe to send again."""
+    if not isinstance(ids, list) or len(ids) > 500:
+        raise ValueError("ids: a list of positions")
+    if not conn.execute("SELECT 1 FROM scopes WHERE id=?", (sid,)).fetchone():
+        return None
+    mine = [r[0] for r in conn.execute("SELECT id FROM scope_zeros WHERE scope_id=? ORDER BY ord, rowid", (sid,))]
+    listed = [str(i) for i in ids if str(i) in mine]
+    for n, zid in enumerate(list(dict.fromkeys(listed)) + [z for z in mine if z not in listed]):
+        conn.execute("UPDATE scope_zeros SET ord=? WHERE id=?", (n + 1, zid))
+    return True
+
+
 def _delete_zero(conn, zid):
     conn.execute("DELETE FROM scope_zeros WHERE id=?", (zid,))
     conn.execute("DELETE FROM scope_log WHERE zero_id=?", (zid,))
@@ -523,6 +537,13 @@ def api_check(zid):
 def api_mount(sid):
     b = _body()
     return _once(b, lambda: mount(db(), _id(sid), _id(b.get("zero_id")), b.get("date"), b.get("note")))
+
+
+@bp.post("/api/zero/scopes/<sid>/order")
+@login_required
+def api_order(sid):
+    b = _body()
+    return _ok(lambda: order_zeros(db(), _id(sid), b.get("ids")))
 
 
 @bp.post("/api/zero/scopes/<sid>/reference")

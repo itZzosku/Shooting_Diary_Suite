@@ -195,6 +195,13 @@ textarea{width:100%;background:var(--surface);border:1px solid var(--line);borde
 .target b{color:var(--fg);font-family:var(--f-mono);font-weight:600}
 .zrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;margin-bottom:6px;color:var(--fg)}
 .zrow:hover{border-color:var(--muted)}
+.sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 10px;font-size:.85rem;color:var(--muted)}
+.sortbar .ghost{padding:5px 11px;font-size:.85rem}
+.sortrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:stretch;margin-bottom:6px}
+.sortrow .zrow{margin-bottom:0}
+.mv{display:flex;flex-direction:column;gap:4px}
+.mv button{flex:1;width:44px;min-height:36px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:1.1rem;line-height:1}
+.mv button:disabled{opacity:.3}
 .zrow.ref{box-shadow:inset 4px 0 0 var(--fg)}
 .zrow.on{box-shadow:inset 4px 0 0 var(--accent)}
 .zrow .nm{font-weight:600;min-width:0;overflow-wrap:anywhere}
@@ -296,7 +303,9 @@ header.top{padding-top:6px!important}
     </section>
 
     <section aria-labelledby="posH">
-      <div class="sechead stack"><h2 id="posH">Dial positions</h2><span class="target" id="posInfo"></span></div>
+      <div class="sechead"><div class="sechead stack" style="margin:0;min-width:0"><h2 id="posH">Dial positions</h2><span class="target" id="posInfo"></span></div>
+        <button class="ghost" type="button" id="sortBtn" aria-pressed="false" style="flex:none">Sort</button></div>
+      <div id="sortBar" class="sortbar" hidden><span>Sort by</span><button type="button" class="ghost" data-sortby="name">A–Z</button><button type="button" class="ghost" data-sortby="rifle">Rifle</button><button type="button" class="ghost" data-sortby="elev">Elevation</button><span class="hint">or move with ↑ ↓</span></div>
       <div id="zList"></div>
       <div class="row2"><button class="ghost" type="button" id="addZeroBtn">+ Add position</button></div>
     </section>
@@ -482,6 +491,7 @@ function applyEff(f){
       distance_m:b.distance_m?+b.distance_m:null,mount:b.mount||null,archived:0,elev:+b.elev,wind:+b.wind,checks:{n:0}};
       nz.name=nameOf(nz);(sc.zeros=sc.zeros||[]).push(nz);pendingLog(sc,{kind:"new",zero_id:nz.id,position:nz.name,date:f.date,elev:nz.elev,wind:nz.wind})}}
   else if(f.k==="scope")Object.assign(sc,f.body);
+  else if(f.k==="order")f.ids.forEach((id,i)=>{const x=(sc.zeros||[]).find(z=>z.id===id);if(x)x.ord=i+1});
 }
 function queueNote(){
   const n=qGet().length,el=$("qNote");
@@ -512,7 +522,8 @@ setInterval(()=>{if(qGet().length&&navigator.onLine!==false)flush()},20000);
 /* ---------- state ---------- */
 const S={scopes:[],guns:[],loads:[],sid:"",to:"",justMounted:null,logAll:false,zid:null,adj:{e:0,w:0}};
 const scope=()=>S.scopes.find(s=>s.id===S.sid);
-const zeros=(all)=>(scope()?.zeros||[]).filter(z=>all||!z.archived);
+// In the order the user arranged (Sort); archived ones last
+const zeros=(all)=>(scope()?.zeros||[]).filter(z=>all||!z.archived).slice().sort((a,b)=>(a.archived-b.archived)||((a.ord||0)-(b.ord||0)));
 const zOf=id=>(scope()?.zeros||[]).find(z=>z.id===id);
 const click=()=>scope()?.click||0.1;
 const dec=()=>{const s=String(+click());return s.includes(".")?Math.max(1,s.split(".")[1].length):0};
@@ -633,20 +644,42 @@ function renderList(){
   const s=scope(),zs=zeros(true);
   const rz=zOf(s.ref_zero_id);
   $("posInfo").textContent=`${s.unit} · click ${+s.click} · 0 / 0 = ${rz?rz.name:"turret zero"}`+(s.zero_stop!=null?` · zero stop ${elevDial(s.zero_stop)}`:"");
-  $("zList").innerHTML=zs.length?zs.map(z=>{
+  $("sortBtn").hidden=zs.length<2;if(zs.length<2)SORTING=false;
+  $("sortBtn").setAttribute("aria-pressed",SORTING);$("sortBtn").textContent=SORTING?"Done":"Sort";$("sortBar").hidden=!SORTING;
+  $("zList").innerHTML=zs.length?zs.map((z,i)=>{
     const ref=z.id===s.ref_zero_id,on=z.id===s.mounted_zero_id;
     const low=s.zero_stop!=null&&z.elev<s.zero_stop-click()/2;
     const sub=[gunName(z.gun_id)&&gunName(z.gun_id)!==z.rifle?gunName(z.gun_id):"",z.cal,z.distance_m?z.distance_m+" m":"",z.mount].filter(Boolean).map(esc);
     const c=z.checks||{};
-    return`<button type="button" class="zrow${ref?" ref":""}${on?" on":""}" data-zid="${esc(z.id)}" ${z.archived?'style="opacity:.55"':""}>
+    const row=`<button type="button" class="zrow${ref?" ref":""}${on?" on":""}" data-zid="${esc(z.id)}" ${z.archived?'style="opacity:.55"':""}>
       <span class="nm">${esc(z.name)}</span>
       <span class="fig">${elevDial(z.elev)} <span style="color:var(--muted)">/</span> ${windShort(z.wind)}${s.zero_stop!=null?`<small>${fx(z.elev-s.zero_stop)} above stop</small>`:""}</span>
       <span class="meta">${ref?'<span class="badge ref">0 / 0 reference</span>':""}${on?'<span class="badge on">scope on</span>':""}${!on&&otherScopeOn(z)?`<span class="badge">${esc(otherScopeOn(z))} on it</span>`:""}${low?'<span class="badge warn">below zero stop</span>':""}${z.archived?'<span class="badge">archived</span>':""}
         ${sub.length?`<span>${sub.join(" · ")}</span>`:""}
-        ${c.n?`<span>checked ${c.n}× · last ${fiDate(c.last)}</span>`:""}${z.label&&z.load_id&&loadName(z.load_id)?`<span>${esc(loadName(z.load_id))}</span>`:""}</span></button>`}).join("")
+        ${c.n?`<span>checked ${c.n}× · last ${fiDate(c.last)}</span>`:""}${z.label&&z.load_id&&loadName(z.load_id)?`<span>${esc(loadName(z.load_id))}</span>`:""}</span></button>`;
+    // Sort mode: ↑ ↓ beside each position (archived ones stay last and don't move)
+    return SORTING?`<div class="sortrow">${row}<div class="mv"><button type="button" data-mv="-1" data-mz="${esc(z.id)}" aria-label="Move up" ${i===0||z.archived?"disabled":""}>↑</button>
+      <button type="button" data-mv="1" data-mz="${esc(z.id)}" aria-label="Move down" ${z.archived||!zs[i+1]||zs[i+1].archived?"disabled":""}>↓</button></div></div>`:row}).join("")
     :'<div class="empty">No positions yet.</div>';
 }
-$("zList").addEventListener("click",e=>{const b=e.target.closest("[data-zid]");if(b)openZero(b.dataset.zid)});
+$("zList").addEventListener("click",e=>{const m=e.target.closest("[data-mv]");if(m){movePos(m.dataset.mz,+m.dataset.mv);return}
+  const b=e.target.closest("[data-zid]");if(b)openZero(b.dataset.zid)});
+/* ---- Sort: arrange the dial positions (↑ ↓ or a quick sort); saved at once, queued when offline ---- */
+let SORTING=false;
+$("sortBtn").addEventListener("click",()=>{SORTING=!SORTING;renderList()});
+async function saveOrder(ids){
+  const s=scope();applyEff({k:"order",sid:s.id,ids});renderList();
+  try{await write("POST",`zero/scopes/${encodeURIComponent(s.id)}/order`,{ids},{k:"order",sid:s.id,ids})}catch(e){toast(errText(e))}
+}
+function movePos(zid,d){
+  const ids=zeros(true).map(z=>z.id),i=ids.indexOf(zid),j=i+d;
+  if(i<0||j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];saveOrder(ids);
+}
+$("sortBar").addEventListener("click",e=>{const b=e.target.closest("[data-sortby]");if(!b)return;
+  const by=b.dataset.sortby,cmp={name:(a,b)=>a.name.localeCompare(b.name,"fi",{numeric:true}),
+    rifle:(a,b)=>String(gunName(a.gun_id)||a.rifle).localeCompare(String(gunName(b.gun_id)||b.rifle),"fi",{numeric:true})||a.name.localeCompare(b.name,"fi",{numeric:true}),
+    elev:(a,b)=>a.elev-b.elev||a.wind-b.wind}[by];
+  saveOrder(zeros(true).slice().sort((a,b)=>(a.archived-b.archived)||cmp(a,b)).map(z=>z.id))});
 
 function renderAll(){
   const zs=zeros(),rows=[];
