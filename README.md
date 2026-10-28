@@ -291,7 +291,7 @@ database is the only copy.
 - **Adjust**: UP/DOWN and LEFT/RIGHT by clicks for what you corrected at the range; logged with date and note.
   *From 0 / 0* instead counts the clicks from the reference (where the new zero is, e.g. 3 down / 3 left) and
   works out the move from the current position (each position opens on *From dial position now*). *Undo* reverts the newest change of a position. Exact values can be typed under *Details* (logged as "set").
-  *Sort* on *Dial positions* arranges them (↑ ↓, or A–Z / rifle / elevation); the order is used in the list, the swap
+  Drag a dial position by its ⠿ handle to reorder (as guns in the diary); the order is used in the list, the swap
   menus and the PDF card.
 - **0 / 0 reference**: by default 0 / 0 is the turret's own zero (values are dial readings). *Make this the
   0 / 0 reference* (or *Scope info*) relabels everything so a position reads 0 / 0 — e.g. after slipping the

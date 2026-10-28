@@ -195,13 +195,12 @@ textarea{width:100%;background:var(--surface);border:1px solid var(--line);borde
 .target b{color:var(--fg);font-family:var(--f-mono);font-weight:600}
 .zrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;margin-bottom:6px;color:var(--fg)}
 .zrow:hover{border-color:var(--muted)}
-.sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 10px;font-size:.85rem;color:var(--muted)}
-.sortbar .ghost{padding:5px 11px;font-size:.85rem}
-.sortrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:stretch;margin-bottom:6px}
-.sortrow .zrow{margin-bottom:0}
-.mv{display:flex;flex-direction:column;gap:4px}
-.mv button{flex:1;width:44px;min-height:36px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:1.1rem;line-height:1}
-.mv button:disabled{opacity:.3}
+/* Dial positions: drag the ⠿ handle to reorder (as guns in the diary) */
+.zwrap{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:stretch;margin-bottom:6px;border-radius:var(--r)}
+.zwrap .zrow{margin-bottom:0}
+.zwrap .grip{margin-right:4px}
+.zwrap.dragging{position:relative;z-index:2;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.zwrap.dragging .grip{cursor:grabbing;color:var(--accent)}
 .zrow.ref{box-shadow:inset 4px 0 0 var(--fg)}
 .zrow.on{box-shadow:inset 4px 0 0 var(--accent)}
 .zrow .nm{font-weight:600;min-width:0;overflow-wrap:anywhere}
@@ -303,9 +302,7 @@ header.top{padding-top:6px!important}
     </section>
 
     <section aria-labelledby="posH">
-      <div class="sechead"><div class="sechead stack" style="margin:0;min-width:0"><h2 id="posH">Dial positions</h2><span class="target" id="posInfo"></span></div>
-        <button class="ghost" type="button" id="sortBtn" aria-pressed="false" style="flex:none">Sort</button></div>
-      <div id="sortBar" class="sortbar" hidden><span>Sort by</span><button type="button" class="ghost" data-sortby="name">A–Z</button><button type="button" class="ghost" data-sortby="rifle">Rifle</button><button type="button" class="ghost" data-sortby="elev">Elevation</button><span class="hint">or move with ↑ ↓</span></div>
+      <div class="sechead stack"><h2 id="posH">Dial positions</h2><span class="target" id="posInfo"></span></div>
       <div id="zList"></div>
       <div class="row2"><button class="ghost" type="button" id="addZeroBtn">+ Add position</button></div>
     </section>
@@ -644,8 +641,7 @@ function renderList(){
   const s=scope(),zs=zeros(true);
   const rz=zOf(s.ref_zero_id);
   $("posInfo").textContent=`${s.unit} · click ${+s.click} · 0 / 0 = ${rz?rz.name:"turret zero"}`+(s.zero_stop!=null?` · zero stop ${elevDial(s.zero_stop)}`:"");
-  $("sortBtn").hidden=zs.length<2;if(zs.length<2)SORTING=false;
-  $("sortBtn").setAttribute("aria-pressed",SORTING);$("sortBtn").textContent=SORTING?"Done":"Sort";$("sortBar").hidden=!SORTING;
+  const drag=zs.filter(z=>!z.archived).length>1;
   $("zList").innerHTML=zs.length?zs.map((z,i)=>{
     const ref=z.id===s.ref_zero_id,on=z.id===s.mounted_zero_id;
     const low=s.zero_stop!=null&&z.elev<s.zero_stop-click()/2;
@@ -657,29 +653,36 @@ function renderList(){
       <span class="meta">${ref?'<span class="badge ref">0 / 0 reference</span>':""}${on?'<span class="badge on">scope on</span>':""}${!on&&otherScopeOn(z)?`<span class="badge">${esc(otherScopeOn(z))} on it</span>`:""}${low?'<span class="badge warn">below zero stop</span>':""}${z.archived?'<span class="badge">archived</span>':""}
         ${sub.length?`<span>${sub.join(" · ")}</span>`:""}
         ${c.n?`<span>checked ${c.n}× · last ${fiDate(c.last)}</span>`:""}${z.label&&z.load_id&&loadName(z.load_id)?`<span>${esc(loadName(z.load_id))}</span>`:""}</span></button>`;
-    // Sort mode: ↑ ↓ beside each position (archived ones stay last and don't move)
-    return SORTING?`<div class="sortrow">${row}<div class="mv"><button type="button" data-mv="-1" data-mz="${esc(z.id)}" aria-label="Move up" ${i===0||z.archived?"disabled":""}>↑</button>
-      <button type="button" data-mv="1" data-mz="${esc(z.id)}" aria-label="Move down" ${z.archived||!zs[i+1]||zs[i+1].archived?"disabled":""}>↓</button></div></div>`:row}).join("")
+    // ⠿ handle to drag (archived ones stay last, no handle)
+    return drag?`<div class="zwrap" data-id="${esc(z.id)}"${z.archived?' data-arch="1"':""}>${z.archived?"<span></span>":'<span class="grip" aria-label="Move" title="Drag to reorder">⠿</span>'}${row}</div>`:row}).join("")
     :'<div class="empty">No positions yet.</div>';
 }
-$("zList").addEventListener("click",e=>{const m=e.target.closest("[data-mv]");if(m){movePos(m.dataset.mz,+m.dataset.mv);return}
-  const b=e.target.closest("[data-zid]");if(b)openZero(b.dataset.zid)});
-/* ---- Sort: arrange the dial positions (↑ ↓ or a quick sort); saved at once, queued when offline ---- */
-let SORTING=false;
-$("sortBtn").addEventListener("click",()=>{SORTING=!SORTING;renderList()});
-async function saveOrder(ids){
-  const s=scope();applyEff({k:"order",sid:s.id,ids});renderList();
-  try{await write("POST",`zero/scopes/${encodeURIComponent(s.id)}/order`,{ids},{k:"order",sid:s.id,ids})}catch(e){toast(errText(e))}
-}
-function movePos(zid,d){
-  const ids=zeros(true).map(z=>z.id),i=ids.indexOf(zid),j=i+d;
-  if(i<0||j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];saveOrder(ids);
-}
-$("sortBar").addEventListener("click",e=>{const b=e.target.closest("[data-sortby]");if(!b)return;
-  const by=b.dataset.sortby,cmp={name:(a,b)=>a.name.localeCompare(b.name,"fi",{numeric:true}),
-    rifle:(a,b)=>String(gunName(a.gun_id)||a.rifle).localeCompare(String(gunName(b.gun_id)||b.rifle),"fi",{numeric:true})||a.name.localeCompare(b.name,"fi",{numeric:true}),
-    elev:(a,b)=>a.elev-b.elev||a.wind-b.wind}[by];
-  saveOrder(zeros(true).slice().sort((a,b)=>(a.archived-b.archived)||cmp(a,b)).map(z=>z.id))});
+$("zList").addEventListener("click",e=>{const b=e.target.closest("[data-zid]");if(b)openZero(b.dataset.zid)});
+/* Drag the ⠿ handle to reorder dial positions (as guns in the diary); saved at once, queued when offline */
+(function(){
+  let row=null;
+  const box=()=>$("zList");
+  box().addEventListener("pointerdown",e=>{
+    const grip=e.target.closest(".grip");if(!grip)return;
+    e.preventDefault();row=grip.closest(".zwrap");row.classList.add("dragging");grip.setPointerCapture(e.pointerId);
+  });
+  box().addEventListener("pointermove",e=>{
+    if(!row)return;
+    const rows=[...box().querySelectorAll(".zwrap")].filter(r=>r!==row),live=rows.filter(r=>!r.dataset.arch);
+    const after=live.find(r=>{const b=r.getBoundingClientRect();return e.clientY<b.top+b.height/2})||rows.find(r=>r.dataset.arch);
+    if(after)box().insertBefore(row,after);else box().appendChild(row);
+  });
+  const drop=async()=>{
+    if(!row)return;row.classList.remove("dragging");row=null;
+    const ids=[...box().querySelectorAll(".zwrap")].map(r=>r.dataset.id),s=scope();
+    if(ids.join()===zeros(true).map(z=>z.id).join())return;
+    applyEff({k:"order",sid:s.id,ids});
+    try{const w=await write("POST",`zero/scopes/${encodeURIComponent(s.id)}/order`,{ids},{k:"order",sid:s.id,ids});if(w.sent)toast("Order saved")}
+    catch(e){toast(errText(e))}
+    render();
+  };
+  box().addEventListener("pointerup",drop);box().addEventListener("pointercancel",drop);
+})();
 
 function renderAll(){
   const zs=zeros(),rows=[];
