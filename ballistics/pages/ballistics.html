@@ -723,6 +723,10 @@ async function flush(){
 window.addEventListener("online",flush);
 
 // ------------------------------------------------------------ helpers
+// range card from / step / to: the profile's own, else the default (the last ones set without a profile)
+function cardSet(){const st=D.settings||{},p=prof(),own=p&&st.by_profile&&st.by_profile[p.id];return own||st}
+function cardRange(){const st=cardSet();return [num($("cStart").value)??st.card_start,num($("cStep").value)??st.card_step,num($("cEnd").value)??st.card_end]}
+function fillCard(){const st=cardSet();$("cStart").value=st.card_start??100;$("cStep").value=st.card_step??50;$("cEnd").value=st.card_end??1000}
 const prof=()=>D.profiles.find(p=>p.id===U.profile)||D.profiles.find(p=>!p.archived)||null;
 const scopeOf=p=>(p&&p.inputs&&p.inputs.scope)||{unit:"MRAD",click:0.1};
 const decs=c=>{const s=String(+c);return s.includes(".")?Math.min(3,s.split(".")[1].length):0};
@@ -814,7 +818,7 @@ function renderSolution(){
 }
 function renderCard(){
   const p=prof(),c=cond(),st=D.settings;
-  const a=num($("cStart").value)??st.card_start,step=num($("cStep").value)??st.card_step,end=num($("cEnd").value)??st.card_end;
+  const [a,step,end]=cardRange();
   if(!ready(p)||!(step>0)||!(end>a)){$("cTable").innerHTML="";return}
   const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<300;x+=step)ranges.push(Math.round(x*10)/10);
   let res;try{res=B.solve(solverInput(p,c),ranges.filter(x=>x>0))}catch(e){$("cTable").innerHTML="";return}
@@ -909,10 +913,10 @@ async function openMM(){
 }
 function closeMM(){$("mm").hidden=true;document.body.style.overflow="";try{wake&&wake.release()}catch(e){}wake=null}
 
+let CARD_FOR;          // the profile whose range card values are in the inputs
 function render(){
   renderProfiles();
-  const st=D.settings||{};
-  if(!$("cStart").value)$("cStart").value=st.card_start;if(!$("cStep").value)$("cStep").value=st.card_step;if(!$("cEnd").value)$("cEnd").value=st.card_end;
+  if(CARD_FOR!==U.profile){CARD_FOR=U.profile;fillCard()}
   renderSolution();renderCard();renderMatch();if(!$("mm").hidden)renderMM();if(U.tab==="ret")renderReticle();
   saveUI();
 }
@@ -949,8 +953,12 @@ $("aStd").addEventListener("click",()=>{$("aT").value=15;$("aP").value=1013;$("a
 $("pSel").addEventListener("change",()=>{U.profile=$("pSel").value;loadCond();render()});
 $("mSel").addEventListener("change",()=>{U.match=$("mSel").value;render()});
 for(const id of ["cStart","cStep","cEnd"])$(id).addEventListener("change",async()=>{
-  renderCard();const s={card_start:num($("cStart").value),card_step:num($("cStep").value),card_end:num($("cEnd").value)};
-  if(s.card_start!=null&&s.card_step>0&&s.card_end>s.card_start){try{await send("PUT","api/ballistics/settings",s);D.settings=s;ls.set(CACHE,D)}catch(e){}}
+  renderCard();const s={card_start:num($("cStart").value),card_step:num($("cStep").value),card_end:num($("cEnd").value)},p=prof();
+  if(!(s.card_start!=null&&s.card_step>0&&s.card_end>s.card_start))return;
+  const st=D.settings=D.settings||{};
+  if(p)st.by_profile=Object.assign({},st.by_profile,{[p.id]:s});Object.assign(st,s);
+  ls.set(CACHE,D);
+  try{const r=await send("PUT","api/ballistics/settings",p?Object.assign({profile_id:p.id},s):s);if(r.ok&&r.j.settings){D.settings=r.j.settings;ls.set(CACHE,D)}}catch(e){}
 });
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;U.tab=b.dataset.tab;showTab();saveUI()});
 function showTab(){document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===U.tab));$("tabCard").hidden=U.tab!=="card";$("tabMatch").hidden=U.tab!=="match";$("tabRet").hidden=U.tab!=="ret";if(U.tab==="ret")renderReticle()}
@@ -1646,7 +1654,7 @@ async function withPdf(btn,fn){const t=btn.textContent;btn.disabled=true;btn.tex
 $("pdfDope").addEventListener("click",()=>withPdf($("pdfDope"),async()=>{
   const p=prof();if(!ready(p))return toast("The profile needs a bullet and velocity.");
   const c=cond(),st=D.settings,s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil";
-  const a=num($("cStart").value)??st.card_start,step=num($("cStep").value)??st.card_step,end=num($("cEnd").value)??st.card_end;
+  const [a,step,end]=cardRange();
   const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<60;x+=step)if(x>0)ranges.push(Math.round(x*10)/10);
   const rows=B.solve(solverInput(p,c),ranges).rows.filter(r=>r.reached);
   const doc=await pdfDoc(),W=doc.internal.pageSize.getWidth(),M=22,colW=(W-3*M)/2;
@@ -1667,7 +1675,7 @@ $("pdfDope").addEventListener("click",()=>withPdf($("pdfDope"),async()=>{
 $("pdfWind").addEventListener("click",()=>withPdf($("pdfWind"),async()=>{
   const p=prof();if(!ready(p))return toast("The profile needs a bullet and velocity.");
   const c=cond(),st=D.settings,s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil",dec=decs(s.click||0.1);
-  const a=num($("cStart").value)??st.card_start,step=num($("cStep").value)??st.card_step,end=num($("cEnd").value)??st.card_end;
+  const [a,step,end]=cardRange();
   const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<60;x+=step)if(x>0)ranges.push(Math.round(x*10)/10);
   const rows=B.solve(solverInput(p,c),ranges).rows.filter(r=>r.reached);
   const doc=await pdfDoc(),M=36;

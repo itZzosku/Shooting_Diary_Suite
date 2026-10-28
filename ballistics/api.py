@@ -61,7 +61,7 @@ DRAG_MODELS = ("G1", "G7")          # RA4 and custom curves come later (see the 
 DIAL_MODES = ("each", "first_hold_rest", "one")
 SETTINGS_KEY = "bal_settings"
 RANGES_KEY = "bal_ranges"            # saved shooting ranges: [{id, name, lat, lon, alt_m}]
-DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000}
+DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000, "by_profile": {}}
 
 
 PROFILE_COLUMNS = {             # added after phase 1: chrono window and the small corrections
@@ -525,6 +525,10 @@ def api_bal_delete_profile(pid):
     conn.execute("UPDATE bal_stages SET profile_id=NULL WHERE profile_id=?", (pid,))
     conn.execute("DELETE FROM bal_profiles WHERE id=?", (pid,))
     conn.commit()
+    s = settings(conn)
+    if pid in (s.get("by_profile") or {}):
+        del s["by_profile"][pid]
+        kv_set(SETTINGS_KEY, json.dumps(s))
     return jsonify(ok=True)
 
 
@@ -564,15 +568,27 @@ def api_bal_delete_stage(sid):
 @bp.put("/api/ballistics/settings")
 @login_required
 def api_bal_put_settings():
+    """Range card from / step / to. With profile_id they are that profile's own (a .22 card stays short,
+    a .308 card long); the top-level values (the last set) are the start for profiles that have none yet."""
     b = _body()
     try:
-        s = {"card_start": _num(0, 3000, True)(b.get("card_start"), "card_start"),
-             "card_step": _num(1, 500, True)(b.get("card_step"), "card_step"),
-             "card_end": _num(10, 3000, True)(b.get("card_end"), "card_end")}
-        if s["card_end"] <= s["card_start"]:
+        card = {"card_start": _num(0, 3000, True)(b.get("card_start"), "card_start"),
+                "card_step": _num(1, 500, True)(b.get("card_step"), "card_step"),
+                "card_end": _num(10, 3000, True)(b.get("card_end"), "card_end")}
+        if card["card_end"] <= card["card_start"]:
             raise ValueError("bad_card_end")
+        pid = b.get("profile_id")
+        if pid is not None and not (isinstance(pid, str) and ID_RE.match(pid)):
+            raise ValueError("bad_profile_id")
     except ValueError as e:
         return jsonify(error=str(e)), 400
+    conn = db()
+    s = settings(conn)
+    if pid:
+        if not conn.execute("SELECT 1 FROM bal_profiles WHERE id=?", (pid,)).fetchone():
+            return jsonify(error="not_found"), 404
+        s["by_profile"] = dict(s.get("by_profile") or {}, **{pid: card})
+    s.update(card)                         # a new profile starts from the last card set
     kv_set(SETTINGS_KEY, json.dumps(s))
     return jsonify(ok=True, settings=s)
 

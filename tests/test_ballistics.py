@@ -149,9 +149,27 @@ def test_stage_validation(client, change):
 def test_settings(client):
     assert client.put("/diary/api/ballistics/settings", json={"card_start": 25, "card_step": 10,
                                                               "card_end": 300}).status_code == 200
-    assert _all(client)["settings"] == {"card_start": 25, "card_step": 10, "card_end": 300}
+    assert _all(client)["settings"] == {"card_start": 25, "card_step": 10, "card_end": 300, "by_profile": {}}
     assert client.put("/diary/api/ballistics/settings", json={"card_start": 300, "card_step": 10,
                                                               "card_end": 100}).status_code == 400
+
+
+def test_range_card_per_profile(client):
+    """Each profile remembers its own card: the .22 short, the .308 long; deleting a profile drops its card."""
+    for pid in ("p-rim", "p-cf"):
+        assert client.put(f"/diary/api/ballistics/profiles/{pid}", json={"name": pid, "sight_height_mm": 50,
+                                                                          "zero_range_m": 50}).status_code == 200
+    put = lambda **b: client.put("/diary/api/ballistics/settings", json=b)
+    assert put(profile_id="p-rim", card_start=25, card_step=5, card_end=200).status_code == 200
+    assert put(profile_id="p-cf", card_start=100, card_step=50, card_end=1200).status_code == 200
+    s = _all(client)["settings"]
+    assert s["by_profile"]["p-rim"] == {"card_start": 25, "card_step": 5, "card_end": 200}
+    assert s["by_profile"]["p-cf"]["card_end"] == 1200
+    assert s["card_end"] == 1200, "a new profile starts from the last card set"
+    assert put(profile_id="p-none", card_start=25, card_step=5, card_end=200).status_code == 404
+    assert put(profile_id="../x", card_start=25, card_step=5, card_end=200).status_code == 400
+    assert client.delete("/diary/api/ballistics/profiles/p-rim", headers=H).status_code == 200
+    assert "p-rim" not in _all(client)["settings"]["by_profile"]
 
 
 def test_login_required():
