@@ -7,11 +7,16 @@
    Spec (all lengths in the reticle's unit):
    { v: 1, unit: "MRAD"|"MOA", focal_plane: "FFP"|"SFP", design_mag, field: half-width drawn,
      centre: {type: "dot"|"cross"|"open"|"none", r, size, w, gap},
-     stadia: {w, mirror: "lr"|"", up|down|left|right: {to, post: {from, w}}},
+     stadia: {w, mirror: "lr"|"", up|down|left|right: {to, segments: [[from, to], ...] (thin line pieces; default
+              one piece from the centre gap to the post), post: {from, w, taper (length of the pointed tip),
+              bar: {at, len, w} (a bar across the post)}}},
      hashes: [{arms: ["left","right","up","down"], from, to, step, len, w, side: "both"|"out"|"in",
-               major: {every, len}, labels: {every, size, offset}}],
+               major: {every, len}, labels: {every, size, offset, place: "after"|"before"}}],
+              (labels "after" = below a horizontal arm / right of a vertical one, "before" = above / left)
      tree: {rows: {from, to, step}, half_width: {kind: "constant"|"linear"|"list", value, at_from, at_to, values},
-            marks: {kind: "dot"|"hash"|"cross", step, r, len, w}, labels: {every, size}},
+            inner: no marks closer than this to the vertical line,
+            marks: {kind: "dot"|"hash"|"cross", step, r, len, w, major: {every, r}},
+            labels: {every, size, x (fixed position, that mark is left out), texts: {"10": "X"}}},
      extras: [primitives] }
    Primitives: {t:"line",x1,y1,x2,y2,w} {t:"rect",x,y,width,height} {t:"dot",x,y,r} {t:"circle",x,y,r,w}
                {t:"poly",points:[[x,y]...],w,closed} {t:"text",x,y,text,size,anchor} */
@@ -52,11 +57,22 @@
       if (!a || !(a.to > 0)) continue;
       const [dx, dy] = DIRS[name], w = st.w > 0 ? st.w : 0.03;
       const thinEnd = a.post && a.post.from > gap && a.post.from < a.to ? a.post.from : a.to;
-      if (thinEnd > gap) push({t: "line", x1: r4(dx * gap), y1: r4(dy * gap), x2: r4(dx * thinEnd), y2: r4(dy * thinEnd), w});
+      const pieces = Array.isArray(a.segments) && a.segments.length ? a.segments : [[gap, thinEnd]];
+      for (const [s0, s1] of pieces) {
+        if (!(s1 > s0)) continue;
+        push({t: "line", x1: r4(dx * s0), y1: r4(dy * s0), x2: r4(dx * s1), y2: r4(dy * s1), w});
+      }
       if (thinEnd < a.to) {
-        const pw = a.post.w > 0 ? a.post.w : w * 5, len = a.to - thinEnd;
-        if (dx) push({t: "rect", x: r4(dx > 0 ? thinEnd : -a.to), y: r4(-pw / 2), width: r4(len), height: r4(pw)});
-        else push({t: "rect", x: r4(-pw / 2), y: r4(dy > 0 ? thinEnd : -a.to), width: r4(pw), height: r4(len)});
+        const P = a.post, pw = P.w > 0 ? P.w : w * 5, tap = P.taper > 0 ? Math.min(P.taper, a.to - thinEnd) : 0;
+        // the post as a polygon along the arm: pointed tip (stadia width) widening to pw over `tap`, then straight
+        const along = [[thinEnd, w / 2], [thinEnd + tap, pw / 2], [a.to, pw / 2]];
+        const pts = along.concat(along.slice().reverse().map(([u, v]) => [u, -v])).map(([u, v]) => dx ? [r4(dx * u), r4(v)] : [r4(v), r4(dy * u)]);
+        push({t: "poly", points: pts, w: 0, closed: true});
+        if (P.bar && P.bar.at > 0 && P.bar.len > 0) {
+          const bw = P.bar.w > 0 ? P.bar.w : pw / 2, at = P.bar.at;
+          if (dx) push({t: "rect", x: r4(dx * at - bw / 2), y: r4(-P.bar.len / 2), width: r4(bw), height: r4(P.bar.len)});
+          else push({t: "rect", x: r4(-P.bar.len / 2), y: r4(dy * at - bw / 2), width: r4(P.bar.len), height: r4(bw)});
+        }
       }
     }
     // centre
@@ -88,8 +104,9 @@
           else push({t: "line", x1: r4(a0), y1: r4(py), x2: r4(a1), y2: r4(py), w});
           if (labEvery && k % labEvery === 0) {
             const off = h.labels.offset > 0 ? h.labels.offset : len / 2 + 0.25, size = h.labels.size > 0 ? h.labels.size : 0.3;
-            if (dx) push({t: "text", x: r4(px), y: r4(Math.max(a1, 0) + off + size * 0.7), text: label(d), size, anchor: "middle"});
-            else push({t: "text", x: r4(Math.max(a1, 0) + off), y: r4(py + size * 0.35), text: label(d), size, anchor: "start"});
+            const before = h.labels.place === "before";
+            if (dx) push({t: "text", x: r4(px), y: r4(before ? Math.min(a0, 0) - off : Math.max(a1, 0) + off + size * 0.7), text: label(d), size, anchor: "middle"});
+            else push({t: "text", x: r4(before ? Math.min(a0, 0) - off : Math.max(a1, 0) + off), y: r4(py + size * 0.35), text: label(d), size, anchor: before ? "end" : "start"});
           }
         }
       }
@@ -111,18 +128,25 @@
         if (!(w > 0)) return;
         if (w > field) warn.push(`Tree row at ${y} is wider than the drawn field.`);
         const n = Math.floor(w / mstep + 1e-6);
+        const inner = tr.inner > 0 ? tr.inner : 0, labX = tr.labels && tr.labels.x != null ? +tr.labels.x : null;
         for (let k = -n; k <= n; k++) {
           if (k === 0 && arm("down") && arm("down").to >= y) continue;   // the stadia is already there
+          if (Math.abs(k * mstep) < inner - 1e-6) continue;
+          if (labX != null && Math.abs(k * mstep - labX) < 1e-6) continue;  // the row's number sits here
           const x = r4(k * mstep);
           if (m.kind === "hash") push({t: "line", x1: x, y1: r4(y - (m.len || 0.1) / 2), x2: x, y2: r4(y + (m.len || 0.1) / 2), w: m.w || 0.02});
           else if (m.kind === "cross") {
             const z = (m.len || 0.1) / 2, ww = m.w || 0.02;
             push({t: "line", x1: r4(x - z), y1: y, x2: r4(x + z), y2: y, w: ww}); push({t: "line", x1: x, y1: r4(y - z), x2: x, y2: r4(y + z), w: ww});
-          } else push({t: "dot", x, y, r: m.r > 0 ? m.r : 0.03});
+          } else {
+            const big = m.major && m.major.every > 0 && Math.abs(x / m.major.every - Math.round(x / m.major.every)) < 1e-6;
+            push({t: "dot", x, y, r: big && m.major.r > 0 ? m.major.r : (m.r > 0 ? m.r : 0.03)});
+          }
         }
         if (tr.labels && tr.labels.every > 0 && Math.round((y - ys[0]) / tr.rows.step) % Math.round(tr.labels.every) === 0) {
-          const size = tr.labels.size > 0 ? tr.labels.size : 0.3;
-          push({t: "text", x: r4(-n * mstep - 0.3), y: r4(y + size * 0.35), text: label(y), size, anchor: "end"});
+          const size = tr.labels.size > 0 ? tr.labels.size : 0.3, text = (tr.labels.texts || {})[label(y)] || label(y);
+          if (labX != null) push({t: "text", x: r4(labX), y: r4(y + size * 0.35), text, size, anchor: "middle"});
+          else push({t: "text", x: r4(-n * mstep - 0.3), y: r4(y + size * 0.35), text, size, anchor: "end"});
         }
       });
     }

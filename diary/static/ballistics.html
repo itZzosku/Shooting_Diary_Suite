@@ -286,8 +286,12 @@ header.top{padding-top:6px!important}
 .hrow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px}
 .hrow .arms{grid-column:1/-1;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 .hrow label.f{font-size:.62rem}
-.armgrid{display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));gap:6px 8px;align-items:center}
-.armgrid b{font-size:.8rem;text-transform:uppercase;color:var(--muted)}
+.armgrid{display:flex;flex-direction:column;gap:8px}
+.armblk{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px}
+.armblk>b{grid-column:1/-1;font-size:.8rem;text-transform:uppercase;color:var(--muted)}
+.armblk .wide{grid-column:span 2}
+.armblk label.f{font-size:.62rem}
+@media (max-width:560px){.armblk{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .rb-prev{position:sticky;top:58px;z-index:2;background:var(--bg);padding-bottom:6px}
 .rb-prev .retbox{width:min(100%,420px,38vh)}
 @media (max-width:560px){.hrow{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -538,7 +542,7 @@ details summary{cursor:pointer;list-style:revert}
     </div>
     <div class="rb-sec"><h3>Centre</h3>
       <div class="g4"><label class="f">Type<select id="rcType"><option value="none">None</option><option value="dot">Dot</option><option value="cross">Fine cross</option><option value="open">Open circle</option></select></label>
-        <label class="f">Size / radius<input type="text" inputmode="decimal" id="rcR"></label>
+        <label class="f">Size (ø for a dot or circle)<input type="text" inputmode="decimal" id="rcR"></label>
         <label class="f">Centre gap<input type="text" inputmode="decimal" id="rcGap"></label>
         <label class="f">Line width<input type="text" inputmode="decimal" id="rcW"></label></div>
     </div>
@@ -561,8 +565,12 @@ details summary{cursor:pointer;list-style:revert}
         <label class="f">Half-width (first)<input type="text" inputmode="decimal" id="rtA"></label><label class="f">Half-width (last)<input type="text" inputmode="decimal" id="rtB"></label>
         <label class="f">Per row, comma-separated<input type="text" id="rtList"></label>
         <label class="f">Marks<select id="rtMark"><option value="dot">Dots</option><option value="hash">Hashes</option><option value="cross">Crosses</option></select></label>
-        <label class="f">Mark spacing<input type="text" inputmode="decimal" id="rtMs"></label><label class="f">Mark size<input type="text" inputmode="decimal" id="rtSize"></label>
+        <label class="f">Mark spacing<input type="text" inputmode="decimal" id="rtMs"></label><label class="f">Mark size (ø for dots)<input type="text" inputmode="decimal" id="rtSize"></label>
+        <label class="f">Bigger dot every<input type="text" inputmode="decimal" id="rtBigE" placeholder="e.g. 1"></label><label class="f">Bigger dot ø<input type="text" inputmode="decimal" id="rtBigS"></label>
+        <label class="f">No marks closer than<input type="text" inputmode="decimal" id="rtInner" placeholder="e.g. 0.4"></label>
         <label class="f">Number every N rows<input type="text" inputmode="numeric" id="rtLab"></label>
+        <label class="f">Numbers at x<input type="text" inputmode="decimal" id="rtLabX" placeholder="left end"></label><label class="f">Number size<input type="text" inputmode="decimal" id="rtLabS"></label>
+        <label class="f">Number text swaps<input type="text" id="rtTexts" placeholder="10=X"></label>
       </div>
     </div>
     <div class="rb-sec"><h3>Extras and raw data</h3>
@@ -1174,7 +1182,7 @@ function renderReticle(){
   const field=(ret.spec&&ret.spec.field)||(ret.unit==="MOA"?30:10);
   if(!$("vZoom").options.length||$("vZoom").dataset.u!==ret.unit){
     const zs=ret.unit==="MOA"?[10,20,30,45]:[3,5,8,10,15];
-    $("vZoom").innerHTML=`<option value="auto">Fit the holds</option>`+zs.map(z=>`<option value="${z}">${z} ${ret.unit==="MOA"?"MOA":"mil"}</option>`).join("");$("vZoom").dataset.u=ret.unit;
+    $("vZoom").innerHTML=`<option value="auto">Fit</option>`+zs.map(z=>`<option value="${z}">${z} ${ret.unit==="MOA"?"MOA":"mil"}</option>`).join("");$("vZoom").dataset.u=ret.unit;
     $("vZoom").value="auto";
   }
   let half=+$("vZoom").value||field;
@@ -1228,17 +1236,20 @@ function fillForm(spec,meta){
   const s=spec||{};meta=meta||{};
   setv("rbName",meta.name);setv("rbMaker",meta.maker);$("rbUnit").value=s.unit||meta.unit||"MRAD";$("rbFp").value=s.focal_plane||meta.focal_plane||"FFP";
   setNum("rbDes",s.design_mag??meta.design_mag);setNum("rbMin",meta.min_mag);setNum("rbMax",meta.max_mag);setNum("rbField",s.field);
-  const c=s.centre||{};$("rcType").value=c.type||"none";setNum("rcR",c.type==="cross"?c.size:c.r);setNum("rcGap",c.gap);setNum("rcW",c.w);
+  const c=s.centre||{};$("rcType").value=c.type||"none";setNum("rcR",c.type==="cross"?c.size:(c.r!=null?+(2*c.r).toFixed(4):null));setNum("rcGap",c.gap);setNum("rcW",c.w);
   const st=s.stadia||{};setNum("rsW",st.w);$("rsMirror").checked=st.mirror==="lr";
-  $("rsArms").innerHTML=`<span></span><b>Length</b><b>Thick post from</b><b>Post width</b>`+ARMS.map(a=>{const x=st[a]||{};return`<b>${a}</b>
-    <input type="text" inputmode="decimal" data-arm="${a}" data-k="to" value="${x.to??""}">
-    <input type="text" inputmode="decimal" data-arm="${a}" data-k="from" value="${x.post?x.post.from??"":""}">
-    <input type="text" inputmode="decimal" data-arm="${a}" data-k="pw" value="${x.post?x.post.w??"":""}">`}).join("");
+  $("rsArms").innerHTML=ARMS.map(a=>{const x=st[a]||{},P=x.post||{},bar=P.bar||{};
+    const f=(k,v,l,cls)=>`<label class="f${cls?" "+cls:""}">${l}<input type="text" inputmode="decimal" data-arm="${a}" data-k="${k}" value="${esc(v??"")}"></label>`;
+    return`<div class="armblk"><b>${a}</b>${f("to",x.to,"Length")}${f("seg",(x.segments||[]).map(p=>p[0]+"-"+p[1]).join(", "),"Line pieces (e.g. 0.2-0.4, 0.6-6)","wide")}
+      ${f("from",P.from,"Thick post from")}${f("pw",P.w,"Post width")}${f("tap",P.taper,"Pointed tip length")}${f("bat",bar.at,"Bar at")}${f("blen",bar.len,"Bar length")}${f("bw",bar.w,"Bar width")}</div>`}).join("");
   $("rhList").innerHTML=(s.hashes||[]).map(hashRow).join("");
   const t=s.tree;$("rtOn").checked=!!t;$("rtBox").hidden=!t;const tt=t||{};const rw=tt.rows||{},hw=tt.half_width||{},mk=tt.marks||{};
   setNum("rtFrom",rw.from);setNum("rtTo",rw.to);setNum("rtStep",rw.step);$("rtKind").value=hw.kind||"linear";
   setNum("rtA",hw.kind==="constant"?hw.value:hw.at_from);setNum("rtB",hw.at_to);$("rtList").value=(hw.values||[]).join(", ");
-  $("rtMark").value=mk.kind||"dot";setNum("rtMs",mk.step);setNum("rtSize",mk.kind==="dot"?mk.r:mk.len);setNum("rtLab",tt.labels&&tt.labels.every);
+  const dia=v=>v!=null?+(2*v).toFixed(4):null,tl=tt.labels||{};
+  $("rtMark").value=mk.kind||"dot";setNum("rtMs",mk.step);setNum("rtSize",(mk.kind||"dot")==="dot"?dia(mk.r):mk.len);setNum("rtLab",tl.every);
+  setNum("rtBigE",mk.major&&mk.major.every);setNum("rtBigS",mk.major&&dia(mk.major.r));setNum("rtInner",tt.inner);
+  setNum("rtLabX",tl.x);setNum("rtLabS",tl.size);$("rtTexts").value=Object.entries(tl.texts||{}).map(([k,v])=>k+"="+v).join(", ");
   $("rxExtras").value=s.extras&&s.extras.length?JSON.stringify(s.extras):"";
   armState();
 }
@@ -1249,33 +1260,46 @@ function hashRow(h){
       <label class="f" style="flex-direction:row;align-items:center;gap:6px">Side<select data-k="side"><option value="both">both</option><option value="out"${h.side==="out"?" selected":""}>right / below</option><option value="in"${h.side==="in"?" selected":""}>left / above</option></select></label>
       <button type="button" class="rm" data-hrm style="margin-left:auto">✕</button></div>
     ${f("from",h.from,"From")}${f("to",h.to,"To")}${f("step",h.step,"Every")}${f("len",h.len,"Length")}${f("w",h.w,"Width")}
-    ${f("me",h.major&&h.major.every,"Long every N")}${f("ml",h.major&&h.major.len,"Long length")}${f("le",h.labels&&h.labels.every,"Number every N")}${f("ls",h.labels&&h.labels.size,"Number size")}${f("lo",h.labels&&h.labels.offset,"Number gap")}</div>`;
+    ${f("me",h.major&&h.major.every,"Long every N")}${f("ml",h.major&&h.major.len,"Long length")}${f("le",h.labels&&h.labels.every,"Number every N")}${f("ls",h.labels&&h.labels.size,"Number size")}${f("lo",h.labels&&h.labels.offset,"Number gap")}
+    <label class="f">Numbers<select data-k="lp"><option value="after">below / right</option><option value="before"${h.labels&&h.labels.place==="before"?" selected":""}>above / left</option></select></label></div>`;
 }
 function armState(){const m=$("rsMirror").checked;document.querySelectorAll('#rsArms [data-arm="left"]').forEach(i=>i.disabled=m)}
 function readForm(){
   const n=id=>num($(id).value);
   const spec={v:1,unit:$("rbUnit").value,focal_plane:$("rbFp").value,design_mag:n("rbDes"),field:n("rbField")||($("rbUnit").value==="MOA"?30:10)};
   spec.centre={type:$("rcType").value,gap:n("rcGap"),w:n("rcW")};
-  if(spec.centre.type==="cross")spec.centre.size=n("rcR");else spec.centre.r=n("rcR");
+  if(spec.centre.type==="cross")spec.centre.size=n("rcR");else spec.centre.r=n("rcR")!=null?n("rcR")/2:null;
   spec.stadia={w:n("rsW"),mirror:$("rsMirror").checked?"lr":""};
   for(const a of ARMS){
-    const g=k=>num(document.querySelector(`#rsArms [data-arm="${a}"][data-k="${k}"]`).value);
+    const el=k=>document.querySelector(`#rsArms [data-arm="${a}"][data-k="${k}"]`),g=k=>num(el(k).value);
     if(a==="left"&&spec.stadia.mirror)continue;
-    if(g("to")>0)spec.stadia[a]=Object.assign({to:g("to")},g("from")>0?{post:{from:g("from"),w:g("pw")}}:{});
+    if(!(g("to")>0))continue;
+    const arm={to:g("to")};
+    const segs=el("seg").value.split(/[,;]+/).map(t=>t.trim().split(/\s*[-–]\s*/).map(num)).filter(p=>p.length===2&&p[0]!=null&&p[1]!=null&&p[1]>p[0]);
+    if(segs.length)arm.segments=segs;
+    if(g("from")>0){arm.post={from:g("from"),w:g("pw")};if(g("tap")>0)arm.post.taper=g("tap");if(g("bat")>0)arm.post.bar={at:g("bat"),len:g("blen"),w:g("bw")}}
+    spec.stadia[a]=arm;
   }
   spec.hashes=[...document.querySelectorAll("#rhList [data-h]")].map(r=>{
     const g=k=>num(r.querySelector(`[data-k="${k}"]`).value);
     const h={arms:[...r.querySelectorAll("[data-arm]")].filter(c=>c.checked).map(c=>c.dataset.arm),from:g("from"),to:g("to"),step:g("step"),len:g("len"),w:g("w"),side:r.querySelector('[data-k="side"]').value};
     if(g("me"))h.major={every:g("me"),len:g("ml")};
-    if(g("le"))h.labels={every:g("le"),size:g("ls"),offset:g("lo")};
+    if(g("le"))h.labels={every:g("le"),size:g("ls"),offset:g("lo"),place:r.querySelector('[data-k="lp"]').value};
     return h;
   });
   if($("rtOn").checked){
     const kind=$("rtKind").value;
     spec.tree={rows:{from:n("rtFrom"),to:n("rtTo"),step:n("rtStep")},
       half_width:kind==="constant"?{kind,value:n("rtA")}:kind==="linear"?{kind,at_from:n("rtA"),at_to:n("rtB")}:{kind,values:$("rtList").value.split(/[,;\s]+/).map(num).filter(v=>v!=null)},
-      marks:Object.assign({kind:$("rtMark").value,step:n("rtMs")},$("rtMark").value==="dot"?{r:n("rtSize")}:{len:n("rtSize")}),
+      marks:Object.assign({kind:$("rtMark").value,step:n("rtMs")},$("rtMark").value==="dot"?{r:n("rtSize")!=null?n("rtSize")/2:null}:{len:n("rtSize")}),
       labels:n("rtLab")?{every:n("rtLab")}:undefined};
+    if(n("rtBigE")>0&&$("rtMark").value==="dot")spec.tree.marks.major={every:n("rtBigE"),r:n("rtBigS")!=null?n("rtBigS")/2:null};
+    if(n("rtInner")>0)spec.tree.inner=n("rtInner");
+    if(spec.tree.labels){
+      if(n("rtLabX")!=null)spec.tree.labels.x=n("rtLabX");if(n("rtLabS")>0)spec.tree.labels.size=n("rtLabS");
+      const tx={};$("rtTexts").value.split(/[,;]+/).forEach(p=>{const m=p.split("=");if(m.length===2&&m[0].trim()&&m[1].trim())tx[String(+m[0])]=m[1].trim().slice(0,4)});
+      if(Object.keys(tx).length)spec.tree.labels.texts=tx;
+    }
   }
   const ex=$("rxExtras").value.trim();
   if(ex){try{const v=JSON.parse(ex);if(Array.isArray(v))spec.extras=v;else throw 0}catch(e){spec._extrasError=true}}

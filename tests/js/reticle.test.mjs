@@ -44,8 +44,42 @@ test("mirror left/right copies the right arm", () => {
   const right = els.filter(e => (e.t === "line" && e.x1 > 0) || (e.t === "rect" && e.x > 0));
   const left = els.filter(e => (e.t === "line" && e.x1 < 0) || (e.t === "rect" && e.x < 0));
   assert.equal(left.length, right.length);
-  const post = els.filter(e => e.t === "rect");
-  assert.deepEqual(post.map(r => [r.x, r.width]).sort(), [[-10, 2], [8, 2]]);
+  const posts = els.filter(e => e.t === "poly");
+  assert.equal(posts.length, 2);
+  const xs = p => p.points.map(q => q[0]);
+  const lp = posts.find(p => xs(p)[0] < 0), rp = posts.find(p => xs(p)[0] > 0);
+  assert.equal(Math.min(...xs(lp)), -10); assert.equal(Math.max(...xs(rp)), 10);
+  assert.deepEqual(xs(lp).map(x => -x), xs(rp), "left post is the right one mirrored");
+});
+
+test("gaps in the stadia, tapered posts and bars", () => {
+  const {elements: e} = R.compile({stadia: {w: 0.035, right: {to: 12, segments: [[0.2, 0.4], [0.6, 2], [5, 6]],
+    post: {from: 6, w: 0.5, taper: 0.5, bar: {at: 10, len: 1.5, w: 0.3}}}}});
+  const lines = e.filter(x => x.t === "line").map(x => [x.x1, x.x2]);
+  assert.deepEqual(lines, [[0.2, 0.4], [0.6, 2], [5, 6]]);
+  const post = e.find(x => x.t === "poly");
+  assert.deepEqual(post.points.slice(0, 3), [[6, 0.0175], [6.5, 0.25], [12, 0.25]], "pointed tip widening to 0.5 over 0.5");
+  const bar = e.find(x => x.t === "rect");
+  assert.deepEqual([bar.x, bar.y, bar.width, bar.height], [9.85, -0.75, 0.3, 1.5]);
+});
+
+test("tree: cleared centre, bigger whole-unit dots, numbers at a fixed spot", () => {
+  const {elements: e} = R.compile({stadia: {down: {to: 10}}, tree: {rows: {from: 1, to: 2, step: 1},
+    half_width: {kind: "list", values: [1, 2]}, inner: 0.4, marks: {kind: "dot", step: 0.2, r: 0.025, major: {every: 1, r: 0.04}},
+    labels: {every: 1, x: 1.2, size: 0.3, texts: {"2": "X"}}}});
+  const row2 = e.filter(x => x.t === "dot" && x.y === 2);
+  assert.ok(!row2.some(d => Math.abs(d.x) < 0.4 - 1e-9), "nothing inside 0.4");
+  assert.ok(!row2.some(d => d.x === 1.2), "no dot where the number is");
+  assert.equal(row2.find(d => d.x === 2).r, 0.04); assert.equal(row2.find(d => d.x === 1.8).r, 0.025);
+  assert.deepEqual(e.filter(x => x.t === "text").map(t => [t.text, t.x]), [["1", 1.2], ["X", 1.2]]);
+});
+
+test("hash numbers above a horizontal arm", () => {
+  const {elements: e} = R.compile({stadia: {right: {to: 5}}, hashes: [{arms: ["right"], from: 1, to: 4, step: 1, len: 0.4,
+    labels: {every: 2, size: 0.3, offset: 0.1, place: "before"}}]});
+  const t = e.filter(x => x.t === "text");
+  assert.deepEqual(t.map(x => x.text), ["2", "4"]);
+  assert.ok(t.every(x => x.y < 0), "above the line");
 });
 
 test("every built-in template compiles cleanly", () => {
