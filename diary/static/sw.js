@@ -5,7 +5,7 @@
    - Logging out clears everything cached. Writes are never cached; the page queues them itself.
    - Share target: a file shared to the installed app (e.g. from ShotView) is POSTed to chrono/share;
      it is kept in the SHARE cache and the velocity page (/velocity) opens and imports it. */
-const VERSION = "v60";
+const VERSION = "v61";
 const PAGE = "diary-page-" + VERSION, DATA = "diary-data", ASSETS = "diary-assets-" + VERSION, SHARE = "diary-share";
 const BASE = new URL("./", self.registration.scope).pathname;            // "/diary/"
 const ASSET_HOSTS = [];                     // fonts and the PDF library are served from /diary/static now
@@ -31,7 +31,7 @@ const PRECACHE = [
   "static/drafts.js",
   "static/ballistics/drag.js",
   "static/ballistics/solver.js",
-  "static/ballistics/reticle.js",
+  "static/ballistics/reticle.js", "static/ballistics/truing.js",
   "static/vendor/jspdf.umd.min.js",
   "static/vendor/jspdf.plugin.autotable.min.js",
   "static/icons/apple-touch-icon.png",

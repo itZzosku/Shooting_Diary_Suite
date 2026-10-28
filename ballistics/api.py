@@ -6,7 +6,7 @@ Tables in each account's diary database:
   bal_bullets       bullet: diameter, length, weight, drag model, BC (or velocity bands)
   bal_curves        custom Mach → Cd drag curves (phase 3; table only)
   bal_profiles      gun + load + bullet + scope + zero, sight height, twist, zero atmosphere, muzzle velocity
-  bal_observations  dope confirmed at the range, for truing (phase 3; table only)
+  bal_observations  dope confirmed at the range (where the shots landed), for truing
   bal_matches       a match: name, date, optional range visit
   bal_stages        a stage: ordered target list, dial strategy, stage wind
 Design: "Ballistic Calculator — Design Document".
@@ -69,12 +69,16 @@ PROFILE_COLUMNS = {             # added after phase 1: chrono window and the sma
     "aero_jump": "INTEGER NOT NULL DEFAULT 0", "azimuth_deg": "REAL"}
 
 
+OBS_COLUMNS = {"powder_c": "REAL", "wind_ms": "REAL", "wind_clock": "REAL", "updated": "TEXT"}
+
+
 def init_ballistics(conn):
     conn.executescript(SCHEMA)
-    have = {r[1] for r in conn.execute("PRAGMA table_info(bal_profiles)")}
-    for col, typ in PROFILE_COLUMNS.items():
-        if col not in have:
-            conn.execute(f"ALTER TABLE bal_profiles ADD COLUMN {col} {typ}")
+    for table, cols in (("bal_profiles", PROFILE_COLUMNS), ("bal_observations", OBS_COLUMNS)):
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for col, typ in cols.items():
+            if col not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
 
 
 def _now():
@@ -233,6 +237,12 @@ STAGE = {
     "name": _text(80, True), "match_id": _ref, "ord": _int(0, 1000), "profile_id": _ref,
     "dial_mode": _choice(DIAL_MODES, "each"), "dial_target": _int(0, 29), "wind": _json_wind,
     "targets": _targets, "notes": _text(2000),
+}
+OBSERVATION = {                 # elevation from the zero that put the group on the aim point, in the scope's unit
+    "profile_id": _ref, "date": _date, "range_m": _num(10, 3000, True), "elev": _num(-30, 200, True),
+    "unit": _choice(("MRAD", "MOA"), "MRAD"), "temp_c": _num(-40, 60), "hpa": _num(500, 1100), "rh": _num(0, 100),
+    "angle_deg": _num(-60, 60), "powder_c": _num(-40, 70), "wind_ms": _num(0, 30), "wind_clock": _num(0, 12),
+    "use_for_truing": lambda v, n: 0 if v in (False, 0, "0", "false") else 1, "note": _text(500),
 }
 DEFAULTS = {"bal_profiles": {"mv_scale": 1, "drag_scale": 1, "ord": 0}, "bal_stages": {"ord": 0}}
 
@@ -395,7 +405,9 @@ def everything(conn):
             "reticles": all_reticles({p["reticle_id"] for p in profiles if p["reticle_id"]}),
             "is_admin": bool(me and me["is_admin"] and not me.get("demo")),
             "matches": _rows(conn, "SELECT * FROM bal_matches ORDER BY archived, date DESC, name"),
-            "stages": stage_rows(conn), "settings": settings(conn), "ranges": saved_ranges(conn), "pickers": picks}
+            "stages": stage_rows(conn),
+            "observations": _rows(conn, "SELECT * FROM bal_observations ORDER BY date, range_m, rowid"),
+            "settings": settings(conn), "ranges": saved_ranges(conn), "pickers": picks}
 
 
 def summary(conn):
@@ -561,6 +573,31 @@ def api_bal_delete_stage(sid):
     _fetch_only()
     conn = db()
     conn.execute("DELETE FROM bal_stages WHERE id=?", (_id(sid),))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+def _obs_rules(row):
+    if not row["profile_id"]:
+        raise ValueError("profile_id_required")
+    if not row["date"]:
+        raise ValueError("date_required")
+    if not db().execute("SELECT 1 FROM bal_profiles WHERE id=?", (row["profile_id"],)).fetchone():
+        raise ValueError("bad_profile_id")
+
+
+@bp.put("/api/ballistics/observations/<oid>")
+@login_required
+def api_bal_put_observation(oid):
+    return _put("bal_observations", OBSERVATION, oid, _obs_rules)
+
+
+@bp.delete("/api/ballistics/observations/<oid>")
+@login_required
+def api_bal_delete_observation(oid):
+    _fetch_only()
+    conn = db()
+    conn.execute("DELETE FROM bal_observations WHERE id=?", (_id(oid),))
     conn.commit()
     return jsonify(ok=True)
 

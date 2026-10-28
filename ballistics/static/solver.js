@@ -206,7 +206,8 @@
   /** Full solution at ranges (m, ascending). inp: {bullet:{model, bc, bands?, curve?, diameterMm, lengthMm, weightGr},
       mv, mvTempC?, tempSens?, mvScale?, dragScale?, sightHeightMm, zeroRangeM, zeroAtmo?, atmo?, powderC?,
       wind?:{ms, clock}, angleDeg?, twistMm?, twistDir?, latitude?, azimuthDeg?,
-      spinDrift?, coriolis?, aeroJump? (booleans, default false)}. */
+      spinDrift?, coriolis?, aeroJump? (booleans, default false), mainOnly? (skip the calm and 1 m/s crosswind
+      trajectories: no windPer1Mrad / calmElevMrad, a third of the work – for truing)}. */
   function solve(inp, ranges) {
     const rs = ranges.slice().sort((a, b) => a - b);
     const atmoIn = Object.assign({}, STD, inp.atmo || {});
@@ -219,8 +220,9 @@
                     bullet: inp.bullet, dragCurve: dragCurve(inp.bullet), dragScale: inp.dragScale};
     const om = inp.coriolis && inp.latitude != null ? omegaVector(+inp.latitude, +inp.azimuthDeg || 0, angle) : null;
     const main = fly(Object.assign({}, common, {wind: windVector(inp.wind, angle), omega: om}), rs);
-    const calm = fly(Object.assign({}, common, {wind: [0, 0, 0], omega: null}), rs);
-    const cross = fly(Object.assign({}, common, {wind: windVector({ms: 1, clock: 9}, angle), omega: null}), rs);
+    const extra = !inp.mainOnly;           // truing needs only the main trajectory
+    const calm = extra ? fly(Object.assign({}, common, {wind: [0, 0, 0], omega: null}), rs) : [];
+    const cross = extra ? fly(Object.assign({}, common, {wind: windVector({ms: 1, clock: 9}, angle), omega: null}), rs) : [];
     const twistSign = inp.twistDir === "L" ? -1 : 1;
     const sg = stability(inp.bullet, +inp.twistMm, mv, atmoIn);
     // Aerodynamic jump (Litz): MOA per mph of crosswind; right twist + wind from the left → up.

@@ -18,7 +18,7 @@ New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the
 | `/diary/log` | **Diary** – range visits, guns and their round counts, licence export (PDF/CSV) |
 | `/diary/velocity` | **Velocity** – Garmin Xero strings, loads, trends, charge ladders |
 | `/diary/zeroes` | **Zeroes** – scope dial positions, swaps, zeroing card (PDF) |
-| `/diary/ballistics` | **Ballistics** – holds and clicks for any range, range/dope/wind cards, match stages and match mode, reticle view and builder, velocity from the chrono, FMI weather (solver runs in the browser, works offline) |
+| `/diary/ballistics` | **Ballistics** – holds and clicks for any range, range/dope/wind cards, match stages and match mode, reticle view and builder, truing from logged dope (velocity and drag scale), velocity from the chrono, FMI weather (solver runs in the browser, works offline) |
 | `/diary/loans` | **Guns loaned** – friends' shots with your guns/ammo and what they owe (tile only) |
 | `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
 | `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |

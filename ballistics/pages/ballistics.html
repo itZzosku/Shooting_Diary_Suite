@@ -247,6 +247,15 @@ header.top{padding-top:6px!important}
 .tbl tr.cur td{font-weight:700;box-shadow:inset 0 -2px 0 var(--accent)}
 .tbl .dim{color:var(--muted)}
 .scroll{overflow-x:auto;margin:0 -4px;padding:0 4px}
+.tnow{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;font-size:.92rem}
+.tnow b{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tfit{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.tres{display:flex;flex-direction:column;gap:8px}
+.tres .big{font-family:var(--f-mono);font-size:1.05rem}
+.tbl td.off{color:var(--muted);text-decoration:line-through}
+.tbl input[type=checkbox]{width:20px;height:20px;margin:0}
+.otbl tr[data-oedit]{cursor:pointer}
+.otbl td small{display:block;font-family:var(--f-body);font-size:.72rem;color:var(--muted)}
 .stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
 .stage-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
 .stage-top b{font-family:var(--f-display);font-size:1.2rem;text-transform:uppercase;letter-spacing:.04em}
@@ -411,6 +420,7 @@ details summary{cursor:pointer;list-style:revert}
     <button type="button" role="tab" data-tab="card" aria-selected="true">Range card</button>
     <button type="button" role="tab" data-tab="ret" aria-selected="false">Reticle</button>
     <button type="button" role="tab" data-tab="match" aria-selected="false">Match</button>
+    <button type="button" role="tab" data-tab="true" aria-selected="false">Truing</button>
   </div>
 
   <section id="tabCard" class="card" aria-label="Range card">
@@ -452,6 +462,22 @@ details summary{cursor:pointer;list-style:revert}
       <div class="actions"><button class="primary" type="button" id="mMode">Match mode</button><button class="ghost" type="button" id="stNew">Add stage</button><button class="ghost" type="button" id="pdfStages">Print stage cards</button></div>
     </div>
     <div id="stList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
+  </section>
+
+  <section id="tabTrue" class="card" aria-label="Truing" hidden>
+    <div class="tnow" id="tNow"></div>
+    <div class="actions"><button class="primary" type="button" id="oAdd">Log dope</button></div>
+    <div id="oList"></div>
+    <div class="tfit" id="tFit">
+      <div class="prow" style="grid-template-columns:minmax(0,1fr) auto">
+        <label class="f">Fit<select id="tMode">
+          <option value="auto">Auto (by Mach at the target)</option><option value="velocity">Muzzle velocity only</option>
+          <option value="drag">Drag only</option><option value="both">Velocity and drag</option></select></label>
+        <button class="ghost" type="button" id="tCalc">Calculate</button>
+      </div>
+      <div id="tOut"></div>
+    </div>
+    <p class="hint" style="margin:0">Log the elevation from your zero that centred a group, with that day's conditions. Shots still above Mach 1.2 true the velocity; shots further out true the drag. A group of 3–5, read from the group's centre, beats single shots.</p>
   </section>
 </div>
 
@@ -567,6 +593,29 @@ details summary{cursor:pointer;list-style:revert}
     <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="sDel" hidden>Delete</button></div>
   </form>
 </div>
+<!-- dope observation sheet -->
+<div class="sheet" id="oSheet" hidden role="dialog" aria-modal="true" aria-labelledby="oTitle">
+  <form class="sheet-in" id="oForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="oTitle">Log dope</h2><button class="ghost" type="button" data-close>Close</button></div>
+    <div class="grid2"><label class="f">Date<input type="date" id="obDate" required></label>
+      <label class="f">Range m<input type="text" inputmode="numeric" id="obRange" required></label></div>
+    <label class="f"><span id="obElevL">Elevation</span><input type="text" inputmode="decimal" id="obElev" required></label>
+    <p class="hint" style="margin:0" id="obHint">The correction from your zero that put the group on the aim point (up +). Filled with what the calculator says now – change it to what actually hit.</p>
+    <div class="g4">
+      <label class="f">Air °C<input type="text" inputmode="decimal" id="obT"></label>
+      <label class="f">Pressure hPa<input type="text" inputmode="decimal" id="obP"></label>
+      <label class="f">Humidity %<input type="text" inputmode="decimal" id="obRH"></label>
+      <label class="f">Powder °C<input type="text" inputmode="decimal" id="obPow"></label>
+      <label class="f">Angle °<input type="text" inputmode="decimal" id="obAng"></label>
+      <label class="f">Wind m/s<input type="text" inputmode="decimal" id="obWms"></label>
+      <label class="f">From<select id="obWclock"></select></label>
+    </div>
+    <label class="f">Note<input type="text" id="obNote" placeholder="e.g. 5 shots, group centre 2 cm high"></label>
+    <label class="check"><input type="checkbox" id="obUse" checked>Use for truing</label>
+    <div class="msg" id="oMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="obDel" hidden>Delete</button></div>
+  </form>
+</div>
 <!-- reticle library and builder -->
 <div class="sheet" id="rbSheet" hidden role="dialog" aria-modal="true" aria-labelledby="rbTitle">
   <form class="sheet-in" id="rbForm" autocomplete="off">
@@ -648,6 +697,7 @@ details summary{cursor:pointer;list-style:revert}
 <script src="static/ballistics/drag.js"></script>
 <script src="static/ballistics/solver.js"></script>
 <script src="static/ballistics/reticle.js"></script>
+<script src="static/ballistics/truing.js"></script>
 <script>
 (function(){
 "use strict";
@@ -657,7 +707,10 @@ const num=v=>{v=parseFloat(String(v??"").replace(",",".").trim());return isFinit
 const B=window.Ballistics;
 const CACHE="bal-cache",OUTBOX="bal-outbox",RECENT="bal-recent",COND="bal-cond:",UI="bal-ui";
 const ls={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const ERR={name_required:"Give it a name.",bad_sight_height_mm:"Sight height must be 10–150 mm.",sight_height_mm_required:"Sight height is needed.",
+const ERR={date_required:"Pick the date.",range_m_required:"Type the range.",bad_range_m:"Range must be 10–3000 m.",
+  elev_required:"Type the elevation that hit.",bad_elev:"Elevation must be a number (−30 … 200).",bad_profile_id:"Save the profile first.",
+  bad_temp_c:"Temperature must be −40 … 60 °C.",bad_hpa:"Pressure must be 500–1100 hPa.",bad_powder_c:"Powder temperature must be −40 … 70 °C.",
+  bad_angle_deg:"Angle must be −60 … 60°.",name_required:"Give it a name.",bad_sight_height_mm:"Sight height must be 10–150 mm.",sight_height_mm_required:"Sight height is needed.",
   bad_mv_ms:"Muzzle velocity must be 100–1500 m/s.",bad_twist_mm:"Twist must be 150–800 mm per turn.",bad_zero_range_m:"Zero range must be 25–600 m.",
   zero_range_m_required:"Zero range is needed.",bad_zero_hpa:"Zero pressure must be 500–1100 hPa (station pressure).",bad_zero_temp_c:"Zero temperature must be −40–60 °C.",
   bad_zero_rh:"Humidity must be 0–100 %.",bad_temp_sens:"Temperature sensitivity must be −5…5 m/s per °C.",bad_bc:"BC must be 0.05–1.5.",bc_required:"Enter the BC.",
@@ -665,7 +718,7 @@ const ERR={name_required:"Give it a name.",bad_sight_height_mm:"Sight height mus
   bad_length_mm:"Length must be 3–80 mm.",in_use:"A profile uses this bullet – change the profile first.",bad_targets:"Each target needs a range (1–3000 m); up to 30 targets.",
   bad_range:"Each target needs a range (1–3000 m).",bad_wind_ms:"Wind must be 0–30 m/s.",bad_date:"Check the date."};
 const CLOCK=[[12,"12 head"],[1,"1"],[2,"2"],[3,"3 right"],[4,"4"],[5,"5"],[6,"6 tail"],[7,"7"],[8,"8"],[9,"9 left"],[10,"10"],[11,"11"]];
-for(const id of ["wClock","sWclock"])$(id).innerHTML=CLOCK.map(([v,t])=>`<option value="${v}">${t}</option>`).join("");
+for(const id of ["wClock","sWclock","obWclock"])$(id).innerHTML=CLOCK.map(([v,t])=>`<option value="${v}">${t}</option>`).join("");
 
 let D=ls.get(CACHE)||{profiles:[],bullets:[],matches:[],stages:[],settings:{card_start:100,card_step:50,card_end:1000},pickers:{guns:[],loads:[],scopes:[]}};
 const U=Object.assign({profile:null,match:null,tab:"card"},ls.get(UI)||{});
@@ -685,10 +738,12 @@ async function load(){
 function outbox(){return ls.get(OUTBOX)||[]}
 function applyOutbox(){                                   // queued edits show before they reach the server
   for(const o of outbox()){
-    const [kind,id]=o.url.split("/").slice(-2),list={profiles:D.profiles,bullets:D.bullets,matches:D.matches,stages:D.stages}[kind];
+    const [kind,id]=o.url.split("/").slice(-2),list={profiles:D.profiles,bullets:D.bullets,matches:D.matches,stages:D.stages,observations:D.observations=D.observations||[]}[kind];
     if(!list)continue;const i=list.findIndex(x=>x.id===id);
     if(o.method==="DELETE"){if(i>=0)list.splice(i,1)}
-    else{const row=Object.assign({},i>=0?list[i]:{},o.body,{id});if(i>=0)list[i]=row;else list.push(row)}
+    else{const row=Object.assign({},i>=0?list[i]:{},o.body,{id});
+      if(kind==="profiles"&&row.inputs)row.inputs=Object.assign({},row.inputs,{mvScale:row.mv_scale,dragScale:row.drag_scale});   // truing offline
+      if(i>=0)list[i]=row;else list.push(row)}
   }
   const n=outbox().length;$("pendNote").hidden=!n;$("pendNote").textContent=n?`${n} change${n>1?"s":""} waiting for a connection – saved on this phone.`:"";
 }
@@ -772,6 +827,7 @@ function renderProfiles(){
   if(i.mv)parts.push(`<b>${Math.round(i.mv*10)/10}</b> m/s${i.mvTempC!=null?" at "+i.mvTempC+" °C":""}${i.mvSource==="chrono"&&i.chrono?` (chrono, ${i.chrono.strings} string${i.chrono.strings>1?"s":""}, SD ${i.chrono.sd??"–"})`:""}${i.tempSens?" · "+i.tempSens+" m/s/°C"+(i.tempSensSource==="chrono"?" (chrono)":""):""}`);
   const corr=[i.spinDrift&&"spin drift",i.aeroJump&&"aero jump",i.coriolis&&"Coriolis"].filter(Boolean);if(corr.length)parts.push(corr.join(", "));
   parts.push(`zero <b>${i.zeroRangeM} m</b>`);
+  if((i.mvScale||1)!==1||(i.dragScale||1)!==1)parts.push(`trued: velocity ×${(i.mvScale||1).toFixed(3)}, drag ×${(i.dragScale||1).toFixed(3)}`);
   if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
   else parts.push("no scope linked: 0.1 mil clicks");
   $("pInfo").innerHTML=parts.join(" · ");
@@ -917,7 +973,7 @@ let CARD_FOR;          // the profile whose range card values are in the inputs
 function render(){
   renderProfiles();
   if(CARD_FOR!==U.profile){CARD_FOR=U.profile;fillCard()}
-  renderSolution();renderCard();renderMatch();if(!$("mm").hidden)renderMM();if(U.tab==="ret")renderReticle();
+  renderSolution();renderCard();renderMatch();if(!$("mm").hidden)renderMM();if(U.tab==="ret")renderReticle();if(U.tab==="true")renderTrue();
   saveUI();
 }
 
@@ -961,7 +1017,141 @@ for(const id of ["cStart","cStep","cEnd"])$(id).addEventListener("change",async(
   try{const r=await send("PUT","api/ballistics/settings",p?Object.assign({profile_id:p.id},s):s);if(r.ok&&r.j.settings){D.settings=r.j.settings;ls.set(CACHE,D)}}catch(e){}
 });
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;U.tab=b.dataset.tab;showTab();saveUI()});
-function showTab(){document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===U.tab));$("tabCard").hidden=U.tab!=="card";$("tabMatch").hidden=U.tab!=="match";$("tabRet").hidden=U.tab!=="ret";if(U.tab==="ret")renderReticle()}
+function showTab(){document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===U.tab));$("tabCard").hidden=U.tab!=="card";$("tabMatch").hidden=U.tab!=="match";$("tabRet").hidden=U.tab!=="ret";$("tabTrue").hidden=U.tab!=="true";if(U.tab==="ret")renderReticle();if(U.tab==="true")renderTrue()}
+
+// ------------------------------------------------------------ truing: logged dope → velocity and drag scale
+const T=window.BallisticsTruing;
+const obsOf=pid=>(D.observations||[]).filter(o=>o.profile_id===pid).sort((a,b)=>a.range_m-b.range_m||String(a.date).localeCompare(b.date));
+const toMrad=(v,u)=>u==="MOA"?v/B.MOA_PER_MRAD:v, fromMrad=(v,u)=>u==="MOA"?v*B.MOA_PER_MRAD:v;
+const localDate=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+function obsInput(p,o){
+  return solverInput(p,{tempC:o.temp_c,hpa:o.hpa,rh:o.rh,powder:o.powder_c,ms:o.wind_ms||0,clock:o.wind_clock??9,angle:o.angle_deg||0});
+}
+const obsFit=(p,o)=>({id:o.id,input:obsInput(p,o),range:o.range_m,elevMrad:toMrad(o.elev,o.unit)});
+const scalesOf=p=>({mvScale:p.inputs.mvScale||1,dragScale:p.inputs.dragScale||1});
+let TFIT=null;            // the last fit: {key, r}; dropped when the dope or the profile changes
+const fitKey=(p,used)=>JSON.stringify([p.id,scalesOf(p),$("tMode").value,used.map(o=>[o.id,o.range_m,o.elev,o.unit,o.temp_c,o.hpa,o.rh,o.powder_c,o.angle_deg,o.wind_ms,o.wind_clock])]);
+function renderTrue(){
+  const p=prof();
+  $("oAdd").disabled=!ready(p);
+  if(!ready(p)){$("tNow").innerHTML=`<span class="hint">Set up a profile with a bullet and velocity first.</span>`;$("oList").innerHTML="";$("tFit").hidden=true;return}
+  const i=p.inputs,sc=scalesOf(p),s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil",dec=decs(s.click||0.1)+1;
+  const trued=Math.abs(sc.mvScale-1)>1e-9||Math.abs(sc.dragScale-1)>1e-9;
+  $("tNow").innerHTML=`<span>Velocity ×<b>${sc.mvScale.toFixed(3)}</b> → <b>${Math.round(i.mv*sc.mvScale)}</b> m/s</span><span>Drag ×<b>${sc.dragScale.toFixed(3)}</b></span>`
+    +(trued?`<button class="ghost" type="button" id="tReset">Back to untrued</button>`:`<span class="hint">not trued</span>`);
+  const obs=obsOf(p.id);
+  if(!obs.length){$("oList").innerHTML=`<div class="empty">No dope logged for this profile yet. After a session, tap <b>Log dope</b> for each distance where you confirmed the elevation.</div>`;$("tFit").hidden=true;return}
+  $("oList").innerHTML=`<div class="scroll"><table class="tbl otbl"><tr><th>Use</th><th>m</th><th>Logged ${u}</th><th>Calc</th><th>Δ</th><th>Mach</th></tr>`+obs.map(o=>{
+    const r=T.predict(obsFit(p,o),sc),cu=o.unit==="MOA"?"MOA":"MRAD";
+    const calc=r?fromMrad(r.elevMrad,cu):null,d=calc!=null?calc-o.elev:null;
+    const air=o.temp_c!=null?`${o.temp_c} °C${o.hpa!=null?" "+Math.round(o.hpa):""}`:"std air";
+    const day=o.date?o.date.slice(8,10).replace(/^0/,"")+"."+o.date.slice(5,7).replace(/^0/,"")+".":"";
+    return`<tr data-oedit="${esc(o.id)}"${r&&r.mach<1.2?' class="ts"':""}><td><input type="checkbox" data-ouse="${esc(o.id)}"${o.use_for_truing?" checked":""} aria-label="Use for truing"></td><td>${o.range_m}<small>${esc(day)} · ${esc(air)}</small></td>`
+      +`<td class="${o.use_for_truing?"":"off"}">${(+o.elev).toFixed(dec)}${cu!==(s.unit==="MOA"?"MOA":"MRAD")?" "+(cu==="MOA"?"MOA":"mil"):""}</td><td>${calc!=null?calc.toFixed(dec):"–"}</td><td>${d!=null?sgn(+d.toFixed(dec),dec):"–"}</td><td class="dim">${r?r.mach.toFixed(2):"–"}</td></tr>`;
+  }).join("")+`</table></div><p class="hint" style="margin:0">Δ = calculated − logged: + means the calculator asks for more than you needed. Tinted rows are below Mach 1.2 (they true the drag). Tap a row to edit it.</p>`;
+  const used=obs.filter(o=>o.use_for_truing);
+  $("tFit").hidden=!used.length;
+  if(TFIT&&TFIT.key!==fitKey(p,used))TFIT=null;
+  $("tOut").innerHTML=TFIT?fitHtml(p,TFIT.r):"";
+}
+const TWARN={not_reached:"Some logged ranges are past where the bullet goes with these settings – skipped.",
+  both_needs_slow:"Velocity and drag need shots on both sides of Mach 1.2 – these are all faster, so only the velocity was trued.",
+  both_needs_fast:"Velocity and drag need shots on both sides of Mach 1.2 – these are all slower, so only the drag was trued.",
+  velocity_from_slow:"Truing velocity from shots below Mach 1.2: a drag error ends up in the velocity. Fine for dope at these ranges.",
+  drag_from_fast:"Truing drag from fast shots only: drag says little up there – check it again further out.",
+  short_range:"All dope is inside 300 m, where small velocity errors barely show – true again from further out.",
+  at_limit:"A factor hit its limit (velocity 0.8–1.2, drag 0.5–1.5): check the logged values, zero and profile."};
+function fitHtml(p,r){
+  const s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil",cu=s.unit==="MOA"?"MOA":"MRAD",dec=decs(s.click||0.1)+1,f=v=>v==null?"–":fromMrad(v,cu).toFixed(dec);
+  const what={velocity:"velocity",drag:"drag",both:"velocity and drag"}[r.mode]||"nothing";
+  if(r.mode==="none")return`<div class="tres"><div class="hint">Nothing to fit: none of the logged ranges is reached with this profile.</div></div>`;
+  return`<div class="tres"><div class="big">Velocity ×${r.mvScale.toFixed(3)} → ${Math.round(p.inputs.mv*r.mvScale)} m/s<br>Drag ×${r.dragScale.toFixed(3)}</div>`
+    +`<div class="hint">Trued ${what}. Average miss: ${f(r.rmsBefore)} → <b>${f(r.rmsAfter)}</b> ${u}.</div>`
+    +`<div class="scroll"><table class="tbl"><tr><th>m</th><th>Logged</th><th>Now</th><th>Trued</th></tr>`
+    +r.rows.map(x=>`<tr><td>${x.range}</td><td>${f(x.observed)}</td><td>${f(x.before)}</td><td><b>${f(x.after)}</b></td></tr>`).join("")+`</table></div>`
+    +r.warnings.map(w=>`<div class="hint">${esc(TWARN[w]||w)}</div>`).join("")
+    +`<div class="actions"><button class="primary" type="button" id="tApply">Apply to profile</button></div></div>`;
+}
+$("tCalc").addEventListener("click",()=>{
+  const p=prof();if(!ready(p))return;
+  const used=obsOf(p.id).filter(o=>o.use_for_truing);if(!used.length)return;
+  $("tCalc").disabled=true;$("tCalc").textContent="Calculating…";
+  setTimeout(()=>{
+    try{TFIT={key:fitKey(p,used),r:T.fit(used.map(o=>obsFit(p,o)),$("tMode").value,scalesOf(p))}}
+    finally{$("tCalc").disabled=false;$("tCalc").textContent="Calculate"}
+    renderTrue();
+  },30);
+});
+$("tMode").addEventListener("change",()=>{TFIT=null;renderTrue()});
+async function setScales(p,mv,drag){
+  const body=Object.assign({},p,{mv_scale:+mv.toFixed(4),drag_scale:+drag.toFixed(4)});delete body.inputs;
+  const err=await write("PUT","api/ballistics/profiles/"+encodeURIComponent(p.id),body);
+  if(err){toast("Couldn't save the profile: "+(ERR[err]||err));return false}
+  return true;
+}
+$("tabTrue").addEventListener("click",async e=>{
+  const p=prof();if(!p)return;
+  if(e.target.closest("#tApply")&&TFIT){
+    const r=TFIT.r;
+    if(await setScales(p,r.mvScale,r.dragScale)){TFIT=null;render();toast(`Trued: velocity ×${r.mvScale.toFixed(3)}, drag ×${r.dragScale.toFixed(3)}.`)}
+  }else if(e.target.closest("#tReset")){
+    if(!confirm("Set velocity and drag back to ×1.000 (untrued)?"))return;
+    if(await setScales(p,1,1)){TFIT=null;render()}
+  }else if(e.target.closest("[data-oedit]")&&!e.target.closest("[data-ouse]")){
+    openObs(D.observations.find(o=>o.id===e.target.closest("[data-oedit]").dataset.oedit));
+  }
+});
+$("tabTrue").addEventListener("change",async e=>{
+  const b=e.target.closest("[data-ouse]");if(!b)return;
+  const o=D.observations.find(x=>x.id===b.dataset.ouse);if(!o)return;
+  const err=await write("PUT","api/ballistics/observations/"+encodeURIComponent(o.id),Object.assign({},o,{use_for_truing:b.checked}));
+  if(err)toast("Couldn't save: "+(ERR[err]||err));
+  render();
+});
+let editO=null;
+function openObs(o){
+  const p=prof();if(!ready(p))return;
+  editO=o||null;$("oTitle").textContent=o?"Edit dope":"Log dope";$("obDel").hidden=!o;
+  const s=scopeOf(p),u=s.unit==="MOA"?"MOA":"MRAD",dec=decs(s.click||0.1);
+  $("obElevL").textContent=`Elevation ${u==="MOA"?"MOA":"mil"} up`;
+  if(o){
+    setv("obDate",o.date);setv("obRange",o.range_m);setv("obElev",o.unit===u?o.elev:+fromMrad(toMrad(o.elev,o.unit),u).toFixed(dec+1));
+    setv("obT",o.temp_c);setv("obP",o.hpa);setv("obRH",o.rh);setv("obPow",o.powder_c);setv("obAng",o.angle_deg);setv("obWms",o.wind_ms);
+    $("obWclock").value=o.wind_clock??9;$("obUse").checked=!!o.use_for_truing;setv("obNote",o.note);
+    $("obHint").hidden=true;
+  }else{
+    const c=cond(),R=num($("rIn").value)||null;
+    setv("obDate",localDate());setv("obRange",R);setv("obElev","");
+    if(R){try{const r=B.solve(solverInput(p,c),[R]).rows[0];if(r.reached)setv("obElev",fromMrad(r.elevMrad,u).toFixed(dec))}catch(e){}}
+    setv("obT",c.tempC);setv("obP",c.hpa);setv("obRH",c.rh);setv("obPow",c.powder);setv("obAng",c.angle||"");setv("obWms",c.ms||"");
+    $("obWclock").value=c.clock??9;$("obUse").checked=true;setv("obNote","");$("obHint").hidden=false;
+  }
+  openSheet("oSheet");
+}
+$("oAdd").addEventListener("click",()=>openObs(null));
+$("obRange").addEventListener("change",()=>{       // a new entry follows the range: the calculator's elevation there
+  const p=prof(),R=num($("obRange").value);if(editO||!ready(p)||!(R>0))return;
+  const s=scopeOf(p),u=s.unit==="MOA"?"MOA":"MRAD";
+  try{const r=B.solve(solverInput(p,cond()),[R]).rows[0];if(r.reached)setv("obElev",fromMrad(r.elevMrad,u).toFixed(decs(s.click||0.1)))}catch(e){}
+});
+$("oForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const p=prof();if(!p)return;
+  const s=scopeOf(p),body={profile_id:p.id,date:$("obDate").value,range_m:num($("obRange").value),elev:num($("obElev").value),
+    unit:s.unit==="MOA"?"MOA":"MRAD",temp_c:num($("obT").value),hpa:num($("obP").value),rh:num($("obRH").value),powder_c:num($("obPow").value),
+    angle_deg:num($("obAng").value),wind_ms:num($("obWms").value),wind_clock:+$("obWclock").value,use_for_truing:$("obUse").checked,note:$("obNote").value};
+  if(body.range_m==null)return msg("oMsg","range_m_required");
+  if(body.elev==null)return msg("oMsg","elev_required");
+  const id=editO?editO.id:newId(body.range_m+"m","o-");
+  const err=await write("PUT","api/ballistics/observations/"+encodeURIComponent(id),body);
+  if(err)return msg("oMsg",err);
+  TFIT=null;closeSheet($("oSheet"));render();
+});
+$("obDel").addEventListener("click",async()=>{
+  if(!editO||!confirm(`Delete the dope at ${editO.range_m} m?`))return;
+  const err=await write("DELETE","api/ballistics/observations/"+encodeURIComponent(editO.id));
+  if(err)return msg("oMsg",err);TFIT=null;closeSheet($("oSheet"));render();
+});
 
 // ------------------------------------------------------------ weather panel (closed by default, summary on the button)
 function wxSummary(){

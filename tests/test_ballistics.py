@@ -259,3 +259,21 @@ def test_every_ballistics_api_route_needs_login():
             assert r.status_code == 401, (m, url, r.status_code)
             n += 1
     assert n >= 15
+
+
+def test_observations(client):
+    """Dope confirmed at the range: saved per profile, validated, dropped with the profile."""
+    assert client.put("/diary/api/ballistics/profiles/p-o", json={"name": "O", "sight_height_mm": 50,
+                                                                   "zero_range_m": 100}).status_code == 200
+    ob = {"profile_id": "p-o", "date": "2026-10-20", "range_m": 600, "elev": 4.6, "unit": "MRAD",
+          "temp_c": 4, "hpa": 1002, "rh": 80, "powder_c": 6, "note": "5 shots centred"}
+    assert client.put("/diary/api/ballistics/observations/o-1", json=ob).status_code == 200
+    got = _all(client)["observations"]
+    assert len(got) == 1 and got[0]["elev"] == 4.6 and got[0]["use_for_truing"] == 1 and got[0]["powder_c"] == 6
+    assert client.put("/diary/api/ballistics/observations/o-1", json=dict(ob, use_for_truing=False)).status_code == 200
+    assert _all(client)["observations"][0]["use_for_truing"] == 0
+    for bad in ({"profile_id": "p-missing"}, {"profile_id": None}, {"date": None}, {"range_m": 0},
+                {"elev": "x"}, {"unit": "IPHY"}):
+        assert client.put("/diary/api/ballistics/observations/o-2", json=dict(ob, **bad)).status_code == 400, bad
+    assert client.delete("/diary/api/ballistics/profiles/p-o", headers=H).status_code == 200
+    assert _all(client)["observations"] == []
