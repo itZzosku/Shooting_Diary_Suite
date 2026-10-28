@@ -857,9 +857,13 @@ function renderSolution(){
   $("oWs").textContent=(w.clicks?`${w.clicks} click${w.clicks===1?"":"s"} ${w.dir==="R"?"right":"left"}${why?" · "+why:""}\n`:"")+`${per} per 1 m/s`;
   $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
     +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span>`+(r.dropM!=null?`<span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`:"");
-  if(r.subsonic)warn.push("Subsonic at this range – expect more spread and less reliable dope.");
-  else if(r.transonic)warn.push("Transonic at this range (Mach 1.0–1.2).");
-  if(res.muzzleMach>1&&res.muzzleMach<1.15)warn.push("Muzzle velocity is just above the speed of sound in this air.");
+  // A round that leaves the muzzle at about the speed of sound or below (.22 LR, subsonic loads) is made for it:
+  // no transonic / subsonic warnings, and its normally low stability factor only warns when it is really unstable.
+  const slowRound=res.muzzleMach<1.2;
+  if(!slowRound){
+    if(r.subsonic)warn.push("Subsonic at this range – expect more spread and less reliable dope.");
+    else if(r.transonic)warn.push("Transonic at this range (Mach 1.0–1.2).");
+  }
   if(s.zeroStop!=null&&z&&tu.reading<s.zeroStop-1e-9)warn.push(`Below the zero stop (${s.zeroStop}).`);
   if(c.hpa!=null&&c.hpa>1040)info.push("That pressure is high for station pressure – is it the sea-level value?");
   for(const k of p.inputs.warnings||[]){
@@ -869,7 +873,7 @@ function renderSolution(){
   }
   if(p.inputs.coriolis&&((c.lat??p.inputs.latitude)==null||(c.az??p.inputs.azimuthDeg)==null))info.push("Coriolis is on but needs latitude and direction of fire (Location, below the conditions).");
   if(p.inputs.spinDrift&&res.sg==null)info.push("Spin drift needs twist and the bullet's length.");
-  if(res.sg!=null&&res.sg<1.4)warn.push(`Stability factor ${res.sg.toFixed(2)} – marginal (under 1.4).`);
+  if(res.sg!=null&&res.sg<(slowRound?1:1.4))warn.push(slowRound?`Stability factor ${res.sg.toFixed(2)} – under 1, the bullet may not be stable.`:`Stability factor ${res.sg.toFixed(2)} – marginal (under 1.4).`);
   $("oWarn").innerHTML=warn.map(w=>`<div>${esc(w)}</div>`).join("")+info.map(w=>`<div class="i">${esc(w)}</div>`).join("");
 }
 function renderCard(){
