@@ -48,6 +48,8 @@ def init_app(app):
     users.migrate_single_user()
     for u in users.all_users():              # schema / migrations for every account's file
         init_db(users.db_path(u))
+    from .reticles import init_library       # the server-wide reticle library
+    init_library()
     if not app.config.get("SECRET_KEY"):
         app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or _secret_key_file()
     app.config.update(
@@ -664,6 +666,7 @@ from . import chrono  # noqa: E402,F401
 from . import zero  # noqa: E402,F401
 # Ballistic calculator (profiles, matches, stages; the solver runs in the browser).
 from . import ballistics  # noqa: E402,F401
+from . import reticles  # noqa: E402,F401
 # Guns loaned to friends + ammo cost.
 from . import loans  # noqa: E402,F401
 # Landing-page summary.

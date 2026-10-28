@@ -268,6 +268,25 @@ header.top{padding-top:6px!important}
 .mm-nav{display:flex;gap:10px;margin-top:16px}
 .mm-nav button{flex:1;background:#1d211d;border:1px solid #3a413a;color:#f2f4f0;border-radius:10px;padding:16px;font-size:1.1rem}
 .req{color:var(--danger)}
+.retbox{background:#f4f5f2;border:1px solid var(--line);border-radius:var(--r);aspect-ratio:1/1;width:100%;max-width:560px;margin:0 auto;color:#111;overflow:hidden;touch-action:none}
+.retbox svg{width:100%;height:100%;display:block}
+:root[data-theme="dark"] .retbox,.retbox.night{background:#0b0d0b;color:#ff5544}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .retbox{background:#0b0d0b;color:#ff5544}}
+.rb-sec{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.rb-sec h3{margin:0;font-family:var(--f-display);text-transform:uppercase;letter-spacing:.05em;font-size:1rem}
+.hrow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px}
+.hrow .arms{grid-column:1/-1;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.hrow label.f{font-size:.62rem}
+.armgrid{display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));gap:6px 8px;align-items:center}
+.armgrid b{font-size:.8rem;text-transform:uppercase;color:var(--muted)}
+.rb-prev{position:sticky;top:58px;z-index:2;background:var(--bg);padding-bottom:6px}
+.rb-prev .retbox{width:min(100%,420px,38vh)}
+@media (max-width:560px){.hrow{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.inbtn{display:flex;gap:4px}
+.inbtn input{flex:1 1 auto}
+.inbtn button{flex:0 0 44px;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;font-size:1.1rem}
+details summary{cursor:pointer;list-style:revert}
 #rChips{min-height:38px;flex-wrap:nowrap;overflow-x:auto}
 #rChips:empty::before{content:"Recent ranges show here";color:var(--muted);font-size:.84rem;align-self:center}
 @media (max-width:560px){ .g4{grid-template-columns:repeat(2,minmax(0,1fr))} .tbl{font-size:.8rem} .tbl th,.tbl td{padding:6px 4px} }
@@ -302,8 +321,24 @@ header.top{padding-top:6px!important}
     <div class="g3">
       <label class="f">Wind m/s<input type="text" inputmode="decimal" id="wMs" placeholder="0"></label>
       <label class="f">From o'clock<select id="wClock"></select></label>
-      <label class="f">Angle °<input type="text" inputmode="decimal" id="aAng" placeholder="0"></label>
+      <label class="f">Angle °<span class="inbtn"><input type="text" inputmode="decimal" id="aAng" placeholder="0"><button type="button" id="aTilt" title="Hold the phone flat along the barrel" aria-label="Measure angle with the phone">∠</button></span></label>
     </div>
+    <div class="prow" style="grid-template-columns:minmax(0,1fr) auto">
+      <label class="f">Place<select id="aPlace"></select></label>
+      <button class="primary" type="button" id="aFetch" style="flex:none;padding:11px 16px">Fetch weather</button>
+    </div>
+    <div class="src" id="aSrc"></div>
+    <details id="aMore">
+      <summary class="hint">Location, altitude, direction of fire</summary>
+      <div class="g4" style="margin-top:10px">
+        <label class="f">Latitude<input type="text" inputmode="decimal" id="aLat"></label>
+        <label class="f">Longitude<input type="text" inputmode="decimal" id="aLon"></label>
+        <label class="f">Altitude m<input type="text" inputmode="decimal" id="aAlt"></label>
+        <label class="f">Firing ° (N=0)<span class="inbtn"><input type="text" inputmode="decimal" id="aAz"><button type="button" id="aCmp" aria-label="Read the compass" title="Point the top of the phone at the target">⌖</button></span></label>
+      </div>
+      <div class="actions" style="margin-top:10px"><button class="ghost" type="button" id="aGps">Use phone location</button><button class="ghost" type="button" id="aSavePlace">Save as a place</button><button class="ghost" type="button" id="aDelPlace" hidden>Forget this place</button></div>
+      <p class="hint" style="margin:6px 0 0">Latitude and direction of fire are only used for Coriolis; altitude turns the weather service's sea-level pressure into station pressure.</p>
+    </details>
     <div class="actions" style="justify-content:space-between">
       <span class="hint" style="margin:0">Pressure is <b>station</b> pressure (Kestrel, phone barometer), not the sea-level value weather services give.</span>
       <button class="ghost" type="button" id="aStd">Standard air</button>
@@ -328,6 +363,7 @@ header.top{padding-top:6px!important}
 
   <div class="tabs" role="tablist">
     <button type="button" role="tab" data-tab="card" aria-selected="true">Range card</button>
+    <button type="button" role="tab" data-tab="ret" aria-selected="false">Reticle</button>
     <button type="button" role="tab" data-tab="match" aria-selected="false">Match</button>
   </div>
 
@@ -339,8 +375,22 @@ header.top{padding-top:6px!important}
     </div>
     <div class="scroll"><table class="tbl" id="cTable"></table></div>
     <p class="hint" style="margin:0">Tinted rows are transonic (Mach 1.0–1.2), muted rows subsonic: drag data is least reliable there.</p>
+    <div class="actions"><button class="ghost" type="button" id="pdfDope">Print dope card</button><button class="ghost" type="button" id="pdfWind">Print wind card</button></div>
   </section>
 
+  <section id="tabRet" class="card" aria-label="Reticle view" hidden>
+    <div class="prow" style="grid-template-columns:minmax(0,1fr) auto">
+      <label class="f">Show<select id="vMode"></select></label>
+      <button class="ghost" type="button" id="vLib">Reticles</button>
+    </div>
+    <div class="g3" id="vOpts">
+      <label class="check" id="vDialL"><input type="checkbox" id="vDial" checked>Elevation dialled</label>
+      <label class="f" id="vMagL" hidden>Magnification ×<input type="text" inputmode="decimal" id="vMag"></label>
+      <label class="f" id="vZoomL">View ±<select id="vZoom"></select></label>
+    </div>
+    <div class="retbox" id="vBox"></div>
+    <div class="src" id="vInfo"></div>
+  </section>
   <section id="tabMatch" aria-label="Match" hidden>
     <div class="card">
       <div class="prow">
@@ -348,7 +398,7 @@ header.top{padding-top:6px!important}
         <button class="ghost" type="button" id="mEdit">Edit</button>
         <button class="ghost" type="button" id="mNew">New</button>
       </div>
-      <div class="actions"><button class="primary" type="button" id="mMode">Match mode</button><button class="ghost" type="button" id="stNew">Add stage</button></div>
+      <div class="actions"><button class="primary" type="button" id="mMode">Match mode</button><button class="ghost" type="button" id="stNew">Add stage</button><button class="ghost" type="button" id="pdfStages">Print stage cards</button></div>
     </div>
     <div id="stList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
   </section>
@@ -373,9 +423,20 @@ header.top{padding-top:6px!important}
     <div class="g3"><label class="f">Sight height mm<input type="text" inputmode="decimal" id="fSight" required placeholder="50"></label>
       <label class="f">Twist mm / turn<input type="text" inputmode="decimal" id="fTwist" placeholder="203"></label>
       <label class="f">Twist<select id="fTwistDir"><option value="R">Right</option><option value="L">Left</option></select></label></div>
-    <div class="g3"><label class="f">Muzzle velocity m/s<input type="text" inputmode="decimal" id="fMv" placeholder="823"></label>
+    <h2 style="font-size:1.05rem">Muzzle velocity</h2>
+    <div class="g3"><label class="f">From<select id="fMvSrc"><option value="manual">Typed in</option><option value="chrono">Chrono strings</option></select></label>
+      <label class="f" id="fMvNL">Newest strings<input type="text" inputmode="numeric" id="fMvN" placeholder="3"></label>
+      <label class="f">Temp. sensitivity<select id="fTsSrc"><option value="manual">Typed in</option><option value="chrono">From chrono days</option></select></label></div>
+    <div class="src" id="fChrono"></div>
+    <div class="g3"><label class="f">Velocity m/s<input type="text" inputmode="decimal" id="fMv" placeholder="823"></label>
       <label class="f">At powder °C<input type="text" inputmode="decimal" id="fMvT" placeholder="15"></label>
       <label class="f">m/s per °C<input type="text" inputmode="decimal" id="fTs" placeholder="none"></label></div>
+    <p class="hint" style="margin:0" id="fMvHint">Typed-in values are also the fallback when the chrono has no strings for this gun and load.</p>
+    <h2 style="font-size:1.05rem">Reticle and corrections</h2>
+    <label class="f">Reticle<select id="fRet"></select></label>
+    <label class="check"><input type="checkbox" id="fSpin">Spin drift (needs twist and bullet length)</label>
+    <label class="check"><input type="checkbox" id="fAj">Aerodynamic jump from crosswind</label>
+    <label class="check"><input type="checkbox" id="fCor">Coriolis (needs latitude and direction of fire)</label>
     <h2 style="font-size:1.05rem">Zero</h2>
     <div class="g4"><label class="f">Range m<input type="text" inputmode="decimal" id="fZr" required placeholder="100"></label>
       <label class="f">Temp °C<input type="text" inputmode="decimal" id="fZt" placeholder="15"></label>
@@ -434,10 +495,83 @@ header.top{padding-top:6px!important}
     <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="sDel" hidden>Delete</button></div>
   </form>
 </div>
+<!-- reticle library and builder -->
+<div class="sheet" id="rbSheet" hidden role="dialog" aria-modal="true" aria-labelledby="rbTitle">
+  <form class="sheet-in" id="rbForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="rbTitle">Reticles</h2><button class="ghost" type="button" data-close>Close</button></div>
+    <div class="chips" id="rbList"></div>
+    <p class="hint" style="margin:0" id="rbWho"></p>
+    <div class="rb-prev">
+      <div class="retbox" id="rbBox" style="max-width:420px"></div>
+      <div class="actions" style="margin-top:6px;justify-content:center">
+        <button class="ghost" type="button" id="rbZin">＋</button><button class="ghost" type="button" id="rbZout">－</button>
+        <button class="ghost" type="button" id="rbMeasure">Measure</button>
+        <label class="ghost" style="cursor:pointer">Drawing…<input type="file" accept="image/*" id="rbImg" hidden></label>
+        <button class="ghost" type="button" id="rbCal" hidden>Line up drawing</button>
+        <input type="range" id="rbOp" min="0" max="1" step="0.05" value="0.5" hidden aria-label="Drawing opacity">
+      </div>
+      <div class="src" id="rbStatus" style="text-align:center"></div>
+    </div>
+    <div class="warns" id="rbWarn"></div>
+
+    <div class="rb-sec"><h3>Basics</h3>
+      <div class="grid2"><label class="f">Name<input type="text" id="rbName" required placeholder="e.g. the reticle's name"></label><label class="f">Maker<input type="text" id="rbMaker"></label></div>
+      <div class="g4"><label class="f">Unit<select id="rbUnit"><option value="MRAD">mil (MRAD)</option><option value="MOA">MOA</option></select></label>
+        <label class="f">Focal plane<select id="rbFp"><option>FFP</option><option>SFP</option></select></label>
+        <label class="f">Design power ×<input type="text" inputmode="decimal" id="rbDes" placeholder="SFP only"></label>
+        <label class="f">Drawn field ±<input type="text" inputmode="decimal" id="rbField" placeholder="10"></label></div>
+      <div class="grid2"><label class="f">Lowest power ×<input type="text" inputmode="decimal" id="rbMin"></label><label class="f">Highest power ×<input type="text" inputmode="decimal" id="rbMax"></label></div>
+    </div>
+    <div class="rb-sec"><h3>Centre</h3>
+      <div class="g4"><label class="f">Type<select id="rcType"><option value="none">None</option><option value="dot">Dot</option><option value="cross">Fine cross</option><option value="open">Open circle</option></select></label>
+        <label class="f">Size / radius<input type="text" inputmode="decimal" id="rcR"></label>
+        <label class="f">Centre gap<input type="text" inputmode="decimal" id="rcGap"></label>
+        <label class="f">Line width<input type="text" inputmode="decimal" id="rcW"></label></div>
+    </div>
+    <div class="rb-sec"><h3>Main stadia</h3>
+      <div class="grid2"><label class="f">Line width<input type="text" inputmode="decimal" id="rsW" placeholder="0.03"></label>
+        <label class="check" style="align-self:end"><input type="checkbox" id="rsMirror">Left arm = right arm</label></div>
+      <div class="armgrid" id="rsArms"></div>
+    </div>
+    <div class="rb-sec"><h3>Hash marks</h3>
+      <p class="hint" style="margin:0">One row per kind of mark on the drawing: e.g. 0.2 mil minor hashes from 0.2 to 8 with a longer mark every 5th and a number every 10th.</p>
+      <div id="rhList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="chip add" type="button" id="rhAdd" style="align-self:flex-start">+ Hash set</button>
+    </div>
+    <div class="rb-sec"><h3>Holdover tree</h3>
+      <label class="check"><input type="checkbox" id="rtOn">This reticle has a tree / grid below the centre</label>
+      <div id="rtBox" class="g4">
+        <label class="f">Rows from<input type="text" inputmode="decimal" id="rtFrom"></label><label class="f">Rows to<input type="text" inputmode="decimal" id="rtTo"></label>
+        <label class="f">Row step<input type="text" inputmode="decimal" id="rtStep"></label>
+        <label class="f">Width<select id="rtKind"><option value="constant">Same every row</option><option value="linear">Grows row by row</option><option value="list">Typed per row</option></select></label>
+        <label class="f">Half-width (first)<input type="text" inputmode="decimal" id="rtA"></label><label class="f">Half-width (last)<input type="text" inputmode="decimal" id="rtB"></label>
+        <label class="f">Per row, comma-separated<input type="text" id="rtList"></label>
+        <label class="f">Marks<select id="rtMark"><option value="dot">Dots</option><option value="hash">Hashes</option><option value="cross">Crosses</option></select></label>
+        <label class="f">Mark spacing<input type="text" inputmode="decimal" id="rtMs"></label><label class="f">Mark size<input type="text" inputmode="decimal" id="rtSize"></label>
+        <label class="f">Number every N rows<input type="text" inputmode="numeric" id="rtLab"></label>
+      </div>
+    </div>
+    <div class="rb-sec"><h3>Extras and raw data</h3>
+      <label class="f">Extra marks (JSON list of primitives)<textarea id="rxExtras" style="min-height:90px" placeholder='[{"t":"dot","x":0,"y":5,"r":0.1}]'></textarea></label>
+      <details><summary class="hint">Whole spec as JSON</summary>
+        <textarea id="rxRaw" style="min-height:200px;margin-top:8px"></textarea>
+        <button class="ghost" type="button" id="rxApply">Use this JSON</button>
+      </details>
+    </div>
+    <div class="msg" id="rbMsg" hidden></div>
+    <div class="actions">
+      <button class="primary" type="submit" id="rbSave">Save to the library</button>
+      <button class="ghost" type="button" id="rbExport">Export file</button>
+      <label class="ghost" style="cursor:pointer">Import file<input type="file" accept="application/json,.json" id="rbImport" hidden></label>
+      <button class="danger" type="button" id="rbArch" hidden>Archive</button>
+    </div>
+  </form>
+</div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="static/ballistics/drag.js"></script>
 <script src="static/ballistics/solver.js"></script>
+<script src="static/ballistics/reticle.js"></script>
 <script>
 (function(){
 "use strict";
@@ -518,13 +652,16 @@ const scopeOf=p=>(p&&p.inputs&&p.inputs.scope)||{unit:"MRAD",click:0.1};
 const decs=c=>{const s=String(+c);return s.includes(".")?Math.min(3,s.split(".")[1].length):0};
 function cond(){
   return {tempC:num($("aT").value),hpa:num($("aP").value),rh:num($("aRH").value),powder:num($("aPow").value),
-          ms:num($("wMs").value)||0,clock:+$("wClock").value,angle:num($("aAng").value)||0};
+          ms:num($("wMs").value)||0,clock:+$("wClock").value,angle:num($("aAng").value)||0,
+          lat:num($("aLat").value),lon:num($("aLon").value),alt:num($("aAlt").value),az:num($("aAz").value)};
 }
 function solverInput(p,c,extra){
   const i=p.inputs;
   return Object.assign({bullet:i.bullet,mv:i.mv,mvTempC:i.mvTempC,tempSens:i.tempSens,mvScale:i.mvScale,dragScale:i.dragScale,
     sightHeightMm:i.sightHeightMm,zeroRangeM:i.zeroRangeM,zeroAtmo:clean(i.zeroAtmo),twistMm:i.twistMm,twistDir:i.twistDir,
-    atmo:clean({tempC:c.tempC,hpa:c.hpa,rh:c.rh}),powderC:c.powder,wind:{ms:c.ms,clock:c.clock},angleDeg:c.angle},extra||{});
+    atmo:clean({tempC:c.tempC,hpa:c.hpa,rh:c.rh}),powderC:c.powder,wind:{ms:c.ms,clock:c.clock},angleDeg:c.angle,
+    spinDrift:i.spinDrift,aeroJump:i.aeroJump,coriolis:i.coriolis&&(c.lat??i.latitude)!=null&&(c.az??i.azimuthDeg)!=null,
+    latitude:c.lat??i.latitude,azimuthDeg:c.az??i.azimuthDeg},extra||{});
 }
 const clean=o=>{const r={};for(const k in o||{})if(o[k]!=null)r[k]=o[k];return r};
 function ready(p){return p&&p.inputs&&p.inputs.bullet&&p.inputs.mv}
@@ -552,7 +689,8 @@ function renderProfiles(){
   const parts=[];
   if(i.gun)parts.push(esc(i.gun));
   if(b)parts.push(`${esc(b.name)} · <b>${b.model} ${b.bc!=null?(+b.bc).toFixed(3):"bands"}</b>`);
-  if(i.mv)parts.push(`<b>${i.mv}</b> m/s${i.mvTempC!=null?" at "+i.mvTempC+" °C":""}${i.tempSens?" · "+i.tempSens+" m/s/°C":""}`);
+  if(i.mv)parts.push(`<b>${Math.round(i.mv*10)/10}</b> m/s${i.mvTempC!=null?" at "+i.mvTempC+" °C":""}${i.mvSource==="chrono"&&i.chrono?` (chrono, ${i.chrono.strings} string${i.chrono.strings>1?"s":""}, SD ${i.chrono.sd??"–"})`:""}${i.tempSens?" · "+i.tempSens+" m/s/°C"+(i.tempSensSource==="chrono"?" (chrono)":""):""}`);
+  const corr=[i.spinDrift&&"spin drift",i.aeroJump&&"aero jump",i.coriolis&&"Coriolis"].filter(Boolean);if(corr.length)parts.push(corr.join(", "));
   parts.push(`zero <b>${i.zeroRangeM} m</b>`);
   if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
   else parts.push("no scope linked: 0.1 mil clicks");
@@ -575,7 +713,7 @@ function renderSolution(){
   const tu=turret(e.signed,z&&z.elev,s,s.elevTurn);
   let es=`${e.clicks} click${e.clicks===1?"":"s"} ${e.dir||""}`.trim();
   if(z&&z.elev)es+=`\nturret ${tu.reading}`;
-  if(s.elevTurn>0)es+=`\n${tu.turns} turn${tu.turns===1?"":"s"} + ${tu.rest}`;
+  if(s.elevTurn>0&&tu.turns>0)es+=`\n${tu.turns} turn${tu.turns===1?"":"s"} + ${tu.rest}`;
   $("oEs").textContent=es;
   $("oW").innerHTML=c.ms?`${w.val}<em>${w.unit} ${w.dir}</em>`:`0<em>${w.unit}</em>`;
   const per=B.toUnit(r.windPer1Mrad,s.unit).toFixed(e.dec+1);
@@ -587,7 +725,14 @@ function renderSolution(){
   if(res.muzzleMach>1&&res.muzzleMach<1.15)warn.push("Muzzle velocity is just above the speed of sound in this air.");
   if(s.zeroStop!=null&&z&&tu.reading<s.zeroStop-1e-9)warn.push(`Below the zero stop (${s.zeroStop}).`);
   if(c.hpa!=null&&c.hpa>1040)info.push("That pressure is high for station pressure – is it the sea-level value?");
-  for(const k of p.inputs.warnings||[])if(k==="bullet_weight_differs")info.push("The load's bullet weight differs from the bullet on this profile.");
+  for(const k of p.inputs.warnings||[]){
+    if(k==="bullet_weight_differs")info.push("The load's bullet weight differs from the bullet on this profile.");
+    if(k==="no_chrono_data")info.push("No chrono strings for this gun and load – using the typed-in velocity.");
+    if(k==="no_chrono_temp_sens")info.push("The chrono days don't span enough temperature yet – using the typed-in sensitivity.");
+  }
+  if(p.inputs.coriolis&&((c.lat??p.inputs.latitude)==null||(c.az??p.inputs.azimuthDeg)==null))info.push("Coriolis is on but needs latitude and direction of fire (Location, below the conditions).");
+  if(p.inputs.spinDrift&&res.sg==null)info.push("Spin drift needs twist and the bullet's length.");
+  if(res.sg!=null&&res.sg<1.4)warn.push(`Stability factor ${res.sg.toFixed(2)} – marginal (under 1.4).`);
   $("oWarn").innerHTML=warn.map(w=>`<div>${esc(w)}</div>`).join("")+info.map(w=>`<div class="i">${esc(w)}</div>`).join("");
 }
 function renderCard(){
@@ -691,7 +836,7 @@ function render(){
   renderProfiles();
   const st=D.settings||{};
   if(!$("cStart").value)$("cStart").value=st.card_start;if(!$("cStep").value)$("cStep").value=st.card_step;if(!$("cEnd").value)$("cEnd").value=st.card_end;
-  renderSolution();renderCard();renderMatch();if(!$("mm").hidden)renderMM();
+  renderSolution();renderCard();renderMatch();if(!$("mm").hidden)renderMM();if(U.tab==="ret")renderReticle();
   saveUI();
 }
 
@@ -700,10 +845,13 @@ function loadCond(){
   const c=ls.get(COND+(U.profile||""))||{};
   $("aT").value=c.t??"";$("aP").value=c.p??"";$("aRH").value=c.rh??"";$("aPow").value=c.pow??"";
   $("wMs").value=c.ms??"";$("wClock").value=c.clock??9;$("aAng").value=c.ang??"";
+  $("aLat").value=c.lat??"";$("aLon").value=c.lon??"";$("aAlt").value=c.alt??"";$("aAz").value=c.az??"";
+  $("aSrc").innerHTML=c.src||"";renderPlaces(c.place);
   if(c.range)$("rIn").value=c.range;
 }
 function saveCond(){
-  ls.set(COND+(U.profile||""),{t:$("aT").value,p:$("aP").value,rh:$("aRH").value,pow:$("aPow").value,ms:$("wMs").value,clock:$("wClock").value,ang:$("aAng").value,range:$("rIn").value});
+  ls.set(COND+(U.profile||""),{t:$("aT").value,p:$("aP").value,rh:$("aRH").value,pow:$("aPow").value,ms:$("wMs").value,clock:$("wClock").value,ang:$("aAng").value,range:$("rIn").value,
+    lat:$("aLat").value,lon:$("aLon").value,alt:$("aAlt").value,az:$("aAz").value,src:$("aSrc").innerHTML,place:$("aPlace").value});
 }
 function recent(){
   const R=num($("rIn").value);if(!(R>0))return;
@@ -711,8 +859,8 @@ function recent(){
 }
 function renderChips(){$("rChips").innerHTML=(ls.get(RECENT)||[]).map(r=>`<button type="button" class="chip" data-r="${r}">${r}</button>`).join("")}
 let tmr=null;
-function changed(){saveCond();renderSolution();clearTimeout(tmr);tmr=setTimeout(()=>{renderCard();renderMatch();if(!$("mm").hidden)renderMM()},120)}
-document.querySelectorAll("#aT,#aP,#aRH,#aPow,#wMs,#wClock,#aAng,#rIn").forEach(el=>el.addEventListener("input",changed));
+function changed(){saveCond();renderSolution();clearTimeout(tmr);tmr=setTimeout(()=>{renderCard();renderMatch();if(!$("mm").hidden)renderMM();if(U.tab==="ret")renderReticle()},120)}
+document.querySelectorAll("#aT,#aP,#aRH,#aPow,#wMs,#wClock,#aAng,#rIn,#aLat,#aLon,#aAlt,#aAz").forEach(el=>el.addEventListener("input",changed));
 $("wClock").addEventListener("change",changed);
 $("rIn").addEventListener("change",()=>{recent();renderChips()});
 const stepR=d=>{const v=(num($("rIn").value)||0)+d;$("rIn").value=Math.max(10,Math.round(v));recent();renderChips();changed()};
@@ -726,7 +874,82 @@ for(const id of ["cStart","cStep","cEnd"])$(id).addEventListener("change",async(
   if(s.card_start!=null&&s.card_step>0&&s.card_end>s.card_start){try{await send("PUT","api/ballistics/settings",s);D.settings=s;ls.set(CACHE,D)}catch(e){}}
 });
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;U.tab=b.dataset.tab;showTab();saveUI()});
-function showTab(){document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===U.tab));$("tabCard").hidden=U.tab!=="card";$("tabMatch").hidden=U.tab!=="match"}
+function showTab(){document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===U.tab));$("tabCard").hidden=U.tab!=="card";$("tabMatch").hidden=U.tab!=="match";$("tabRet").hidden=U.tab!=="ret";if(U.tab==="ret")renderReticle()}
+
+// ------------------------------------------------------------ places, weather and phone sensors
+function renderPlaces(sel){
+  const rs=D.ranges||[];
+  $("aPlace").innerHTML=`<option value="">Typed in / phone location</option>`+rs.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("");
+  $("aPlace").value=rs.some(r=>r.id===sel)?sel:"";$("aDelPlace").hidden=!$("aPlace").value;
+}
+$("aPlace").addEventListener("change",()=>{
+  const r=(D.ranges||[]).find(x=>x.id===$("aPlace").value);
+  if(r){$("aLat").value=r.lat;$("aLon").value=r.lon;$("aAlt").value=r.alt_m??""}
+  $("aDelPlace").hidden=!r;changed();
+});
+function gps(){return new Promise((ok,no)=>{
+  if(!navigator.geolocation)return no(new Error("no_gps"));
+  navigator.geolocation.getCurrentPosition(p=>ok(p.coords),no,{enableHighAccuracy:true,timeout:15000,maximumAge:300000});
+})}
+async function useGps(){
+  try{const c=await gps();$("aLat").value=c.latitude.toFixed(4);$("aLon").value=c.longitude.toFixed(4);
+    if(c.altitude!=null&&$("aAlt").value==="")$("aAlt").value=Math.round(c.altitude);$("aPlace").value="";changed();return true}
+  catch(e){toast("No location from the phone – allow it in the browser, or pick a saved place.");return false}
+}
+$("aGps").addEventListener("click",useGps);
+$("aSavePlace").addEventListener("click",async()=>{
+  const lat=num($("aLat").value),lon=num($("aLon").value);
+  if(lat==null||lon==null)return toast("Fill in latitude and longitude first (or use the phone location).");
+  const name=prompt("Name of this place (e.g. the club range)");if(!name)return;
+  const id=newId(name,"r-"),list=(D.ranges||[]).concat([{id,name,lat,lon,alt_m:num($("aAlt").value)}]);
+  const err=await write("PUT","api/ballistics/ranges",list);if(err)return toast("Couldn't save the place: "+err);
+  D.ranges=list;renderPlaces(id);saveCond();
+});
+$("aDelPlace").addEventListener("click",async()=>{
+  const id=$("aPlace").value,r=(D.ranges||[]).find(x=>x.id===id);if(!r||!confirm(`Forget “${r.name}”?`))return;
+  const list=D.ranges.filter(x=>x.id!==id);const err=await write("PUT","api/ballistics/ranges",list);if(err)return toast(err);
+  D.ranges=list;renderPlaces("");saveCond();
+});
+const age=iso=>{const m=Math.round((Date.now()-Date.parse(iso))/60000);return isFinite(m)?(m<60?m+" min":Math.round(m/60)+" h")+" ago":""};
+$("aFetch").addEventListener("click",async()=>{
+  if(num($("aLat").value)==null||num($("aLon").value)==null){if(!(await useGps()))return}
+  const q=`lat=${num($("aLat").value)}&lon=${num($("aLon").value)}`+(num($("aAlt").value)!=null?`&alt=${num($("aAlt").value)}`:"");
+  $("aFetch").disabled=true;let r,j={};
+  try{r=await fetch("api/ballistics/weather?"+q,{credentials:"same-origin",headers:{"X-Requested-With":"fetch"}});j=await r.json()}
+  catch(e){$("aFetch").disabled=false;return toast("Offline – type the conditions in.")}
+  $("aFetch").disabled=false;
+  if(!r.ok)return toast(j.error==="no_stations"?"No weather station nearby.":"The weather service didn't answer – type the conditions in.");
+  if(j.temp_c!=null)$("aT").value=j.temp_c;if(j.rh!=null)$("aRH").value=Math.round(j.rh);
+  const S=j.sources||{},src=k=>S[k]?`${esc(S[k].station)} ${S[k].distance_km} km`:"";
+  let p="";
+  if(j.hpa_station!=null){$("aP").value=j.hpa_station;p=`<b>${j.hpa_station}</b> hPa station (sea level ${j.hpa_sea}, altitude ${j.alt_m} m)`}
+  else if(j.hpa_sea!=null)p=`sea-level pressure ${j.hpa_sea} hPa – <b>add the altitude</b> to turn it into station pressure`;
+  const w=j.wind_ms!=null?` · station wind ${j.wind_ms} m/s from ${Math.round(j.wind_dir_deg??0)}° (not the range's wind, not applied)`:"";
+  $("aSrc").innerHTML=`FMI · ${src("t2m")}${S.p_sea&&S.p_sea.station!==(S.t2m||{}).station?" · pressure "+src("p_sea"):""} · ${new Date(j.fetched_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}<br>${p}${w}`;
+  if(j.hpa_station==null&&j.hpa_sea!=null){$("aMore").open=true;$("aAlt").focus()}
+  changed();
+});
+async function motionPermission(){
+  try{if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission){return (await DeviceOrientationEvent.requestPermission())==="granted"}}catch(e){return false}
+  return typeof DeviceOrientationEvent!=="undefined";
+}
+function sample(event,pick,ms){return new Promise(ok=>{const v=[];const f=e=>{const x=pick(e);if(x!=null&&isFinite(x))v.push(x)};
+  window.addEventListener(event,f);setTimeout(()=>{window.removeEventListener(event,f);ok(v)},ms)})}
+$("aTilt").addEventListener("click",async()=>{
+  if(!(await motionPermission()))return toast("The phone doesn't share its tilt with the browser.");
+  toast("Hold the phone flat along the barrel…");
+  const v=await sample("deviceorientation",e=>e.beta,1200);
+  if(!v.length)return toast("No tilt reading from the phone.");
+  const b=v.reduce((a,x)=>a+x,0)/v.length;$("aAng").value=Math.round(b);changed();
+});
+$("aCmp").addEventListener("click",async()=>{
+  if(!(await motionPermission()))return toast("The phone doesn't share its compass with the browser.");
+  const ios=await sample("deviceorientation",e=>e.webkitCompassHeading,800);
+  let v=ios;if(!v.length)v=(await sample("deviceorientationabsolute",e=>e.alpha!=null?(360-e.alpha)%360:null,800));
+  if(!v.length)return toast("No compass reading – type the direction in.");
+  const sx=v.reduce((a,x)=>a+Math.sin(x*Math.PI/180),0),cx=v.reduce((a,x)=>a+Math.cos(x*Math.PI/180),0);
+  $("aAz").value=Math.round((Math.atan2(sx,cx)*180/Math.PI+360)%360);changed();
+});
 
 // ------------------------------------------------------------ sheets
 function openSheet(id){$(id).hidden=false;document.body.style.overflow="hidden";const m=$(id).querySelector(".msg");if(m)m.hidden=true}
@@ -751,9 +974,24 @@ function openProfile(p){
   fillScopeZero(x.scope_id,x.zero_id);fillBullets(x.bullet_id);
   setv("fName",x.name);setv("fSight",x.sight_height_mm);setv("fTwist",x.twist_mm);$("fTwistDir").value=x.twist_dir||"R";
   setv("fMv",x.mv_ms);setv("fMvT",x.mv_temp_c);setv("fTs",x.temp_sens);setv("fZr",x.zero_range_m);
+  $("fMvSrc").value=x.mv_source||"manual";$("fTsSrc").value=x.temp_sens_source||"manual";setv("fMvN",x.mv_strings);
+  $("fSpin").checked=!!x.spin_drift;$("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
+  $("fRet").innerHTML=opt("","– none –")+(D.reticles||[]).filter(r=>!r.archived||r.id===x.reticle_id).map(r=>opt(r.id,`${r.maker?r.maker+" ":""}${r.name} · ${r.focal_plane} ${r.unit==="MOA"?"MOA":"mil"}`,r.id===x.reticle_id)).join("");
+  chronoHint(p);
   setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
   openSheet("pSheet");if(!p)$("fName").focus();
 }
+function chronoHint(p){
+  const ch=p&&p.inputs&&p.inputs.chrono,on=$("fMvSrc").value==="chrono"||$("fTsSrc").value==="chrono";
+  $("fMvNL").hidden=$("fMvSrc").value!=="chrono";
+  if(!on){$("fChrono").innerHTML="";return}
+  if(!$("fGun").value||!$("fLoad").value){$("fChrono").innerHTML="Pick the gun and the load: velocities are per barrel.";return}
+  if(!ch||(p.gun_id!==$("fGun").value||p.load_id!==$("fLoad").value)){$("fChrono").innerHTML="Chrono figures show after saving.";return}
+  $("fChrono").innerHTML=`Chrono: <b>${ch.mv}</b> m/s · SD ${ch.sd??"–"} · ES ${ch.es??"–"} · n ${ch.n} from ${ch.strings} string${ch.strings>1?"s":""} (${ch.from===ch.to?ch.to:ch.from+" – "+ch.to})`
+    +(ch.temp_c!=null?` at ${ch.temp_c} °C`:" · no temperatures logged")
+    +` · temp. sensitivity ${ch.temp_sens!=null?"<b>"+ch.temp_sens+"</b> m/s/°C over "+ch.days+" days":"needs ≥ 3 days spanning 10 °C"}`;
+}
+for(const id of ["fMvSrc","fTsSrc","fGun","fLoad"])$(id).addEventListener("change",()=>chronoHint(editP));
 $("fScope").addEventListener("change",()=>fillScopeZero($("fScope").value,null));
 $("fZero").addEventListener("change",()=>{       // a scope zero knows its rifle and distance
   const sc=D.pickers.scopes.find(s=>s.id===$("fScope").value),z=sc&&sc.zeros.find(z=>z.id===$("fZero").value);
@@ -767,6 +1005,9 @@ $("pForm").addEventListener("submit",async e=>{
     bullet_id:$("fBullet").value||null,sight_height_mm:num($("fSight").value),twist_mm:num($("fTwist").value),twist_dir:$("fTwistDir").value,
     mv_ms:num($("fMv").value),mv_temp_c:num($("fMvT").value),temp_sens:num($("fTs").value),zero_range_m:num($("fZr").value),
     zero_temp_c:num($("fZt").value),zero_hpa:num($("fZp").value),zero_rh:num($("fZh").value),archived:$("fArch").checked,
+    mv_source:$("fMvSrc").value,temp_sens_source:$("fTsSrc").value,mv_strings:num($("fMvN").value),
+    spin_drift:$("fSpin").checked,aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
+    latitude:editP?editP.latitude:null,azimuth_deg:editP?editP.azimuth_deg:null,
     ord:editP?editP.ord:D.profiles.length,mv_scale:editP?editP.mv_scale:1,drag_scale:editP?editP.drag_scale:1};
   const id=editP?editP.id:newId(body.name,"p-");
   const err=await write("PUT","api/ballistics/profiles/"+encodeURIComponent(id),body);
@@ -873,6 +1114,305 @@ let tx=null;$("mm").addEventListener("touchstart",e=>{tx=e.touches[0].clientX},{
 $("mm").addEventListener("touchend",e=>{if(tx==null)return;const dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>70){mmIdx+=dx<0?1:-1;renderMM()}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!$("mm").hidden)closeMM();else document.querySelectorAll(".sheet").forEach(s=>{if(!s.hidden)closeSheet(s)})}});
 document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&!$("mm").hidden&&wake===null){try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(e){}}});
+
+// ------------------------------------------------------------ reticle view
+const RT=window.Reticle;
+const retOf=p=>p&&p.inputs&&p.inputs.reticleId?(D.reticles||[]).find(r=>r.id===p.inputs.reticleId)||null:null;
+const toRet=(v,fromUnit,ret)=>RT.convert(v,fromUnit==="MOA"?"MOA":"MRAD",ret.unit);
+function renderReticle(){
+  const p=prof(),ret=retOf(p),m=curMatch();
+  const sts=m?stagesOf(m.id):[];
+  const keep=$("vMode").value;
+  $("vMode").innerHTML=`<option value="shot">This shot</option>`+sts.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+  $("vMode").value=[...$("vMode").options].some(o=>o.value===keep)?keep:"shot";
+  $("vDialL").hidden=$("vMode").value!=="shot";
+  if(!ret){
+    $("vBox").innerHTML="";$("vMagL").hidden=true;
+    $("vInfo").innerHTML=p?`No reticle on this profile. Pick one under <b>Edit</b> → Reticle${(D.reticles||[]).length?"":" – the library is empty; an admin adds reticles under <b>Reticles</b>"}.`:"";
+    return;
+  }
+  const sfp=ret.focal_plane==="SFP";
+  $("vMagL").hidden=!sfp;
+  if(sfp&&!$("vMag").value)$("vMag").value=ret.design_mag||"";
+  const field=(ret.spec&&ret.spec.field)||(ret.unit==="MOA"?30:10);
+  if(!$("vZoom").options.length||$("vZoom").dataset.u!==ret.unit){
+    const zs=ret.unit==="MOA"?[10,20,30,45]:[3,5,8,10,15];
+    $("vZoom").innerHTML=`<option value="auto">Fit the holds</option>`+zs.map(z=>`<option value="${z}">${z} ${ret.unit==="MOA"?"MOA":"mil"}</option>`).join("");$("vZoom").dataset.u=ret.unit;
+    $("vZoom").value="auto";
+  }
+  let half=+$("vZoom").value||field;
+  const k=RT.sfpFactor(ret,num($("vMag").value));
+  const holds=[],targets=[],info=[];
+  const s=scopeOf(p);
+  if(!ready(p)){$("vBox").innerHTML=RT.svg(ret.elements,{half,k});$("vInfo").textContent="Add a bullet and velocity to the profile to see holds.";return}
+  if($("vMode").value==="shot"){
+    const R=num($("rIn").value);let r=null;
+    try{r=R>0?B.solve(solverInput(p,cond()),[R]).rows[0]:null}catch(e){}
+    if(r&&r.reached){
+      const e=B.toUnit(r.elevMrad,s.unit),w=B.toUnit(r.windMrad,s.unit);
+      const dialled=$("vDial").checked?Math.round(e/(s.click||0.1))*(s.click||0.1):0;
+      const y=toRet(e-dialled,s.unit,ret),x=-toRet(w,s.unit,ret);
+      holds.push({x,y,label:`${R} m`,main:true});
+      info.push(`Put the target on the dot: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
+      if($("vDial").checked)info.push(`Dialled ${dialled.toFixed(decs(s.click||0.1))} ${s.unit==="MOA"?"MOA":"mil"} up.`);
+    }
+  }else{
+    const st=D.stages.find(x=>x.id===$("vMode").value),rows=st?stageRows(st,p)||[]:[];
+    for(const x of rows){
+      if(x.bad)continue;
+      const y=toRet(x.hold,s.unit,ret),xx=-toRet(x.wind,s.unit,ret);
+      holds.push({x:xx,y,label:x.t.label});
+      if(x.t.w_cm){
+        const wm=x.t.w_cm/100/x.t.range_m*1000,hm=(x.t.h_cm||x.t.w_cm)/100/x.t.range_m*1000;
+        targets.push({x:xx,y,w:RT.convert(wm,"MRAD",ret.unit),h:RT.convert(hm,"MRAD",ret.unit)});
+      }
+    }
+    const d=rows.find(x=>!x.bad);
+    if(d)info.push(`Dialled ${d.dial.toFixed(d.dec)} ${d.unit} for ${st.dial_mode==="each"?"each target (dots show the leftover hold)":"the stage"}; dots are where each target sits in the reticle.`);
+  }
+  if($("vZoom").value==="auto"){
+    const ext=Math.max(0,...holds.map(h=>Math.max(Math.abs(h.x),Math.abs(h.y))),...targets.map(t=>Math.max(Math.abs(t.x)+t.w/2,Math.abs(t.y)+(t.h||t.w)/2)));
+    const unitMin=ret.unit==="MOA"?6:2;half=Math.min(field,Math.max(unitMin,ext*1.35));
+  }
+  if(sfp&&Math.abs(k-1)>1e-6)info.push(`Second focal plane at ${num($("vMag").value)}×: the marks are drawn at their true size (×${k.toFixed(2)}); holds read off the marks only match at ${ret.design_mag}×.`);
+  if(ret.unit!==(s.unit==="MOA"?"MOA":"MRAD"))info.push(`The reticle is in ${ret.unit==="MOA"?"MOA":"mil"}, the turret in ${s.unit==="MOA"?"MOA":"mil"}: holds are converted.`);
+  if(ret.archived)info.push("This reticle is archived in the library.");
+  $("vBox").innerHTML=RT.svg(ret.elements,{half,k,holds,targets,accent:"#e2590f"});
+  $("vInfo").innerHTML=esc(`${ret.maker?ret.maker+" ":""}${ret.name} · ${ret.focal_plane} · rev ${ret.rev}`)+"<br>"+info.map(esc).join("<br>");
+}
+["vMode","vDial","vMag","vZoom"].forEach(id=>$(id).addEventListener(id==="vMag"?"input":"change",renderReticle));
+
+// ------------------------------------------------------------ reticle builder
+const BS={ret:null,spec:null,half:10,img:null,mode:null,pts:[],imgT:null};
+const ARMS=["up","right","down","left"];
+function setNum(id,v){$(id).value=v==null?"":v}
+function blankSpec(){return JSON.parse(JSON.stringify(RT.TEMPLATES["mil-hash"].spec))}
+function fillForm(spec,meta){
+  const s=spec||{};meta=meta||{};
+  setv("rbName",meta.name);setv("rbMaker",meta.maker);$("rbUnit").value=s.unit||meta.unit||"MRAD";$("rbFp").value=s.focal_plane||meta.focal_plane||"FFP";
+  setNum("rbDes",s.design_mag??meta.design_mag);setNum("rbMin",meta.min_mag);setNum("rbMax",meta.max_mag);setNum("rbField",s.field);
+  const c=s.centre||{};$("rcType").value=c.type||"none";setNum("rcR",c.type==="cross"?c.size:c.r);setNum("rcGap",c.gap);setNum("rcW",c.w);
+  const st=s.stadia||{};setNum("rsW",st.w);$("rsMirror").checked=st.mirror==="lr";
+  $("rsArms").innerHTML=`<span></span><b>Length</b><b>Thick post from</b><b>Post width</b>`+ARMS.map(a=>{const x=st[a]||{};return`<b>${a}</b>
+    <input type="text" inputmode="decimal" data-arm="${a}" data-k="to" value="${x.to??""}">
+    <input type="text" inputmode="decimal" data-arm="${a}" data-k="from" value="${x.post?x.post.from??"":""}">
+    <input type="text" inputmode="decimal" data-arm="${a}" data-k="pw" value="${x.post?x.post.w??"":""}">`}).join("");
+  $("rhList").innerHTML=(s.hashes||[]).map(hashRow).join("");
+  const t=s.tree;$("rtOn").checked=!!t;$("rtBox").hidden=!t;const tt=t||{};const rw=tt.rows||{},hw=tt.half_width||{},mk=tt.marks||{};
+  setNum("rtFrom",rw.from);setNum("rtTo",rw.to);setNum("rtStep",rw.step);$("rtKind").value=hw.kind||"linear";
+  setNum("rtA",hw.kind==="constant"?hw.value:hw.at_from);setNum("rtB",hw.at_to);$("rtList").value=(hw.values||[]).join(", ");
+  $("rtMark").value=mk.kind||"dot";setNum("rtMs",mk.step);setNum("rtSize",mk.kind==="dot"?mk.r:mk.len);setNum("rtLab",tt.labels&&tt.labels.every);
+  $("rxExtras").value=s.extras&&s.extras.length?JSON.stringify(s.extras):"";
+  armState();
+}
+function hashRow(h){
+  h=h||{arms:["left","right","up","down"],step:0.2,len:0.1};
+  const a=new Set(h.arms||[]),f=(k,v,l)=>`<label class="f">${l}<input type="text" inputmode="decimal" data-k="${k}" value="${v??""}"></label>`;
+  return`<div class="hrow" data-h><div class="arms">${ARMS.map(x=>`<label class="check"><input type="checkbox" data-arm="${x}"${a.has(x)?" checked":""}>${x}</label>`).join("")}
+      <label class="f" style="flex-direction:row;align-items:center;gap:6px">Side<select data-k="side"><option value="both">both</option><option value="out"${h.side==="out"?" selected":""}>right / below</option><option value="in"${h.side==="in"?" selected":""}>left / above</option></select></label>
+      <button type="button" class="rm" data-hrm style="margin-left:auto">✕</button></div>
+    ${f("from",h.from,"From")}${f("to",h.to,"To")}${f("step",h.step,"Every")}${f("len",h.len,"Length")}${f("w",h.w,"Width")}
+    ${f("me",h.major&&h.major.every,"Long every N")}${f("ml",h.major&&h.major.len,"Long length")}${f("le",h.labels&&h.labels.every,"Number every N")}${f("ls",h.labels&&h.labels.size,"Number size")}${f("lo",h.labels&&h.labels.offset,"Number gap")}</div>`;
+}
+function armState(){const m=$("rsMirror").checked;document.querySelectorAll('#rsArms [data-arm="left"]').forEach(i=>i.disabled=m)}
+function readForm(){
+  const n=id=>num($(id).value);
+  const spec={v:1,unit:$("rbUnit").value,focal_plane:$("rbFp").value,design_mag:n("rbDes"),field:n("rbField")||($("rbUnit").value==="MOA"?30:10)};
+  spec.centre={type:$("rcType").value,gap:n("rcGap"),w:n("rcW")};
+  if(spec.centre.type==="cross")spec.centre.size=n("rcR");else spec.centre.r=n("rcR");
+  spec.stadia={w:n("rsW"),mirror:$("rsMirror").checked?"lr":""};
+  for(const a of ARMS){
+    const g=k=>num(document.querySelector(`#rsArms [data-arm="${a}"][data-k="${k}"]`).value);
+    if(a==="left"&&spec.stadia.mirror)continue;
+    if(g("to")>0)spec.stadia[a]=Object.assign({to:g("to")},g("from")>0?{post:{from:g("from"),w:g("pw")}}:{});
+  }
+  spec.hashes=[...document.querySelectorAll("#rhList [data-h]")].map(r=>{
+    const g=k=>num(r.querySelector(`[data-k="${k}"]`).value);
+    const h={arms:[...r.querySelectorAll("[data-arm]")].filter(c=>c.checked).map(c=>c.dataset.arm),from:g("from"),to:g("to"),step:g("step"),len:g("len"),w:g("w"),side:r.querySelector('[data-k="side"]').value};
+    if(g("me"))h.major={every:g("me"),len:g("ml")};
+    if(g("le"))h.labels={every:g("le"),size:g("ls"),offset:g("lo")};
+    return h;
+  });
+  if($("rtOn").checked){
+    const kind=$("rtKind").value;
+    spec.tree={rows:{from:n("rtFrom"),to:n("rtTo"),step:n("rtStep")},
+      half_width:kind==="constant"?{kind,value:n("rtA")}:kind==="linear"?{kind,at_from:n("rtA"),at_to:n("rtB")}:{kind,values:$("rtList").value.split(/[,;\s]+/).map(num).filter(v=>v!=null)},
+      marks:Object.assign({kind:$("rtMark").value,step:n("rtMs")},$("rtMark").value==="dot"?{r:n("rtSize")}:{len:n("rtSize")}),
+      labels:n("rtLab")?{every:n("rtLab")}:undefined};
+  }
+  const ex=$("rxExtras").value.trim();
+  if(ex){try{const v=JSON.parse(ex);if(Array.isArray(v))spec.extras=v;else throw 0}catch(e){spec._extrasError=true}}
+  return spec;
+}
+function meta(){return{name:$("rbName").value.trim(),maker:$("rbMaker").value.trim(),unit:$("rbUnit").value,focal_plane:$("rbFp").value,
+  design_mag:num($("rbDes").value),min_mag:num($("rbMin").value),max_mag:num($("rbMax").value)}}
+function preview(){
+  const spec=readForm(),bad=spec._extrasError;delete spec._extrasError;BS.spec=spec;
+  const res=RT.compile(spec);BS.elements=res.elements;
+  const warn=res.warnings.slice();if(bad)warn.push("Extra marks: not a valid JSON list – ignored.");
+  $("rbWarn").innerHTML=warn.map(w=>`<div>${esc(w)}</div>`).join("");
+  let image=null;
+  if(BS.img)image={href:BS.img.src,opacity:+$("rbOp").value,transform:BS.imgT||fitT()};
+  let extra="";const px=BS.half/160;
+  for(const p of BS.pts)extra+=`<circle cx="${p.x}" cy="${p.y}" r="${px*4}" fill="none" stroke="#1a7f37" stroke-width="${px*1.5}"/>`;
+  if(BS.mode==="m"&&BS.pts.length===2){const[a,b]=BS.pts;extra+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#1a7f37" stroke-width="${px*1.5}"/>`}
+  $("rbBox").innerHTML=RT.svg(res.elements,{half:BS.half,image,extra});
+  $("rxRaw").value=JSON.stringify(spec,null,1);
+  $("rbStatus").textContent=status()||`${res.elements.length} marks`;
+}
+function fitT(){const w=BS.img.naturalWidth,h=BS.img.naturalHeight,sc=2*BS.half/Math.max(w,h);return`translate(${-w*sc/2} ${-h*sc/2}) scale(${sc})`}
+function status(){
+  if(BS.mode==="c0")return"Tap the centre of the reticle on the drawing.";
+  if(BS.mode==="c1")return"Tap a mark you know on the drawing (you'll type its value).";
+  if(BS.mode==="m"){if(BS.pts.length<2)return"Tap two points to measure.";const[a,b]=BS.pts,dx=b.x-a.x,dy=b.y-a.y;return`Δx ${dx.toFixed(3)} · Δy ${(-dy).toFixed(3)} · distance ${Math.hypot(dx,dy).toFixed(3)} ${$("rbUnit").value==="MOA"?"MOA":"mil"}`}
+  return"";
+}
+function svgPoint(e,el){const svg=$("rbBox").querySelector("svg");if(!svg)return null;const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
+  const m=(el||svg).getScreenCTM();return m?pt.matrixTransform(m.inverse()):null}
+$("rbBox").addEventListener("click",e=>{
+  if(BS.mode==="m"){const p=svgPoint(e);if(!p)return;if(BS.pts.length>=2)BS.pts=[];BS.pts.push({x:p.x,y:p.y});preview();return}
+  if(BS.mode==="c0"||BS.mode==="c1"){
+    const img=$("rbBox").querySelector("image");if(!img)return;
+    const local=svgPoint(e,img),root=svgPoint(e);BS.calib=BS.calib||[];BS.calib.push({ix:local.x,iy:local.y});BS.pts.push({x:root.x,y:root.y});
+    if(BS.mode==="c0"){BS.mode="c1";preview();return}
+    const v=num(prompt(`How far from the centre is that mark, in ${$("rbUnit").value==="MOA"?"MOA":"mil"}? (e.g. 10)`,"10"));
+    const axis=confirm("Is that mark straight to the RIGHT of the centre?\nOK = right, Cancel = straight down")?"right":"down";
+    const[c0,c1]=BS.calib;BS.calib=null;BS.mode=null;BS.pts=[];
+    if(!(v>0)){preview();return}
+    const di=Math.hypot(c1.ix-c0.ix,c1.iy-c0.iy);if(!(di>0)){preview();return}
+    const sc=v/di,rot=(axis==="right"?0:90)-Math.atan2(c1.iy-c0.iy,c1.ix-c0.ix)*180/Math.PI;
+    BS.imgT=`rotate(${rot}) scale(${sc}) translate(${-c0.ix} ${-c0.iy})`;
+    toast("Drawing lined up – compare it with the marks, then fix the numbers.");preview();
+  }
+});
+$("rbZin").addEventListener("click",()=>{BS.half=Math.max(1,BS.half/1.5);preview()});
+$("rbZout").addEventListener("click",()=>{BS.half=Math.min(100,BS.half*1.5);preview()});
+$("rbMeasure").addEventListener("click",()=>{BS.mode=BS.mode==="m"?null:"m";BS.pts=[];$("rbMeasure").setAttribute("aria-pressed",BS.mode==="m");preview()});
+$("rbImg").addEventListener("change",()=>{const f=$("rbImg").files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{const im=new Image();im.onload=()=>{BS.img=im;BS.imgT=null;$("rbCal").hidden=$("rbOp").hidden=false;BS.mode="c0";BS.pts=[];preview()};im.src=rd.result};rd.readAsDataURL(f)});
+$("rbCal").addEventListener("click",()=>{BS.imgT=null;BS.mode="c0";BS.pts=[];preview()});
+$("rbOp").addEventListener("input",preview);
+$("rbForm").addEventListener("input",e=>{if(e.target.id!=="rxRaw")preview()});
+$("rbForm").addEventListener("change",e=>{if(e.target.id==="rsMirror")armState();if(e.target.id==="rtOn")$("rtBox").hidden=!$("rtOn").checked;if(e.target.id!=="rxRaw"&&e.target.type!=="file")preview()});
+$("rhAdd").addEventListener("click",()=>{$("rhList").insertAdjacentHTML("beforeend",hashRow(null));preview()});
+$("rhList").addEventListener("click",e=>{if(e.target.closest("[data-hrm]")){e.target.closest("[data-h]").remove();preview()}});
+$("rxApply").addEventListener("click",()=>{try{fillForm(JSON.parse($("rxRaw").value),meta());preview()}catch(e){toast("That isn't valid JSON.")}});
+function renderLib(){
+  const lib=D.reticles||[];
+  $("rbList").innerHTML=lib.map(r=>`<button type="button" class="chip" data-ret="${esc(r.id)}" aria-pressed="${BS.ret&&BS.ret.id===r.id}">${esc((r.maker?r.maker+" ":"")+r.name)}${r.archived?" (archived)":""}</button>`).join("")
+    +Object.entries(RT.TEMPLATES).map(([k,t])=>`<button type="button" class="chip add" data-tpl="${k}">+ ${esc(t.name)}</button>`).join("");
+  $("rbWho").innerHTML=D.is_admin?"The library is shared by every account on this server. Start from a template or a copy, fill in the numbers from the maker's subtension drawing, check against the drawing, save."
+    :"The library is shared by every account and kept by an admin. You can build and preview a reticle here and <b>Export</b> it for an admin to add.";
+  $("rbSave").hidden=!D.is_admin;$("rbArch").hidden=!D.is_admin||!BS.ret||!!BS.ret.archived;
+}
+function openLib(ret){
+  BS.ret=ret||null;BS.img=null;BS.imgT=null;BS.mode=null;BS.pts=[];$("rbCal").hidden=$("rbOp").hidden=true;
+  const r=ret||(D.reticles||[])[0];
+  if(r){BS.ret=r;fillForm(r.spec,r)}else fillForm(blankSpec(),{name:""});
+  BS.half=(BS.ret&&BS.ret.spec&&BS.ret.spec.field)||10;
+  renderLib();openSheet("rbSheet");preview();
+}
+$("vLib").addEventListener("click",()=>openLib(retOf(prof())));
+$("rbList").addEventListener("click",e=>{
+  const c=e.target.closest("[data-ret]"),t=e.target.closest("[data-tpl]");
+  if(c){const r=(D.reticles||[]).find(x=>x.id===c.dataset.ret);BS.ret=r;fillForm(r.spec,r);BS.half=(r.spec&&r.spec.field)||10}
+  if(t){const T=RT.TEMPLATES[t.dataset.tpl];BS.ret=null;fillForm(JSON.parse(JSON.stringify(T.spec)),{name:"",maker:""});BS.tpl=t.dataset.tpl;BS.half=T.spec.field}
+  renderLib();preview();
+});
+$("rbForm").addEventListener("submit",async e=>{
+  e.preventDefault();preview();
+  const m=meta();if(!m.name)return msg("rbMsg","name_required");
+  const body=Object.assign(m,{spec:BS.spec,elements:BS.elements,template:BS.ret?BS.ret.template:(BS.tpl||null)});
+  const id=BS.ret?BS.ret.id:newId((m.maker?m.maker+" ":"")+m.name,"ret-");
+  let res;try{res=await send("PUT","api/ballistics/reticles/"+encodeURIComponent(id),body)}catch(err){return msg("rbMsg","Offline – reticles are saved to the server's library, try again with a connection.")}
+  if(!res.ok)return msg("rbMsg",{admin_only:"Only an admin can change the library.",design_mag_required:"A second focal plane reticle needs its design power.",bad_elements:"The reticle has no marks, or too many."}[res.j.error]||res.j.error);
+  $("rbMsg").hidden=true;await load();BS.ret=(D.reticles||[]).find(r=>r.id===id)||null;renderLib();toast(`Saved – revision ${res.j.reticle.rev}.`);
+});
+$("rbArch").addEventListener("click",async()=>{
+  if(!BS.ret||!confirm(`Archive “${BS.ret.name}”? Profiles that use it keep it; it disappears from the picker.`))return;
+  const res=await send("DELETE","api/ballistics/reticles/"+encodeURIComponent(BS.ret.id));if(!res.ok)return msg("rbMsg",res.j.error);
+  await load();BS.ret=null;renderLib();
+});
+$("rbExport").addEventListener("click",()=>{
+  preview();const m=meta();
+  const blob=new Blob([JSON.stringify({format:"shooting-diary-reticle",v:1,reticle:Object.assign(m,{spec:BS.spec})},null,1)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(m.name||"reticle").replace(/[^A-Za-z0-9._-]+/g,"-")+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+});
+$("rbImport").addEventListener("change",()=>{const f=$("rbImport").files[0];if(!f)return;f.text().then(t=>{
+  try{const j=JSON.parse(t),r=j.reticle||j;if(!r.spec)throw 0;BS.ret=null;fillForm(r.spec,r);renderLib();preview();toast("Imported – check it, then save.")}
+  catch(e){toast("That file isn't a reticle export.")}$("rbImport").value=""})});
+
+// ------------------------------------------------------------ printable cards
+function loadScript(src){return new Promise((ok,no)=>{if(document.querySelector('script[src="'+src+'"]'))return ok();const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>no(new Error("load"));document.head.appendChild(s)})}
+const PT=t=>String(t??"").replace(/[−–]/g,"-").replace(/↑/g,"up ").replace(/↓/g,"dn ").replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/×/g,"x").replace(/±/g,"+/-");
+async function pdfDoc(){await loadScript("static/vendor/jspdf.umd.min.js");await loadScript("static/vendor/jspdf.plugin.autotable.min.js");return new window.jspdf.jsPDF({unit:"pt",format:"a4"})}
+function condLine(p,c){
+  const i=p.inputs,res=B.solve(solverInput(p,c),[i.zeroRangeM]);
+  const a=[`${c.tempC??15} C`,`${c.hpa??1013.25} hPa station`,`RH ${c.rh??0}%`];
+  if(c.powder!=null)a.push(`powder ${c.powder} C`);
+  a.push(`MV ${Math.round(res.mv)} m/s`,`zero ${i.zeroRangeM} m`);if(c.angle)a.push(`angle ${c.angle} deg`);
+  return a.join(" · ")+` · printed ${new Date().toISOString().slice(0,10)}`;
+}
+function pdfName(p,what){return(p.name+"-"+what).replace(/[^A-Za-z0-9._-]+/g,"-").toLowerCase()+".pdf"}
+async function withPdf(btn,fn){const t=btn.textContent;btn.disabled=true;btn.textContent="Creating PDF…";
+  try{await fn()}catch(e){toast(e.message==="load"?"The PDF tool isn't cached yet – open this once online.":"Couldn't make the PDF: "+e.message)}finally{btn.disabled=false;btn.textContent=t}}
+$("pdfDope").addEventListener("click",()=>withPdf($("pdfDope"),async()=>{
+  const p=prof();if(!ready(p))return toast("The profile needs a bullet and velocity.");
+  const c=cond(),st=D.settings,s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil";
+  const a=num($("cStart").value)??st.card_start,step=num($("cStep").value)??st.card_step,end=num($("cEnd").value)??st.card_end;
+  const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<60;x+=step)if(x>0)ranges.push(Math.round(x*10)/10);
+  const rows=B.solve(solverInput(p,c),ranges).rows.filter(r=>r.reached);
+  const doc=await pdfDoc(),W=doc.internal.pageSize.getWidth(),M=22,colW=(W-3*M)/2;
+  const fs=rows.length>34?6.5:rows.length>26?7.5:8.5;
+  for(const x0 of [M,2*M+colW]){                     // two copies side by side, for cutting
+    doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text(PT(p.name),x0,M+12,{maxWidth:colW});
+    doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(70);
+    const cl=doc.splitTextToSize(PT(condLine(p,c)),colW);doc.text(cl,x0,M+24);doc.setTextColor(0);
+    doc.autoTable({startY:M+26+cl.length*8,margin:{left:x0,right:W-x0-colW},tableWidth:colW,theme:"grid",
+      head:[["m",`Elev ${u}`,"Clicks",`Wind/1m/s`,"TOF"]],
+      body:rows.map(r=>{const e=fmtHold(r.elevMrad,s,"U","D");return[r.range,(e.signed<0?"-":"")+e.val,e.clicks+(e.dir?" "+e.dir:""),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}),
+      styles:{font:"helvetica",fontSize:fs,cellPadding:2,halign:"right",lineColor:[170,170,170],lineWidth:.3},headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
+      columnStyles:{0:{halign:"left",fontStyle:"bold"},1:{fontStyle:"bold"}},
+      didParseCell:d=>{if(d.section==="body"){const r=rows[d.row.index];if(r.subsonic)d.cell.styles.textColor=120;else if(r.transonic)d.cell.styles.fillColor=[251,227,212]}}});
+  }
+  doc.save(pdfName(p,"dope-card"));
+}));
+$("pdfWind").addEventListener("click",()=>withPdf($("pdfWind"),async()=>{
+  const p=prof();if(!ready(p))return toast("The profile needs a bullet and velocity.");
+  const c=cond(),st=D.settings,s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil",dec=decs(s.click||0.1);
+  const a=num($("cStart").value)??st.card_start,step=num($("cStep").value)??st.card_step,end=num($("cEnd").value)??st.card_end;
+  const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<60;x+=step)if(x>0)ranges.push(Math.round(x*10)/10);
+  const rows=B.solve(solverInput(p,c),ranges).rows.filter(r=>r.reached);
+  const doc=await pdfDoc(),M=36;
+  doc.setFont("helvetica","bold");doc.setFontSize(15);doc.text(PT(p.name+" - wind card"),M,M+8);
+  doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(70);doc.text(PT(condLine(p,c)+` · full-value crosswind, ${u}`),M,M+24);doc.setTextColor(0);
+  doc.autoTable({startY:M+34,margin:{left:M,right:M},theme:"grid",head:[["m",`Elev ${u}`,"1 m/s","2 m/s","3 m/s","4 m/s","5 m/s","6 m/s"]],
+    body:rows.map(r=>{const w=B.toUnit(r.windPer1Mrad,s.unit);return[r.range,B.toUnit(r.elevMrad,s.unit).toFixed(dec),...[1,2,3,4,5,6].map(n=>(w*n).toFixed(dec))]}),
+    styles:{font:"helvetica",fontSize:10,cellPadding:3,halign:"right",lineColor:[170,170,170],lineWidth:.3},headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
+    columnStyles:{0:{halign:"left",fontStyle:"bold"}}});
+  doc.save(pdfName(p,"wind-card"));
+}));
+$("pdfStages").addEventListener("click",()=>withPdf($("pdfStages"),async()=>{
+  const p=prof(),m=curMatch();if(!m)return;if(!ready(p))return toast("The profile needs a bullet and velocity.");
+  const c=cond(),doc=await pdfDoc(),W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=30;
+  doc.setFont("helvetica","bold");doc.setFontSize(15);doc.text(PT(m.name+(m.date?" - "+m.date:"")),M,M+8);
+  doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(70);doc.text(PT(p.name+" · "+condLine(p,c)),M,M+22,{maxWidth:W-2*M});doc.setTextColor(0);
+  let y=M+40;
+  for(const st of stagesOf(m.id)){
+    const rows=stageRows(st,p)||[],d=rows.find(x=>!x.bad);
+    if(y>H-140){doc.addPage();y=M}
+    const mode={each:"dial each",first_hold_rest:"dial first, hold rest",one:"dial one, hold rest"}[st.dial_mode];
+    const w=st.wind||{ms:c.ms,clock:c.clock};
+    doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text(PT(st.name),M,y);
+    doc.setFont("helvetica","normal");doc.setFontSize(9);doc.text(PT(`${mode} · wind ${w.ms} m/s from ${w.clock} o'clock`),W-M,y,{align:"right"});
+    doc.autoTable({startY:y+6,margin:{left:M,right:M},theme:"grid",head:[["Target","m",`Dial ${d?d.unit:""}`,"Hold","Wind","+/-1 m/s","Width"]],
+      body:rows.map(x=>x.bad?[x.t.label,x.t.range_m,"-","","","",""]:[x.t.label,x.t.range_m,x.dial.toFixed(x.dec)+(x.change!=null?`  (${sgn(x.change,x.dec)})`:""),x.hold?ud(x.hold,x.dec):"-",lr(x.wind,x.dec),x.per1.toFixed(2),x.wUnit?x.wUnit.toFixed(2):""].map(PT)),
+      styles:{font:"helvetica",fontSize:12,cellPadding:4,halign:"right",lineColor:[150,150,150],lineWidth:.4},headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold",fontSize:9},
+      columnStyles:{0:{halign:"left",fontStyle:"bold"},2:{fontStyle:"bold"},3:{fontStyle:"bold"}}});
+    y=doc.lastAutoTable.finalY+26;
+  }
+  doc.save(pdfName(p,(m.name||"match")+"-stages"));
+}));
 
 // ------------------------------------------------------------ start
 showTab();applyOutbox();U.profile=(prof()||{}).id||null;loadCond();renderChips();render();

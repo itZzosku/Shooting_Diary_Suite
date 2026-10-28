@@ -192,6 +192,10 @@ def backup(directory, keep):
             print(f"Removed old backup of a deleted account: {os.path.basename(p)}")
     for p in users.purge_deleted():
         print(f"Removed final copy of a deleted account: {os.path.basename(p)}")
+    from . import reticles
+    lib = reticles.backup(directory, keep)
+    if lib:
+        print(f"Backup reticle library: {lib} (keeping the newest {keep})")
     return done
 
 

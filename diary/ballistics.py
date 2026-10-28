@@ -58,11 +58,21 @@ TABLES = ("bal_bullets", "bal_curves", "bal_profiles", "bal_observations", "bal_
 DRAG_MODELS = ("G1", "G7")          # RA4 and custom curves come later (see the design doc's open questions)
 DIAL_MODES = ("each", "first_hold_rest", "one")
 SETTINGS_KEY = "bal_settings"
+RANGES_KEY = "bal_ranges"            # saved shooting ranges: [{id, name, lat, lon, alt_m}]
 DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000}
+
+
+PROFILE_COLUMNS = {             # added after phase 1: chrono window and the small corrections
+    "mv_strings": "INTEGER", "spin_drift": "INTEGER NOT NULL DEFAULT 0", "coriolis": "INTEGER NOT NULL DEFAULT 0",
+    "aero_jump": "INTEGER NOT NULL DEFAULT 0", "azimuth_deg": "REAL"}
 
 
 def init_ballistics(conn):
     conn.executescript(SCHEMA)
+    have = {r[1] for r in conn.execute("PRAGMA table_info(bal_profiles)")}
+    for col, typ in PROFILE_COLUMNS.items():
+        if col not in have:
+            conn.execute(f"ALTER TABLE bal_profiles ADD COLUMN {col} {typ}")
 
 
 def _now():
@@ -212,6 +222,9 @@ PROFILE = {
     "zero_rh": _num(0, 100), "mv_ms": _num(100, 1500), "mv_temp_c": _num(-40, 60), "temp_sens": _num(-5, 5),
     "mv_scale": _num(0.8, 1.2), "drag_scale": _num(0.5, 1.5), "latitude": _num(-90, 90),
     "notes": _text(2000), "ord": _int(0, 100000), "archived": _flag,
+    "mv_source": _choice(("manual", "chrono"), "manual"), "temp_sens_source": _choice(("manual", "chrono"), "manual"),
+    "mv_strings": _int(1, 50), "spin_drift": _flag, "coriolis": _flag, "aero_jump": _flag,
+    "azimuth_deg": _num(0, 360), "reticle_id": _ref,
 }
 MATCH = {"name": _text(80, True), "date": _date, "visit_id": _ref, "notes": _text(2000), "archived": _flag}
 STAGE = {
@@ -288,7 +301,51 @@ def pickers(conn):
     return {"guns": guns, "loads": loads, "scopes": scopes}
 
 
-def resolve_inputs(profile, bullets, picks):
+DEFAULT_STRINGS = 3
+
+
+def chrono_velocity(conn, gun_id, load_id, n_strings=DEFAULT_STRINGS):
+    """Muzzle velocity from the newest chrono strings for this gun + load (excluded shots dropped), and the
+    temperature sensitivity over every day of them – the same figures the Velocity page shows."""
+    if not (gun_id and load_id):
+        return None
+    try:
+        from . import chrono
+        ds = chrono.days(conn, gun_id, load_id)          # newest first
+    except Exception:                                    # velocity tables not created yet
+        return None
+    if not ds:
+        return None
+    picked = []
+    for d in ds:
+        picked += d["strings"]
+        if len(picked) >= n_strings:
+            break
+    picked = picked[:max(n_strings, 1)]
+    marks = ",".join("?" * len(picked))
+    shots = chrono._shots_by_string(conn, f" WHERE st.id IN ({marks})", picked)
+    stemp = {r["id"]: r["temp_c"] for r in conn.execute(f"SELECT id, temp_c FROM chrono_strings WHERE id IN ({marks})", picked)}
+    v, temps = [], []
+    for sid in picked:
+        for x in shots.get(sid, []):
+            if x["excluded"]:
+                continue
+            v.append(x["v_ms"])
+            t = x["temp_c"] if x["temp_c"] is not None else stemp.get(sid)
+            if t is not None:
+                temps.append(t)
+    if not v:
+        return None
+    from .chrono_stats import stats, temp_sensitivity
+    st = stats(v)
+    dates = sorted(d["date"] for d in ds if set(d["strings"]) & set(picked))
+    return {"mv": st["avg"], "sd": st["sd"], "es": st["es"], "n": st["n"], "strings": len(picked),
+            "from": dates[0], "to": dates[-1], "temp_c": round(sum(temps) / len(temps), 1) if temps else None,
+            "temp_sens": temp_sensitivity([(d["temp_c"], d["stats"]["avg"]) for d in ds]),
+            "days": len(ds)}
+
+
+def resolve_inputs(profile, bullets, picks, conn=None):
     """One flat object of what the solver and the readout need, each value with where it came from."""
     by = lambda rows, rid: next((r for r in rows if r["id"] == rid), None)  # noqa: E731
     b = by(bullets, profile["bullet_id"]) if profile["bullet_id"] else None
@@ -303,12 +360,34 @@ def resolve_inputs(profile, bullets, picks):
         warn.append("no_velocity")
     if b and load and load.get("bullet_gr") and abs(load["bullet_gr"] - b["weight_gr"]) > 0.5:
         warn.append("bullet_weight_differs")
+    ch = None
+    if conn is not None and (profile.get("mv_source") == "chrono" or profile.get("temp_sens_source") == "chrono"):
+        ch = chrono_velocity(conn, profile["gun_id"], profile["load_id"], profile.get("mv_strings") or DEFAULT_STRINGS)
+    mv, mv_t, mv_src = profile["mv_ms"], profile["mv_temp_c"], "manual"
+    if profile.get("mv_source") == "chrono":
+        if ch:
+            mv, mv_t, mv_src = ch["mv"], ch["temp_c"], "chrono"
+        else:
+            warn.append("no_chrono_data")
+    ts, ts_src = profile["temp_sens"], "manual"
+    if profile.get("temp_sens_source") == "chrono":
+        if ch and ch["temp_sens"] is not None:
+            ts, ts_src = ch["temp_sens"], "chrono"
+        else:
+            warn.append("no_chrono_temp_sens")
+    if mv is None and "no_velocity" not in warn:
+        warn.append("no_velocity")
+    elif mv is not None and "no_velocity" in warn:
+        warn.remove("no_velocity")
     return {
         "bullet": b and {"model": b["drag_model"], "bc": b["bc"], "bands": b["bc_bands"],
                          "diameterMm": b["diameter_mm"], "lengthMm": b["length_mm"], "weightGr": b["weight_gr"],
                          "name": b["name"]},
-        "mv": profile["mv_ms"], "mvTempC": profile["mv_temp_c"], "tempSens": profile["temp_sens"],
-        "mvSource": profile["mv_source"], "mvScale": profile["mv_scale"], "dragScale": profile["drag_scale"],
+        "mv": mv, "mvTempC": mv_t, "tempSens": ts, "mvSource": mv_src, "tempSensSource": ts_src, "chrono": ch,
+        "mvScale": profile["mv_scale"], "dragScale": profile["drag_scale"],
+        "spinDrift": bool(profile.get("spin_drift")), "coriolis": bool(profile.get("coriolis")),
+        "aeroJump": bool(profile.get("aero_jump")), "azimuthDeg": profile.get("azimuth_deg"),
+        "reticleId": profile.get("reticle_id"),
         "sightHeightMm": profile["sight_height_mm"], "zeroRangeM": profile["zero_range_m"],
         "zeroAtmo": {"tempC": profile["zero_temp_c"], "hpa": profile["zero_hpa"], "rh": profile["zero_rh"]},
         "twistMm": profile["twist_mm"], "twistDir": profile["twist_dir"], "latitude": profile["latitude"],
@@ -327,15 +406,25 @@ def settings(conn):
     return dict(DEFAULT_SETTINGS, **(json.loads(stored) if stored else {}))
 
 
+def saved_ranges(conn):
+    stored = kv_get(RANGES_KEY, conn)
+    return json.loads(stored) if stored else []
+
+
 def everything(conn):
     picks = pickers(conn)
     bullets = bullet_rows(conn)
     profiles = _rows(conn, "SELECT * FROM bal_profiles ORDER BY archived, ord, name")
     for p in profiles:
-        p["inputs"] = resolve_inputs(p, bullets, picks)
+        p["inputs"] = resolve_inputs(p, bullets, picks, conn)
+    from .reticles import all_reticles
+    from . import current_user
+    me = current_user()
     return {"profiles": profiles, "bullets": bullets,
+            "reticles": all_reticles({p["reticle_id"] for p in profiles if p["reticle_id"]}),
+            "is_admin": bool(me and me["is_admin"] and not me.get("demo")),
             "matches": _rows(conn, "SELECT * FROM bal_matches ORDER BY archived, date DESC, name"),
-            "stages": stage_rows(conn), "settings": settings(conn), "pickers": picks}
+            "stages": stage_rows(conn), "settings": settings(conn), "ranges": saved_ranges(conn), "pickers": picks}
 
 
 def summary(conn):
@@ -347,7 +436,9 @@ def summary(conn):
 
 # ------------------------------------------------------------------ backup
 def export_rows(conn):
-    return {t: _rows(conn, f"SELECT * FROM {t} ORDER BY rowid") for t in TABLES}
+    out = {t: _rows(conn, f"SELECT * FROM {t} ORDER BY rowid") for t in TABLES}
+    out["bal_kv"] = {k: kv_get(k, conn) for k in (SETTINGS_KEY, RANGES_KEY) if kv_get(k, conn) is not None}
+    return out
 
 
 def import_rows(conn, data, replace=False):
@@ -360,6 +451,9 @@ def import_rows(conn, data, replace=False):
             cols = [c for c in row if c in have]
             conn.execute(f"INSERT OR REPLACE INTO {t}({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
                          [row[c] for c in cols])
+    for k, v in (data.get("bal_kv") or {}).items():
+        if k in (SETTINGS_KEY, RANGES_KEY) and isinstance(v, str):
+            conn.execute("INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, v))
     return {t: len(data.get(t, [])) for t in TABLES}
 
 
@@ -447,7 +541,7 @@ def api_bal_put_profile(pid):
         return res
     conn = db()
     p = dict(conn.execute("SELECT * FROM bal_profiles WHERE id=?", (pid,)).fetchone())
-    p["inputs"] = resolve_inputs(p, bullet_rows(conn), pickers(conn))
+    p["inputs"] = resolve_inputs(p, bullet_rows(conn), pickers(conn), conn)
     return jsonify(ok=True, id=pid, profile=p)
 
 
@@ -510,3 +604,46 @@ def api_bal_put_settings():
         return jsonify(error=str(e)), 400
     kv_set(SETTINGS_KEY, json.dumps(s))
     return jsonify(ok=True, settings=s)
+
+
+RANGE = {"name": _text(60, True), "lat": _num(-90, 90, True), "lon": _num(-180, 180, True), "alt_m": _num(-500, 9000)}
+
+
+@bp.put("/api/ballistics/ranges")
+@login_required
+def api_bal_put_ranges():
+    """The whole list of saved ranges (venue name, position, altitude), replaced at once."""
+    b = request.get_json(silent=True) if request.is_json else abort(415)
+    if not isinstance(b, list) or len(b) > 100:
+        return jsonify(error="bad_ranges"), 400
+    out = []
+    try:
+        for r in b:
+            if not isinstance(r, dict):
+                raise ValueError("bad_ranges")
+            row = clean(RANGE, r)
+            row["id"] = r.get("id") if ID_RE.match(str(r.get("id") or "")) else new_id(row["name"], "r-")
+            out.append(row)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    kv_set(RANGES_KEY, json.dumps(out, ensure_ascii=False))
+    return jsonify(ok=True, ranges=out)
+
+
+@bp.get("/api/ballistics/weather")
+@login_required
+def api_bal_weather():
+    """Latest FMI observations near ?lat=&lon= (&alt= metres for station pressure)."""
+    from . import weather
+    try:
+        lat = _num(-90, 90, True)(request.args.get("lat"), "lat")
+        lon = _num(-180, 180, True)(request.args.get("lon"), "lon")
+        alt = _num(-500, 9000)(request.args.get("alt"), "alt")
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    try:
+        return jsonify(weather.current(lat, lon, alt))
+    except ValueError as e:
+        return jsonify(error=str(e) if str(e) == "no_stations" else "weather_unavailable"), 502
+    except Exception:                       # network, timeout, bad XML
+        return jsonify(error="weather_unavailable"), 502

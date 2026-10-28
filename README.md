@@ -18,7 +18,7 @@ New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the
 | `/diary/log` | **Diary** – range visits, guns and their round counts, licence export (PDF/CSV) |
 | `/diary/velocity` | **Velocity** – Garmin Xero strings, loads, trends, charge ladders |
 | `/diary/zeroes` | **Zeroes** – scope dial positions, swaps, zeroing card (PDF) |
-| `/diary/ballistics` | **Ballistics** – holds and clicks for any range, range card, match stages and match mode (solver runs in the browser, works offline) |
+| `/diary/ballistics` | **Ballistics** – holds and clicks for any range, range/dope/wind cards, match stages and match mode, reticle view and builder, velocity from the chrono, FMI weather (solver runs in the browser, works offline) |
 | `/diary/loans` | **Guns loaned** – friends' shots with your guns/ammo and what they owe (tile only) |
 | `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
 | `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |
@@ -33,7 +33,7 @@ addresses redirect. Long-press the installed app icon for shortcuts.
 
 Code lives in `diary/` and `club/`; `main.py` calls `diary.init_app(app)` and `club.init_app(app)` and redirects `/`.
 
-Data is stored outside git in `diary_data/`: `users.db` (accounts), one SQLite file per account (`diary.db` for
+Data is stored outside git in `diary_data/`: `users.db` (accounts), `library.db` (the shared reticle library, kept by admins), one SQLite file per account (`diary.db` for
 the first one, `users/<name>.db` for the rest), `clubs.db` (club ammo), `deleted/` (final copies of deleted accounts, 30 days) and the
 cookie key. `diary_data/`, `diary_backups/`, `.env`, `diary_seed*.json` and `*.xls(x)` are in `.gitignore` –
 this repo is public, never commit them. Tests use synthetic data only.
