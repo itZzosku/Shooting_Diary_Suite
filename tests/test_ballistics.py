@@ -287,3 +287,15 @@ def test_spin_scale(client):
     assert client.put("/diary/api/ballistics/profiles/p-s", json=base).status_code == 200
     assert next(x for x in _all(client)["profiles"] if x["id"] == "p-s")["inputs"]["spinScale"] == 1
     assert client.put("/diary/api/ballistics/profiles/p-s", json=dict(base, spin_scale=5)).status_code == 400
+
+
+def test_stage_target_shapes(client):
+    assert client.put("/diary/api/ballistics/matches/m-s", json={"name": "M"}).status_code == 200
+    st = {"name": "S", "match_id": "m-s", "targets": [{"range_m": 300, "w_cm": 30, "h_cm": 45},
+                                                      {"range_m": 400, "w_cm": 20, "shape": "circle"},
+                                                      {"range_m": 500, "shape": "sra2024"}]}
+    assert client.put("/diary/api/ballistics/stages/st-s", json=st).status_code == 200
+    got = [t["shape"] for t in _all(client)["stages"][0]["targets"]]
+    assert got == [None, "circle", "sra2024"]
+    bad = dict(st, targets=[{"range_m": 300, "shape": "<svg>"}])
+    assert client.put("/diary/api/ballistics/stages/st-s", json=bad).status_code == 400

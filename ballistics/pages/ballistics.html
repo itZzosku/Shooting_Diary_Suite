@@ -261,7 +261,7 @@ header.top{padding-top:6px!important}
 .stage-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
 .stage-top b{font-family:var(--f-display);font-size:1.2rem;text-transform:uppercase;letter-spacing:.04em}
 .stage-top span{color:var(--muted);font-size:.82rem}
-.trow{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,.8fr) 34px;gap:6px;align-items:end}
+.trow{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr) minmax(0,1.3fr) 34px;gap:6px;align-items:end;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .trow .rm{height:44px}
 .mm{position:fixed;inset:0;z-index:15;background:#0e100e;color:#f2f4f0;overflow-y:auto;
   padding:max(14px,env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
@@ -928,7 +928,8 @@ function stageRows(stage,p){
     const hold=rnd(elev[i]-dial);
     const prev=i>0&&dialAt==null&&elev[i-1]!=null?rnd(elev[i-1]):null;
     const wind=B.toUnit(x.r.windMrad,s.unit);
-    const wUnit=x.t.w_cm?B.toUnit(x.t.w_cm/100/x.t.range_m*1000,s.unit):null;
+    const wcm=x.t.w_cm||(TARGET_PRESETS[x.t.shape]||{}).w;      // a scored target's width: its scoring outline
+    const wUnit=wcm?B.toUnit(wcm/100/x.t.range_m*1000,s.unit):null;
     return Object.assign(x,{dial,hold,change:prev==null?null:dial-prev,wind,wUnit,dec,unit:s.unit==="MOA"?"MOA":"mil",
       per1:B.toUnit(x.r.windPer1Mrad,s.unit)});
   });
@@ -956,7 +957,7 @@ function renderMatch(){
       const u=rows.find(x=>!x.bad);const unit=u?u.unit:"mil";
       body=`<div class="scroll"><table class="tbl"><tr><th>Target</th><th>m</th><th>Dial ${unit}</th><th>Hold</th><th>Wind</th><th>±1 m/s</th></tr>`+rows.map(x=>x.bad
         ?`<tr><td>${esc(x.t.label)}</td><td>${x.t.range_m}</td><td colspan="4" class="dim">–</td></tr>`
-        :`<tr><td>${esc(x.t.label)}${x.t.w_cm?`<span class="dim"> ${x.t.w_cm}${x.t.h_cm?"×"+x.t.h_cm:""}</span>`:""}</td><td>${x.t.range_m}</td><td>${x.dial.toFixed(x.dec)}${x.change!=null?`<span class="dim"> ${sgn(x.change,x.dec)}</span>`:""}</td><td>${x.hold?ud(x.hold,x.dec):"–"}</td><td>${lr(x.wind,x.dec)}</td><td class="dim">${x.per1.toFixed(2)}</td></tr>`).join("")+`</table></div>`;
+        :`<tr><td>${esc(x.t.label)}${tgtLabel(x.t)?`<span class="dim"> ${esc(tgtLabel(x.t))}</span>`:""}</td><td>${x.t.range_m}</td><td>${x.dial.toFixed(x.dec)}${x.change!=null?`<span class="dim"> ${sgn(x.change,x.dec)}</span>`:""}</td><td>${x.hold?ud(x.hold,x.dec):"–"}</td><td>${lr(x.wind,x.dec)}</td><td class="dim">${x.per1.toFixed(2)}</td></tr>`).join("")+`</table></div>`;
     }
     return`<div class="stage"><div class="stage-top"><b>${esc(st.name)}</b><span>${esc(mode)} · wind ${esc(w)}</span><button class="ghost" type="button" data-stage="${esc(st.id)}">Edit</button></div>${body}</div>`;
   }).join("");
@@ -1404,15 +1405,23 @@ $("mDel").addEventListener("click",async()=>{
 });
 
 let editS=null;
+// Stage target shapes: rect (default; W × H), circle (W = diameter), diamond (W × H tip to tip) or a scored target
+const SHAPES=()=>[["rect","Rectangle"],["circle","Circle"],["diamond","Diamond"],...Object.entries(TARGET_PRESETS).map(([k,v])=>[k,v.name])];
 function targetRow(t,i){
+  const sh=t.shape||"rect";
   return`<div class="trow" data-t><label class="f">Target<input type="text" data-k="label" value="${esc(t.label||"T"+(i+1))}"></label>
     <label class="f">Range m<input type="text" inputmode="numeric" data-k="range_m" value="${esc(t.range_m??"")}"></label>
-    <label class="f">W cm<input type="text" inputmode="decimal" data-k="w_cm" value="${esc(t.w_cm??"")}"></label>
-    <label class="f">H cm<input type="text" inputmode="decimal" data-k="h_cm" value="${esc(t.h_cm??"")}"></label>
-    <button type="button" class="rm" data-rm aria-label="Remove target">✕</button></div>`;
+    <label class="f">Shape<select data-k="shape">${SHAPES().map(([k,n])=>opt(k,n,k===sh)).join("")}</select></label>
+    <button type="button" class="rm" data-rm aria-label="Remove target">✕</button>
+    <label class="f" data-wl>${sh==="circle"?"Ø cm":"W cm"}<input type="text" inputmode="decimal" data-k="w_cm" value="${esc(t.w_cm??"")}"></label>
+    <label class="f" data-hl>H cm<input type="text" inputmode="decimal" data-k="h_cm" value="${esc(t.h_cm??"")}"></label></div>`;
 }
-function readTargets(){return[...$("sTargets").querySelectorAll("[data-t]")].map(r=>{const o={};r.querySelectorAll("[data-k]").forEach(i=>{o[i.dataset.k]=i.dataset.k==="label"?i.value:num(i.value)});return o})}
-function drawTargets(list){$("sTargets").innerHTML=list.map(targetRow).join("");fillDialT()}
+function rowShape(r){const sh=r.querySelector('[data-k="shape"]').value,fixed=!!TARGET_PRESETS[sh];
+  r.querySelector("[data-wl]").hidden=fixed;r.querySelector("[data-hl]").hidden=fixed||sh==="circle";
+  r.querySelector("[data-wl]").firstChild.textContent=sh==="circle"?"Ø cm":"W cm"}
+function readTargets(){return[...$("sTargets").querySelectorAll("[data-t]")].map(r=>{const o={};r.querySelectorAll("[data-k]").forEach(i=>{o[i.dataset.k]=i.dataset.k==="label"||i.dataset.k==="shape"?i.value:num(i.value)});
+  if(o.shape==="rect")o.shape=null;if(TARGET_PRESETS[o.shape]){o.w_cm=null;o.h_cm=null}if(o.shape==="circle")o.h_cm=null;return o})}
+function drawTargets(list){$("sTargets").innerHTML=list.map(targetRow).join("");$("sTargets").querySelectorAll("[data-t]").forEach(rowShape);fillDialT()}
 function fillDialT(){const ts=readTargets(),keep=+$("sDialT").value||0;$("sDialT").innerHTML=ts.map((t,i)=>opt(i,`${t.label||"T"+(i+1)} · ${t.range_m??"?"} m`,i===keep)).join("");$("sDialTL").hidden=$("sDial").value!=="one"}
 function openStage(st){
   editS=st;$("sTitle").textContent=st?"Edit stage":"New stage";$("sDel").hidden=!st;
@@ -1427,9 +1436,10 @@ $("sQuickAdd").addEventListener("click",()=>{
   const toks=$("sQuick").value.split(/[\s,;]+/).filter(Boolean),bad=toks.filter(t=>!(num(t)>0&&num(t)<=3000));
   if(bad.length)return msg("sMsg","Not a range: "+bad.join(" "));
   const cur=readTargets(),last=cur[cur.length-1]||{};
-  drawTargets(cur.concat(toks.map((t,i)=>({label:"T"+(cur.length+i+1),range_m:num(t),w_cm:last.w_cm,h_cm:last.h_cm}))));$("sQuick").value="";$("sMsg").hidden=true;
+  drawTargets(cur.concat(toks.map((t,i)=>({label:"T"+(cur.length+i+1),range_m:num(t),w_cm:last.w_cm,h_cm:last.h_cm,shape:last.shape}))));$("sQuick").value="";$("sMsg").hidden=true;
 });
-$("sAddT").addEventListener("click",()=>{const cur=readTargets(),last=cur[cur.length-1]||{};drawTargets(cur.concat([{label:"T"+(cur.length+1),w_cm:last.w_cm,h_cm:last.h_cm}]))});
+$("sAddT").addEventListener("click",()=>{const cur=readTargets(),last=cur[cur.length-1]||{};drawTargets(cur.concat([{label:"T"+(cur.length+1),w_cm:last.w_cm,h_cm:last.h_cm,shape:last.shape}]))});
+$("sTargets").addEventListener("change",e=>{if(e.target.matches('[data-k="shape"]'))rowShape(e.target.closest("[data-t]"))});
 $("sTargets").addEventListener("click",e=>{if(e.target.closest("[data-rm]")){e.target.closest("[data-t]").remove();fillDialT()}});
 $("sTargets").addEventListener("change",fillDialT);$("sDial").addEventListener("change",fillDialT);
 $("sForm").addEventListener("submit",async e=>{
@@ -1490,11 +1500,10 @@ function retScene(p,ret){
       if(x.bad)continue;
       const y=toRet(x.hold,s.unit,ret),xx=-toRet(x.wind,s.unit,ret);
       out.holds.push({x:xx,y,label:x.t.label});
-      if(x.t.w_cm){
-        const wm=x.t.w_cm/100/x.t.range_m*1000,hm=(x.t.h_cm||x.t.w_cm)/100/x.t.range_m*1000;
-        out.targets.push({x:xx,y,w:RT.convert(wm,"MRAD",ret.unit),h:RT.convert(hm,"MRAD",ret.unit)});
-      }
+      const tg=targetShape(x.t.range_m,ret,{kind:x.t.shape||"rect",d:x.t.w_cm,w:x.t.w_cm,h:x.t.h_cm||x.t.w_cm});
+      if(tg)out.targets.push(Object.assign(tg.shape,{x:xx,y,range:x.t.range_m}));
     }
+    out.targets.sort((a,b)=>a.range-b.range);       // near (big) targets underneath, far (small) ones on top
     const d=rows.find(x=>!x.bad);
     if(d){out.dialled=d.dial;out.R=d.t.range_m;out.info.push(`Dialled ${d.dial.toFixed(d.dec)} ${d.unit} for ${st.dial_mode==="each"?"each target (dots show the leftover hold)":"the stage"}; dots are where each target sits in the reticle.`)}
   }
@@ -1658,10 +1667,13 @@ function pistolTarget(){
   return out;
 }
 const TARGET_PRESETS={
-  sra2024:{name:"SRA target",size:"45 × 75 cm",parts:sraTarget()},
-  pv03:{name:"PV 03 ring target",size:"rings Ø 5–50 cm",parts:pv03Target()},
-  pistol:{name:"Pistol target",size:"Ø 50 cm, black Ø 20",parts:pistolTarget()},
+  sra2024:{name:"SRA target",size:"45 × 75 cm",w:45,parts:sraTarget()},
+  pv03:{name:"PV 03 ring target",size:"rings Ø 5–50 cm",w:50,parts:pv03Target()},
+  pistol:{name:"Pistol target",size:"Ø 50 cm, black Ø 20",w:50,parts:pistolTarget()},
 };
+/** Short text for a stage target's size / shape: "30×45", "Ø 20", "◇ 30", "SRA target" */
+function tgtLabel(t){const sh=t.shape||"rect";if(TARGET_PRESETS[sh])return TARGET_PRESETS[sh].name;if(!t.w_cm)return"";
+  return sh==="circle"?`Ø ${t.w_cm}`:(sh==="diamond"?"◇ ":"")+t.w_cm+(t.h_cm&&t.h_cm!==t.w_cm?"×"+t.h_cm:sh==="diamond"?"":"")}
 function tgtState(){return Object.assign({kind:"",d:30,w:30,h:45},U.tgt||{})}
 function fillTargetUI(){
   const t=tgtState();
@@ -1679,8 +1691,8 @@ function targetCm(t){
   const pre=TARGET_PRESETS[t.kind];return pre?{parts:pre.parts,name:`${pre.name} (${pre.size})`}:null;
 }
 /** {shape (reticle units, centred on the aim point), info} for the chosen target at range R, or null */
-function targetShape(R,ret){
-  const t=tgtState();if(!t.kind||!(R>0))return null;
+function targetShape(R,ret,given){
+  const t=given||tgtState();if(!t.kind||!(R>0))return null;
   const cm=targetCm(t);if(!cm)return null;
   const u=ret.unit==="MOA"?"MOA":"mil",ang=v=>RT.convert(v/100/R*1000,"MRAD",ret.unit),f=v=>(+v).toFixed(2);
   const parts=cm.parts.map(q=>{

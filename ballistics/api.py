@@ -194,6 +194,18 @@ def _wind(v, name):
     return {"ms": ms, "clock": clock}
 
 
+SHAPE_RE = re.compile(r"^[a-z0-9]{1,20}$")
+
+
+def _shape(v):
+    """Stage target shape: rect (default), circle, diamond or a target preset key (sra2024, pv03, pistol …)."""
+    if v in (None, "", "rect"):
+        return None
+    if not isinstance(v, str) or not SHAPE_RE.match(v):
+        raise ValueError("bad_shape")
+    return v
+
+
 def _targets(v, name):
     if not isinstance(v, list) or not 1 <= len(v) <= 30:
         raise ValueError("bad_" + name)
@@ -208,6 +220,7 @@ def _targets(v, name):
             "h_cm": _num(0, 1000)(t.get("h_cm"), "height"),
             "angle_deg": _num(-60, 60)(t.get("angle_deg"), "angle"),
             "wind": _wind(t.get("wind"), "wind"),
+            "shape": _shape(t.get("shape")),
         })
     return json.dumps(out)
 
