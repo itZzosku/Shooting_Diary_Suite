@@ -325,8 +325,10 @@ def test_service_worker_precache_files_exist():
     block = sw[sw.index("const PRECACHE"):sw.index("];", sw.index("const PRECACHE"))]
     paths = re.findall(r'"static/([^"]+)"', block)
     assert len(paths) > 10
-    for p in paths:
-        assert os.path.isfile(os.path.join(here, p)), p
+    bal = os.path.join(os.path.dirname(os.path.dirname(diary.__file__)), "ballistics", "static")
+    for p in paths:                    # static/ballistics/* is served from the ballistics package
+        f = os.path.join(bal, p[len("ballistics/"):]) if p.startswith("ballistics/") else os.path.join(here, p)
+        assert os.path.isfile(f), p
     fonts = {f for f in os.listdir(os.path.join(here, "fonts")) if f.endswith(".woff2")}
     assert fonts <= {p.split("/")[-1] for p in paths}          # every font is precached
 

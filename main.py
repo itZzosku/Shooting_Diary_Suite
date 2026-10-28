@@ -20,6 +20,8 @@ diary.init_app(app)
 # Club ammo boxes at /ammo (separate package; talks to the diary only through club/bridge.py)
 import club
 club.init_app(app)
+import ballistics
+ballistics.init_app(app)
 
 
 # The site is the shooting diary: the bare domain goes straight to it

@@ -31,7 +31,10 @@ Diary, Velocity and Zeroes have a switcher at the top (Home · Diary · Velocity
 click calculator are opened from their tiles. The old `/diary/chrono`, `/diary/zero` and `/diary/lent`
 addresses redirect. Long-press the installed app icon for shortcuts.
 
-Code lives in `diary/` and `club/`; `main.py` calls `diary.init_app(app)` and `club.init_app(app)` and redirects `/`.
+Code lives in `diary/`, `club/` and `ballistics/`; `main.py` calls `diary.init_app(app)`, `club.init_app(app)` and
+`ballistics.init_app(app)` and redirects `/`. `club/` and `ballistics/` reach the diary only through their `bridge.py`.
+The ballistic calculator keeps its per-account tables (`bal_*`) in each account's diary database – so the diary's
+backups carry them – and the shared reticle library in `diary_data/library.db`.
 
 Data is stored outside git in `diary_data/`: `users.db` (accounts), `library.db` (the shared reticle library, kept by admins), one SQLite file per account (`diary.db` for
 the first one, `users/<name>.db` for the rest), `clubs.db` (club ammo), `deleted/` (final copies of deleted accounts, 30 days) and the
@@ -111,7 +114,7 @@ DIARY_SMTP_PASSWORD=abcdefghijklmnop     # Gmail app password, myaccount.google.
 crontab -e                  # 17 3 * * 0  /root/Shooting_Diary_Suite/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
 ```
 
-The same script also copies the club ammo database (`python -m club backup`): `clubs-YYYY-MM-DD.db`, newest 12
+The same script also copies the reticle library (`python -m ballistics backup`: `library-YYYY-MM-DD.db`) and the club ammo database (`python -m club backup`): `clubs-YYYY-MM-DD.db`, newest 12
 (not e-mailed). Before that, shooters' names on club entries older than `CLUB_NAMES_YEARS` (default 3) are blanked.
 
 Backups contain everyone's data, licence numbers included – the privacy page says they go to the admin's

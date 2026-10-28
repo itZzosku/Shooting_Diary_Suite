@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 
 const require = createRequire(import.meta.url);
-const B = require("../../diary/static/ballistics/solver.js");
+const B = require("../../ballistics/static/solver.js");
 const golden = require("./golden.json");
 
 const BULLET = {model: "G7", bc: 0.305, weightGr: 140, diameterMm: 6.71, lengthMm: 35.3};

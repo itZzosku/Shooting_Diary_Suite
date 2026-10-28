@@ -345,12 +345,15 @@ async function load(){
     :`<span>Nothing loaned yet.</span>`;
   $("nZero").innerHTML=z.length?z.map(s=>`${esc(s.name)} <span>·</span> ${s.on?`<span>on</span> <b>${esc(s.on)}</b>`:`<span>${s.positions} positions</span>`}`).join("<br>")
     :`<span>No scopes yet.</span>`;
-  const bl=j.ballistics||{};
+}
+// Ballistics (separate package, its own summary)
+async function loadBallistics(){
+  let bl;try{const r=await fetch("api/ballistics/summary",{credentials:"same-origin",headers:{"X-Requested-With":"fetch"}});if(!r.ok)return;bl=await r.json()}catch(e){return}
   $("nBal").innerHTML=bl.profiles?`<b>${bl.profiles}</b> <span>profile${bl.profiles>1?"s":""}</span>`+(bl.match?` · <span>${bl.match.date?fiDate(bl.match.date)+" ":""}</span>${esc(bl.match.name)}`:"")
     :`<span>No profiles yet.</span>`;
 }
-load();loadClubs();
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load()});
+load();loadClubs();loadBallistics();
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){load();loadBallistics()}});
 
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2600)}
 

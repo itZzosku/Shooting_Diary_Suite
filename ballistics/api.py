@@ -1,6 +1,6 @@
-"""Ballistic calculator: profiles, bullets, matches and stages. The trajectory itself is computed in the browser
-(static/ballistics/solver.js) so it works offline at the range; the server stores the records and resolves a
-profile's links to the diary (gun, load, scope, scope zero) into the numbers the page needs.
+"""Ballistic calculator API: profiles, bullets, matches and stages. The trajectory itself is computed in the browser
+(static/solver.js) so it works offline at the range; the server stores the records and resolves a profile's links
+to the diary (gun, load, scope, scope zero, chrono velocities) into the numbers the page needs.
 
 Tables in each account's diary database:
   bal_bullets       bullet: diameter, length, weight, drag model, BC (or velocity bands)
@@ -18,7 +18,9 @@ import time
 
 from flask import abort, jsonify, request
 
-from . import ID_RE, DATE_RE, bp, db, kv_get, kv_set, login_required, static_page
+from . import PAGES, bp
+from .bridge import DATE_RE, ID_RE, db, kv_get, kv_set, login_required
+from . import bridge
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS bal_bullets (
@@ -272,33 +274,7 @@ def stage_rows(conn):
 
 def pickers(conn):
     """The diary records a profile can link to, in the shape the profile sheet needs."""
-    guns = []
-    for r in conn.execute("SELECT id, data FROM guns"):
-        g = json.loads(r["data"])
-        guns.append({"id": r["id"], "name": g.get("name") or "", "cal": g.get("cal") or "",
-                     "archived": bool(g.get("archived")), "order": g.get("order", 99)})
-    guns.sort(key=lambda g: (g["archived"], g["order"], g["name"]))
-    try:
-        from .chrono_loads import short_name
-        loads = [{"id": r["id"], "name": r["name"], "short": short_name(dict(r)), "cal": r["cal"],
-                  "bullet_gr": r["bullet_gr"], "archived": bool(r["archived"])}
-                 for r in conn.execute("SELECT * FROM loads ORDER BY archived, name")]
-    except Exception:                      # velocity tables not created yet
-        loads = []
-    from .zero import _load_labels, display_name
-    labels = _load_labels(conn)
-    scopes = []
-    for s in conn.execute("SELECT * FROM scopes ORDER BY archived, ord, name"):
-        s = dict(s)
-        zeros = []
-        for z in conn.execute("SELECT * FROM scope_zeros WHERE scope_id=? ORDER BY archived, ord, rowid", (s["id"],)):
-            z = dict(z)
-            zeros.append({"id": z["id"], "name": display_name(z, labels), "gun_id": z["gun_id"],
-                          "load_id": z["load_id"], "distance_m": z["distance_m"], "elev": z["elev"],
-                          "wind": z["wind"], "archived": bool(z["archived"])})
-        scopes.append({k: s.get(k) for k in ("id", "name", "unit", "click", "zero_stop", "elev_turn", "wind_turn",
-                                              "mounted_zero_id", "archived")} | {"zeros": zeros})
-    return {"guns": guns, "loads": loads, "scopes": scopes}
+    return {"guns": bridge.guns(conn), "loads": bridge.loads(conn), "scopes": bridge.scopes(conn)}
 
 
 DEFAULT_STRINGS = 3
@@ -310,9 +286,8 @@ def chrono_velocity(conn, gun_id, load_id, n_strings=DEFAULT_STRINGS):
     if not (gun_id and load_id):
         return None
     try:
-        from . import chrono
-        ds = chrono.days(conn, gun_id, load_id)          # newest first
-    except Exception:                                    # velocity tables not created yet
+        ds = bridge.chrono_days(conn, gun_id, load_id)          # newest first
+    except Exception:                                           # velocity tables not created yet
         return None
     if not ds:
         return None
@@ -322,9 +297,7 @@ def chrono_velocity(conn, gun_id, load_id, n_strings=DEFAULT_STRINGS):
         if len(picked) >= n_strings:
             break
     picked = picked[:max(n_strings, 1)]
-    marks = ",".join("?" * len(picked))
-    shots = chrono._shots_by_string(conn, f" WHERE st.id IN ({marks})", picked)
-    stemp = {r["id"]: r["temp_c"] for r in conn.execute(f"SELECT id, temp_c FROM chrono_strings WHERE id IN ({marks})", picked)}
+    shots, stemp = bridge.chrono_shots(conn, picked)
     v, temps = [], []
     for sid in picked:
         for x in shots.get(sid, []):
@@ -336,12 +309,11 @@ def chrono_velocity(conn, gun_id, load_id, n_strings=DEFAULT_STRINGS):
                 temps.append(t)
     if not v:
         return None
-    from .chrono_stats import stats, temp_sensitivity
-    st = stats(v)
+    st = bridge.stats(v)
     dates = sorted(d["date"] for d in ds if set(d["strings"]) & set(picked))
     return {"mv": st["avg"], "sd": st["sd"], "es": st["es"], "n": st["n"], "strings": len(picked),
             "from": dates[0], "to": dates[-1], "temp_c": round(sum(temps) / len(temps), 1) if temps else None,
-            "temp_sens": temp_sensitivity([(d["temp_c"], d["stats"]["avg"]) for d in ds]),
+            "temp_sens": bridge.temp_sensitivity([(d["temp_c"], d["stats"]["avg"]) for d in ds]),
             "days": len(ds)}
 
 
@@ -418,8 +390,7 @@ def everything(conn):
     for p in profiles:
         p["inputs"] = resolve_inputs(p, bullets, picks, conn)
     from .reticles import all_reticles
-    from . import current_user
-    me = current_user()
+    me = bridge.current_user()
     return {"profiles": profiles, "bullets": bullets,
             "reticles": all_reticles({p["reticle_id"] for p in profiles if p["reticle_id"]}),
             "is_admin": bool(me and me["is_admin"] and not me.get("demo")),
@@ -461,7 +432,7 @@ def import_rows(conn, data, replace=False):
 @bp.get("/ballistics")
 @login_required
 def page_ballistics():
-    return static_page("ballistics.html")
+    return bridge.static_page(PAGES, "ballistics.html")
 
 
 def _body():
@@ -647,3 +618,10 @@ def api_bal_weather():
         return jsonify(error=str(e) if str(e) == "no_stations" else "weather_unavailable"), 502
     except Exception:                       # network, timeout, bad XML
         return jsonify(error="weather_unavailable"), 502
+
+
+@bp.get("/api/ballistics/summary")
+@login_required
+def api_bal_summary():
+    """The home page tile."""
+    return jsonify(summary(db()))

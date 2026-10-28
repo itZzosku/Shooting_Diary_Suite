@@ -5,7 +5,9 @@ import os
 import pytest
 
 import diary
-from diary import ballistics, users
+import ballistics as bal_pkg
+from ballistics import api as ballistics
+from diary import users
 
 H = {"X-Requested-With": "fetch"}
 BULLET = {"name": "Test 140", "maker": "Maker", "diameter_mm": 6.71, "length_mm": 35.3, "weight_gr": 140,
@@ -16,6 +18,7 @@ def _app():
     from flask import Flask
     app = Flask(__name__)
     diary.init_app(app)
+    bal_pkg.init_app(app)
     return app
 
 
@@ -190,10 +193,51 @@ def test_export_import_round_trip(client):
     conn.close()
     for t in ballistics.TABLES:
         assert again[t] == data[t], t
-    assert client.get("/diary/api/home").get_json()["ballistics"]["profiles"] == 1
+    assert client.get("/diary/api/ballistics/summary").get_json()["profiles"] == 1
 
 
 def test_page_and_static_files_exist(client):
     assert client.get("/diary/ballistics").status_code == 200
-    for f in ("drag.js", "solver.js"):
+    for f in ("drag.js", "solver.js", "reticle.js"):
         assert client.get(f"/diary/static/ballistics/{f}").status_code == 200
+
+
+def test_diary_core_does_not_import_ballistics():
+    """ballistics/ is its own package: only its bridge.py imports diary, and diary never imports it (it only lists
+    it in EXTENSION_MODULES for the command line)."""
+    import glob, os, re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for f in glob.glob(os.path.join(root, "diary", "*.py")):
+        src = open(f, encoding="utf-8").read()
+        assert not re.search(r"^\s*(from|import)\s+(\.|ballistics)\s*\.?\s*(ballistics|reticles|weather)\b", src, re.M), f
+    for f in glob.glob(os.path.join(root, "ballistics", "*.py")):
+        if f.endswith("bridge.py"):
+            continue
+        src = open(f, encoding="utf-8").read()
+        assert not re.search(r"^\s*(from|import)\s+diary\b", src, re.M), f
+
+
+def test_command_line_backup_carries_ballistics_rows(client, tmp_path):
+    client.put("/diary/api/ballistics/bullets/b-1", json=BULLET)
+    import json, subprocess, sys, os
+    env = dict(os.environ)
+    out = tmp_path / "x.json"
+    r = subprocess.run([sys.executable, "-m", "diary", "export", "--user", "osku", str(out)], env=env, capture_output=True, text=True,
+                       cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    assert r.returncode == 0, r.stderr
+    assert [b["id"] for b in json.loads(out.read_text())["bal_bullets"]] == ["b-1"]
+
+
+def test_every_ballistics_api_route_needs_login():
+    app = _app()
+    anon = app.test_client()
+    n = 0
+    for rule in app.url_map.iter_rules():
+        if not rule.rule.startswith("/diary/api/ballistics"):
+            continue
+        url = rule.rule.replace("<bid>", "x").replace("<pid>", "x").replace("<mid>", "x").replace("<sid>", "x").replace("<rid>", "x")
+        for m in rule.methods - {"HEAD", "OPTIONS"}:
+            r = anon.open(url, method=m, json={} if m == "PUT" else None, headers={"X-Requested-With": "fetch"})
+            assert r.status_code == 401, (m, url, r.status_code)
+            n += 1
+    assert n >= 15

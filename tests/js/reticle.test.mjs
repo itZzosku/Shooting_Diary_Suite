@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 
 const require = createRequire(import.meta.url);
-const R = require("../../diary/static/ballistics/reticle.js");
+const R = require("../../ballistics/static/reticle.js");
 
 const HASHES = {v: 1, unit: "MRAD", focal_plane: "FFP", field: 10, stadia: {w: 0.03, right: {to: 10}, left: {to: 10}, up: {to: 10}, down: {to: 10}},
   hashes: [{arms: ["left", "right", "up", "down"], from: 0.2, to: 8, step: 0.2, len: 0.1, major: {every: 5, len: 0.3}}]};

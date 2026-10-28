@@ -5,7 +5,9 @@ import os
 import pytest
 
 import diary
-from diary import ballistics, reticles, users, weather
+import ballistics as bal_pkg
+from ballistics import api as ballistics, reticles, weather
+from diary import users
 
 H = {"X-Requested-With": "fetch"}
 BULLET = {"name": "Test 140", "diameter_mm": 6.71, "length_mm": 35.3, "weight_gr": 140, "drag_model": "G7", "bc": 0.305}
@@ -15,6 +17,7 @@ def _app():
     from flask import Flask
     app = Flask(__name__)
     diary.init_app(app)
+    bal_pkg.init_app(app)
     return app
 
 

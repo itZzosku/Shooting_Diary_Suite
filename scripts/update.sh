@@ -122,7 +122,7 @@ fi
 
 # 4. Checks: everything compiles, the app imports, tests pass (tests use a throwaway data folder)
 say "Checking"
-COMPILE="diary main.py"; [ -d club ] && COMPILE="$COMPILE club"
+COMPILE="diary main.py"; [ -d club ] && COMPILE="$COMPILE club"; [ -d ballistics ] && COMPILE="$COMPILE ballistics"
 "$PYTHON" -m compileall -q $COMPILE >/dev/null || rollback "Python files don't compile"
 DIARY_DATA_DIR="$(mktemp -d)" "$PYTHON" -c "import main" \
   || rollback "The app doesn't start"

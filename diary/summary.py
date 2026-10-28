@@ -47,11 +47,6 @@ def zero_summary(conn):
     return out
 
 
-def ballistics_summary(conn):
-    from .ballistics import summary
-    return summary(conn)
-
-
 @bp.get("/api/home")
 @login_required
 def api_home():
@@ -69,7 +64,7 @@ def api_home():
             "unpaid": unpaid_total(conn), "last": max((l["date"] for l in ln), default=None)}
     from . import users
     pending = sum(1 for u in users.all_users() if u.get("pending")) if me["is_admin"] else 0
-    return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), pending=pending, demo=bool(me.get("demo")), diary=diary_summary(conn), lent=lent, velocity=vel, zeroes=zero_summary(conn), ballistics=ballistics_summary(conn))
+    return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), pending=pending, demo=bool(me.get("demo")), diary=diary_summary(conn), lent=lent, velocity=vel, zeroes=zero_summary(conn))
 
 
 def export_data(conn):
@@ -83,8 +78,9 @@ def export_data(conn):
     out.update(chrono.export_rows(conn))
     out.update(loans.export_rows(conn))
     out.update(zero.export_rows(conn))
-    from . import ballistics
-    out.update(ballistics.export_rows(conn))
+    from . import EXTENSIONS
+    for ext in EXTENSIONS:                    # e.g. the ballistic calculator's tables
+        out.update(ext["export"](conn))
     return out
 
 

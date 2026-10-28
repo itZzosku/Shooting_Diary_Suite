@@ -15,7 +15,9 @@ import time
 
 from flask import jsonify, request
 
-from . import ID_RE, bp, current_user, login_required
+from . import bp
+from .bridge import ID_RE, current_user, login_required
+from . import bridge
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS reticles (
@@ -34,8 +36,7 @@ ELEMENT_FIELDS = {                       # type → numeric fields it must have
 
 
 def path():
-    from . import DATA_DIR
-    return os.path.join(DATA_DIR, "library.db")
+    return os.path.join(bridge.data_dir(), "library.db")
 
 
 def connect():
@@ -45,6 +46,7 @@ def connect():
 
 
 def init_library():
+    os.makedirs(bridge.data_dir(), exist_ok=True)
     conn = connect()
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)

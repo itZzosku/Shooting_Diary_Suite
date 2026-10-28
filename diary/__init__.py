@@ -38,6 +38,21 @@ PROFILE_KEYS = ("name", "sra", "ipsc", "hunterNo")
 bp = Blueprint("diary", __name__, template_folder="templates", static_folder="static",
                static_url_path="/static")
 
+# Packages that keep tables in each account's database (ballistics/): {name, init(conn), export(conn) -> dict,
+# import(conn, data, replace)}. They register themselves through their bridge; load_extensions() imports the
+# known ones for the command line, where no web app does it.
+EXTENSIONS = []
+EXTENSION_MODULES = ("ballistics",)
+
+
+def load_extensions():
+    import importlib
+    for name in EXTENSION_MODULES:
+        try:
+            importlib.import_module(name)
+        except ImportError:
+            pass
+
 
 # ------------------------------------------------------------------ setup
 def init_app(app):
@@ -48,8 +63,6 @@ def init_app(app):
     users.migrate_single_user()
     for u in users.all_users():              # schema / migrations for every account's file
         init_db(users.db_path(u))
-    from .reticles import init_library       # the server-wide reticle library
-    init_library()
     if not app.config.get("SECRET_KEY"):
         app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or _secret_key_file()
     app.config.update(
@@ -141,8 +154,8 @@ def init_db(path=None):
     init_loans(conn)
     from .zero import init_zero
     init_zero(conn)
-    from .ballistics import init_ballistics
-    init_ballistics(conn)
+    for ext in EXTENSIONS:                    # tables other packages keep in each account's file (ballistics)
+        ext["init"](conn)
     conn.commit()
     conn.close()
 
@@ -664,9 +677,6 @@ def delete_gun(gid):
 from . import chrono  # noqa: E402,F401
 # Scope zeroes (dial positions per rifle, swap calculator, PDF zeroing card).
 from . import zero  # noqa: E402,F401
-# Ballistic calculator (profiles, matches, stages; the solver runs in the browser).
-from . import ballistics  # noqa: E402,F401
-from . import reticles  # noqa: E402,F401
 # Guns loaned to friends + ammo cost.
 from . import loans  # noqa: E402,F401
 # Landing-page summary.
