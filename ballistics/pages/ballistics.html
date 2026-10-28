@@ -256,6 +256,7 @@ header.top{padding-top:6px!important}
 .tbl input[type=checkbox]{width:20px;height:20px;margin:0}
 .otbl tr[data-oedit]{cursor:pointer}
 .otbl td small{display:block;font-family:var(--f-body);font-size:.72rem;color:var(--muted)}
+.spinrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5rem;gap:10px;align-items:center;min-height:3.2rem}
 .stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
 .stage-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
 .stage-top b{font-family:var(--f-display);font-size:1.2rem;text-transform:uppercase;letter-spacing:.04em}
@@ -533,7 +534,9 @@ details summary{cursor:pointer;list-style:revert}
     <p class="hint" style="margin:0" id="fMvHint">Typed-in values are also the fallback when the chrono has no strings for this gun and load.</p>
     <h2 style="font-size:1.05rem">Reticle and corrections</h2>
     <label class="f">Reticle<select id="fRet"></select></label>
-    <label class="check"><input type="checkbox" id="fSpin">Spin drift (needs twist and bullet length)</label>
+    <div class="spinrow"><label class="check"><input type="checkbox" id="fSpin">Spin drift</label>
+      <label class="f" id="fSpinSL">Spin drift ×<input type="text" inputmode="decimal" id="fSpinS" placeholder="1"></label></div>
+    <p class="hint" style="margin:0">Spin drift needs the twist and the bullet's length.<span id="fSpinH"> The formula is made for supersonic bullets and reads high for .22 LR: × about 0.6 matches Strelok. Empty = 1.</span></p>
     <label class="check"><input type="checkbox" id="fAj">Aerodynamic jump from crosswind</label>
     <label class="check"><input type="checkbox" id="fCor">Coriolis (needs latitude and direction of fire)</label>
     <h2 style="font-size:1.05rem">Zero</h2>
@@ -709,7 +712,7 @@ const num=v=>{v=parseFloat(String(v??"").replace(",",".").trim());return isFinit
 const B=window.Ballistics;
 const CACHE="bal-cache",OUTBOX="bal-outbox",RECENT="bal-recent",COND="bal-cond:",UI="bal-ui";
 const ls={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const ERR={date_required:"Pick the date.",range_m_required:"Type the range.",bad_range_m:"Range must be 10–3000 m.",
+const ERR={bad_spin_scale:"Spin drift × must be 0–3.",date_required:"Pick the date.",range_m_required:"Type the range.",bad_range_m:"Range must be 10–3000 m.",
   elev_required:"Type the elevation that hit.",bad_elev:"Elevation must be a number (−30 … 200).",bad_profile_id:"Save the profile first.",
   bad_temp_c:"Temperature must be −40 … 60 °C.",bad_hpa:"Pressure must be 500–1100 hPa.",bad_powder_c:"Powder temperature must be −40 … 70 °C.",
   bad_angle_deg:"Angle must be −60 … 60°.",name_required:"Give it a name.",bad_sight_height_mm:"Sight height must be 10–150 mm.",sight_height_mm_required:"Sight height is needed.",
@@ -797,7 +800,7 @@ function solverInput(p,c,extra){
   return Object.assign({bullet:i.bullet,mv:i.mv,mvTempC:i.mvTempC,tempSens:i.tempSens,mvScale:i.mvScale,dragScale:i.dragScale,
     sightHeightMm:i.sightHeightMm,zeroRangeM:i.zeroRangeM,zeroAtmo:clean(i.zeroAtmo),twistMm:i.twistMm,twistDir:i.twistDir,
     atmo:clean({tempC:c.tempC,hpa:c.hpa,rh:c.rh}),powderC:c.powder,wind:{ms:c.ms,clock:c.clock},angleDeg:c.angle,
-    spinDrift:i.spinDrift,aeroJump:i.aeroJump,coriolis:i.coriolis&&(c.lat??i.latitude)!=null&&(c.az??i.azimuthDeg)!=null,
+    spinDrift:i.spinDrift,spinScale:i.spinScale,aeroJump:i.aeroJump,coriolis:i.coriolis&&(c.lat??i.latitude)!=null&&(c.az??i.azimuthDeg)!=null,
     latitude:c.lat??i.latitude,azimuthDeg:c.az??i.azimuthDeg},extra||{});
 }
 const clean=o=>{const r={};for(const k in o||{})if(o[k]!=null)r[k]=o[k];return r};
@@ -827,7 +830,7 @@ function renderProfiles(){
   if(i.gun)parts.push(esc(i.gun));
   if(b)parts.push(`${esc(b.name)} · <b>${b.model} ${b.bc!=null?(+b.bc).toFixed(3):"bands"}</b>`);
   if(i.mv)parts.push(`<b>${Math.round(i.mv*10)/10}</b> m/s${i.mvTempC!=null?" at "+i.mvTempC+" °C":""}${i.mvSource==="chrono"&&i.chrono?` (chrono, ${i.chrono.strings} string${i.chrono.strings>1?"s":""}, SD ${i.chrono.sd??"–"})`:""}${i.tempSens?" · "+i.tempSens+" m/s/°C"+(i.tempSensSource==="chrono"?" (chrono)":""):""}`);
-  const corr=[i.spinDrift&&"spin drift",i.aeroJump&&"aero jump",i.coriolis&&"Coriolis"].filter(Boolean);if(corr.length)parts.push(corr.join(", "));
+  const corr=[i.spinDrift&&("spin drift"+(i.spinScale!=null&&+i.spinScale!==1?" ×"+(+i.spinScale):"")),i.aeroJump&&"aero jump",i.coriolis&&"Coriolis"].filter(Boolean);if(corr.length)parts.push(corr.join(", "));
   parts.push(`zero <b>${i.zeroRangeM} m</b>`);
   if((i.mvScale||1)!==1||(i.dragScale||1)!==1)parts.push(`trued: velocity ×${(i.mvScale||1).toFixed(3)}, drag ×${(i.dragScale||1).toFixed(3)}`);
   if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
@@ -1304,7 +1307,7 @@ function openProfile(p){
   setv("fName",x.name);setv("fSight",x.sight_height_mm);setv("fTwist",x.twist_mm);$("fTwistDir").value=x.twist_dir||"R";
   setv("fMv",x.mv_ms);setv("fMvT",x.mv_temp_c);setv("fTs",x.temp_sens);setv("fZr",x.zero_range_m);
   $("fMvSrc").value=x.mv_source||"manual";$("fTsSrc").value=x.temp_sens_source||"manual";setv("fMvN",x.mv_strings);
-  $("fSpin").checked=!!x.spin_drift;$("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
+  $("fSpin").checked=!!x.spin_drift;setv("fSpinS",x.spin_scale);spinState();$("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
   $("fRet").innerHTML=opt("","– none –")+(D.reticles||[]).filter(r=>!r.archived||r.id===x.reticle_id).map(r=>opt(r.id,`${r.maker?r.maker+" ":""}${r.name} · ${r.focal_plane} ${r.unit==="MOA"?"MOA":"mil"}`,r.id===x.reticle_id)).join("");
   chronoHint(p);
   setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
@@ -1326,6 +1329,8 @@ $("fZero").addEventListener("change",()=>{       // a scope zero knows its rifle
   const sc=D.pickers.scopes.find(s=>s.id===$("fScope").value),z=sc&&sc.zeros.find(z=>z.id===$("fZero").value);
   if(!z)return;if(z.distance_m)$("fZr").value=z.distance_m;if(z.gun_id&&!$("fGun").value)$("fGun").value=z.gun_id;if(z.load_id&&!$("fLoad").value)$("fLoad").value=z.load_id;
 });
+function spinState(){const on=$("fSpin").checked;$("fSpinSL").hidden=$("fSpinH").hidden=!on}
+$("fSpin").addEventListener("change",spinState);
 $("pEdit").addEventListener("click",()=>openProfile(prof()));
 $("pNew").addEventListener("click",()=>openProfile(null));
 $("pForm").addEventListener("submit",async e=>{
@@ -1335,7 +1340,7 @@ $("pForm").addEventListener("submit",async e=>{
     mv_ms:num($("fMv").value),mv_temp_c:num($("fMvT").value),temp_sens:num($("fTs").value),zero_range_m:num($("fZr").value),
     zero_temp_c:num($("fZt").value),zero_hpa:num($("fZp").value),zero_rh:num($("fZh").value),archived:$("fArch").checked,
     mv_source:$("fMvSrc").value,temp_sens_source:$("fTsSrc").value,mv_strings:num($("fMvN").value),
-    spin_drift:$("fSpin").checked,aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
+    spin_drift:$("fSpin").checked,spin_scale:num($("fSpinS").value),aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
     latitude:editP?editP.latitude:null,azimuth_deg:editP?editP.azimuth_deg:null,
     ord:editP?editP.ord:D.profiles.length,mv_scale:editP?editP.mv_scale:1,drag_scale:editP?editP.drag_scale:1};
   const id=editP?editP.id:newId(body.name,"p-");

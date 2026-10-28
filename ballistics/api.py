@@ -66,7 +66,8 @@ DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000, "by_pr
 
 PROFILE_COLUMNS = {             # added after phase 1: chrono window and the small corrections
     "mv_strings": "INTEGER", "spin_drift": "INTEGER NOT NULL DEFAULT 0", "coriolis": "INTEGER NOT NULL DEFAULT 0",
-    "aero_jump": "INTEGER NOT NULL DEFAULT 0", "azimuth_deg": "REAL"}
+    "aero_jump": "INTEGER NOT NULL DEFAULT 0", "azimuth_deg": "REAL",
+    "spin_scale": "REAL"}       # spin drift × this (Litz's formula reads high for subsonic .22 LR); empty = 1
 
 
 OBS_COLUMNS = {"powder_c": "REAL", "wind_ms": "REAL", "wind_clock": "REAL", "updated": "TEXT"}
@@ -230,7 +231,7 @@ PROFILE = {
     "notes": _text(2000), "ord": _int(0, 100000), "archived": _flag,
     "mv_source": _choice(("manual", "chrono"), "manual"), "temp_sens_source": _choice(("manual", "chrono"), "manual"),
     "mv_strings": _int(1, 50), "spin_drift": _flag, "coriolis": _flag, "aero_jump": _flag,
-    "azimuth_deg": _num(0, 360), "reticle_id": _ref,
+    "azimuth_deg": _num(0, 360), "reticle_id": _ref, "spin_scale": _num(0, 3),
 }
 MATCH = {"name": _text(80, True), "date": _date, "visit_id": _ref, "notes": _text(2000), "archived": _flag}
 STAGE = {
@@ -367,7 +368,9 @@ def resolve_inputs(profile, bullets, picks, conn=None):
                          "name": b["name"]},
         "mv": mv, "mvTempC": mv_t, "tempSens": ts, "mvSource": mv_src, "tempSensSource": ts_src, "chrono": ch,
         "mvScale": profile["mv_scale"], "dragScale": profile["drag_scale"],
-        "spinDrift": bool(profile.get("spin_drift")), "coriolis": bool(profile.get("coriolis")),
+        "spinDrift": bool(profile.get("spin_drift")),
+        "spinScale": profile.get("spin_scale") if profile.get("spin_scale") is not None else 1,
+        "coriolis": bool(profile.get("coriolis")),
         "aeroJump": bool(profile.get("aero_jump")), "azimuthDeg": profile.get("azimuth_deg"),
         "reticleId": profile.get("reticle_id"),
         "sightHeightMm": profile["sight_height_mm"], "zeroRangeM": profile["zero_range_m"],

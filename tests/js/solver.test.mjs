@@ -128,3 +128,10 @@ test("speed: a 1200 m solution well under a frame on a desktop", () => {
   const ms = (performance.now() - t0) / 10;
   assert.ok(ms < 30, `${ms.toFixed(1)} ms per solve`);
 });
+
+test("spin drift scale: × 0.5 halves the drift, × 0 removes it", () => {
+  const sd = Object.assign({}, BASE, {twistMm: 203, spinDrift: true});
+  const full = at(sd, 800).windMrad, half = at(Object.assign({}, sd, {spinScale: 0.5}), 800).windMrad;
+  near(half, full / 2, 1e-3, "half");
+  near(at(Object.assign({}, sd, {spinScale: 0}), 800).windMrad, 0, 1e-9, "none");
+});

@@ -277,3 +277,13 @@ def test_observations(client):
         assert client.put("/diary/api/ballistics/observations/o-2", json=dict(ob, **bad)).status_code == 400, bad
     assert client.delete("/diary/api/ballistics/profiles/p-o", headers=H).status_code == 200
     assert _all(client)["observations"] == []
+
+
+def test_spin_scale(client):
+    base = {"name": "S", "sight_height_mm": 50, "zero_range_m": 50, "spin_drift": True}
+    assert client.put("/diary/api/ballistics/profiles/p-s", json=dict(base, spin_scale=0.6)).status_code == 200
+    p = next(x for x in _all(client)["profiles"] if x["id"] == "p-s")
+    assert p["spin_scale"] == 0.6 and p["inputs"]["spinScale"] == 0.6
+    assert client.put("/diary/api/ballistics/profiles/p-s", json=base).status_code == 200
+    assert next(x for x in _all(client)["profiles"] if x["id"] == "p-s")["inputs"]["spinScale"] == 1
+    assert client.put("/diary/api/ballistics/profiles/p-s", json=dict(base, spin_scale=5)).status_code == 400

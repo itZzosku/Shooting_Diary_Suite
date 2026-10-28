@@ -206,7 +206,7 @@
   /** Full solution at ranges (m, ascending). inp: {bullet:{model, bc, bands?, curve?, diameterMm, lengthMm, weightGr},
       mv, mvTempC?, tempSens?, mvScale?, dragScale?, sightHeightMm, zeroRangeM, zeroAtmo?, atmo?, powderC?,
       wind?:{ms, clock}, angleDeg?, twistMm?, twistDir?, latitude?, azimuthDeg?,
-      spinDrift?, coriolis?, aeroJump? (booleans, default false), mainOnly? (skip the calm and 1 m/s crosswind
+      spinDrift?, coriolis?, aeroJump? (booleans, default false), spinScale? (spin drift × this, default 1), mainOnly? (skip the calm and 1 m/s crosswind
       trajectories: no windPer1Mrad / calmElevMrad, a third of the work – for truing)}. */
   function solve(inp, ranges) {
     const rs = ranges.slice().sort((a, b) => a - b);
@@ -237,7 +237,7 @@
       const r = main[i];
       if (!r) { rows.push({range: rs[i], reached: false}); continue; }
       let z = r.z;
-      if (inp.spinDrift && sg) z += twistSign * 1.25 * (sg + 1.2) * Math.pow(r.t, 1.83) * 0.0254;
+      if (inp.spinDrift && sg) z += twistSign * (inp.spinScale != null ? +inp.spinScale : 1) * 1.25 * (sg + 1.2) * Math.pow(r.t, 1.83) * 0.0254;
       const x = r.x || 1e-9;
       const y = r.y + jumpRad * x;
       const mach = r.v / atm.c;
