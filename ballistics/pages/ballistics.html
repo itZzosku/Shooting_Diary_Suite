@@ -1633,8 +1633,20 @@ function sraTarget(){
     letter("B",0,-75),letter("A",0,aimY),letter("C",-112,aimY),letter("C",112,aimY),letter("D",-188,aimY),letter("D",188,aimY),
   ];
 }
+// PV 03 ring target: bull Ø 5, 10 ring Ø 10, then 9 … 6 rings every 10 cm (Ø 20 … 50). White out to halfway
+// across the 9 ring (Ø 15), black from there to the 6 ring; ring lines black on white, white on black;
+// on white paper with a 10 cm margin (70 × 70 cm). Aimed at the centre.
+function pv03Target(){
+  const out=[{t:"poly",points:[[-35,-35],[35,-35],[35,35],[-35,35]],fill:"#fff",stroke:"#999",width:1},
+    {t:"circle",r:25,fill:"#111",stroke:"#111",width:1},{t:"circle",r:7.5,fill:"#fff",stroke:"none",width:0}];
+  for(const d of [5,10])out.push({t:"circle",r:d/2,stroke:"#111",width:1});
+  for(const d of [20,30,40])out.push({t:"circle",r:d/2,stroke:"#fff",width:1});
+  const num=(n,r,size)=>[-1,1].flatMap(sg=>[{t:"text",x:sg*r,y:0,text:String(n),size,color:"#fff"},{t:"text",x:0,y:sg*r,text:String(n),size,color:"#fff"}]);
+  return out.concat(num(9,8.75,1.8),num(8,12.5,3),num(7,17.5,3),num(6,22.5,3));
+}
 const TARGET_PRESETS={
   sra2024:{name:"SRA target",size:"45 × 75 cm",parts:sraTarget()},
+  pv03:{name:"PV 03 ring target",size:"rings Ø 5–50 cm",parts:pv03Target()},
 };
 function tgtState(){return Object.assign({kind:"",d:30,w:30,h:45},U.tgt||{})}
 function fillTargetUI(){
