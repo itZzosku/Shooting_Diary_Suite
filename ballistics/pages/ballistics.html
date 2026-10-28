@@ -953,7 +953,7 @@ function renderMatch(){
 let mmIdx=0;
 function renderMM(){
   const m=curMatch(),sts=m?stagesOf(m.id):[],p=prof();
-  if(!sts.length){$("mm").hidden=true;return}
+  if(!sts.length){if(!$("mm").hidden)closeMM();return}
   mmIdx=Math.max(0,Math.min(mmIdx,sts.length-1));
   const st=sts[mmIdx],rows=stageRows(st,p)||[],c=cond();
   $("mmName").textContent=st.name;
@@ -968,11 +968,31 @@ function renderMM(){
   $("mmPrev").disabled=mmIdx===0;$("mmNext").disabled=mmIdx===sts.length-1;
 }
 let wake=null;
+// ------------------------------------------------------------ overlays and the phone's back button
+// Each open sheet / match mode / scope view adds a history entry: Back closes the top one instead of leaving the
+// page. Closing with a button drops its entry again (history.back), so history stays as it was.
+const LAYERS=[];          // open overlays, newest last: {el, close}
+let SKIP=0,PENDING=0;     // our own history.back()s still to come / entries to push once they have
+function pushLayer(el,close){
+  if(LAYERS.some(l=>l.el===el))return;
+  LAYERS.push({el,close});
+  if(SKIP)PENDING++;else history.pushState({balLayer:true},"");
+}
+function dropLayer(el){   // closed by a button, Escape or saving: remove its history entry without closing anything
+  const i=LAYERS.findIndex(l=>l.el===el);if(i<0)return;
+  LAYERS.splice(i,1);
+  if(PENDING){PENDING--;return}
+  SKIP++;history.back();
+}
+window.addEventListener("popstate",()=>{
+  if(SKIP){SKIP--;if(!SKIP)for(;PENDING;PENDING--)history.pushState({balLayer:true},"");return}
+  const l=LAYERS.pop();if(l)l.close(true);
+});
 async function openMM(){
-  mmIdx=0;$("mm").hidden=false;document.body.style.overflow="hidden";renderMM();
+  mmIdx=0;$("mm").hidden=false;pushLayer($("mm"),closeMM);document.body.style.overflow="hidden";renderMM();
   try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(e){}
 }
-function closeMM(){$("mm").hidden=true;document.body.style.overflow="";try{wake&&wake.release()}catch(e){}wake=null}
+function closeMM(fromBack){if(fromBack!==true)dropLayer($("mm"));$("mm").hidden=true;document.body.style.overflow="";try{wake&&wake.release()}catch(e){}wake=null}
 
 let CARD_FOR;          // the profile whose range card values are in the inputs
 function render(){
@@ -1260,8 +1280,8 @@ $("aCmp").addEventListener("click",async()=>{
 });
 
 // ------------------------------------------------------------ sheets
-function openSheet(id){$(id).hidden=false;document.body.style.overflow="hidden";const m=$(id).querySelector(".msg");if(m)m.hidden=true}
-function closeSheet(el){el.hidden=true;if([...document.querySelectorAll(".sheet")].every(s=>s.hidden)&&$("mm").hidden)document.body.style.overflow=""}
+function openSheet(id){$(id).hidden=false;pushLayer($(id),fromBack=>closeSheet($(id),fromBack));document.body.style.overflow="hidden";const m=$(id).querySelector(".msg");if(m)m.hidden=true}
+function closeSheet(el,fromBack){if(fromBack!==true)dropLayer(el);el.hidden=true;if([...document.querySelectorAll(".sheet")].every(s=>s.hidden)&&$("mm").hidden)document.body.style.overflow=""}
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>closeSheet(b.closest(".sheet"))));
 const msg=(id,code)=>{$(id).textContent=ERR[code]||("Couldn't save: "+code);$(id).hidden=false};
 const opt=(v,t,sel)=>`<option value="${esc(v)}"${sel?" selected":""}>${esc(t)}</option>`;
@@ -1587,10 +1607,10 @@ function renderRV(){
 }
 let rvWake=null;
 async function openRV(){
-  RV.user=false;$("rv").hidden=false;document.body.style.overflow="hidden";renderRV();
+  RV.user=false;$("rv").hidden=false;pushLayer($("rv"),closeRV);document.body.style.overflow="hidden";renderRV();
   try{if(navigator.wakeLock)rvWake=await navigator.wakeLock.request("screen")}catch(e){}
 }
-function closeRV(){$("rv").hidden=true;if($("mm").hidden&&[...document.querySelectorAll(".sheet")].every(s=>s.hidden))document.body.style.overflow="";try{rvWake&&rvWake.release()}catch(e){}rvWake=null}
+function closeRV(fromBack){if(fromBack!==true)dropLayer($("rv"));$("rv").hidden=true;if($("mm").hidden&&[...document.querySelectorAll(".sheet")].every(s=>s.hidden))document.body.style.overflow="";try{rvWake&&rvWake.release()}catch(e){}rvWake=null}
 $("vFull").addEventListener("click",openRV);$("rvClose").addEventListener("click",closeRV);
 $("rvDial").addEventListener("click",()=>{$("vDial").checked=!$("vDial").checked;renderReticle()});
 $("rvTurret").addEventListener("click",()=>{if($("vMode").value==="shot"){$("vDial").checked=!$("vDial").checked;renderReticle()}});
