@@ -780,9 +780,10 @@ function renderSolution(){
   if(z&&z.elev)es+=`\nturret ${tu.reading}`;
   if(s.elevTurn>0&&tu.turns>0)es+=`\n${tu.turns} turn${tu.turns===1?"":"s"} + ${tu.rest}`;
   $("oEs").textContent=es;
-  $("oW").innerHTML=c.ms?`${w.val}<em>${w.unit} ${w.dir}</em>`:`0<em>${w.unit}</em>`;
+  $("oW").innerHTML=w.clicks?`${w.val}<em>${w.unit} ${w.dir}</em>`:`0<em>${w.unit}</em>`;   // wind, spin drift, Coriolis
   const per=B.toUnit(r.windPer1Mrad,s.unit).toFixed(e.dec+1);
-  $("oWs").textContent=(c.ms?`${w.clicks} click${w.clicks===1?"":"s"} ${w.dir==="R"?"right":"left"}\n`:"")+`${per} per 1 m/s`;
+  const why=[c.ms&&"wind",p.inputs.spinDrift&&"spin drift",solverInput(p,c).coriolis&&"Coriolis"].filter(Boolean).join(" + ");
+  $("oWs").textContent=(w.clicks?`${w.clicks} click${w.clicks===1?"":"s"} ${w.dir==="R"?"right":"left"}${why?" · "+why:""}\n`:"")+`${per} per 1 m/s`;
   $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
     +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span>`+(r.dropM!=null?`<span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`:"");
   if(r.subsonic)warn.push("Subsonic at this range – expect more spread and less reliable dope.");
@@ -812,7 +813,7 @@ function renderCard(){
     if(!r.reached)return`<tr><td>${r.range}</td><td colspan="6" class="dim">not reached</td></tr>`;
     const e=fmtHold(r.elevMrad,s,"U","D"),w=fmtHold(r.windMrad,s,"R","L");
     const cls=[r.subsonic?"ss":r.transonic?"ts":"",r.range===R?"cur":""].join(" ").trim();
-    return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${e.signed<0?"−":""}${e.val}</td><td>${e.clicks}${e.dir?" "+e.dir[0]:""}</td><td>${c.ms?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
+    return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${e.signed<0?"−":""}${e.val}</td><td>${e.clicks}${e.dir?" "+e.dir[0]:""}</td><td>${w.clicks?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
   }).join("");
 }
 
