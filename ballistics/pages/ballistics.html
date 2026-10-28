@@ -1642,7 +1642,7 @@ function pv03Target(){
   for(const d of [5,10])out.push({t:"circle",r:d/2,stroke:"#111",width:1});
   for(const d of [20,30,40])out.push({t:"circle",r:d/2,stroke:"#fff",width:1});
   const num=(n,r,size)=>[-1,1].flatMap(sg=>[{t:"text",x:sg*r,y:0,text:String(n),size,color:"#fff"},{t:"text",x:0,y:sg*r,text:String(n),size,color:"#fff"}]);
-  return out.concat(num(9,8.75,1.8),num(8,12.5,3),num(7,17.5,3),num(6,22.5,3));
+  return out.concat(num(9,8.75,2.4),num(8,12.5,3),num(7,17.5,3),num(6,22.5,3));
 }
 const TARGET_PRESETS={
   sra2024:{name:"SRA target",size:"45 × 75 cm",parts:sraTarget()},
