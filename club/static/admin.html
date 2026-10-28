@@ -274,12 +274,17 @@ $("stockActs").addEventListener("click",e=>{const b=e.target.closest("[data-act]
 
 /* ---- sheet ---- */
 let onSave=null;
+// The phone's Back closes the sheet instead of leaving the page: opening it adds a history entry, closing it
+// with a button drops the entry again.
+let sheetEntry=false,backSkip=0;
+window.addEventListener("popstate",()=>{if(backSkip){backSkip--;return}if(sheetEntry){sheetEntry=false;closeSheet(true)}});
 function sheet(title,html,save,label){
+  if($("sheet").hidden&&!sheetEntry){sheetEntry=true;history.pushState({sheet:1},"")}
   $("sTitle").textContent=title;$("sBody").innerHTML=html;$("sMsg").hidden=true;onSave=save;
   $("sFoot").hidden=!save;$("sSave").textContent=label||T("Save");$("sheet").hidden=false;document.body.style.overflow="hidden";$("sheet").scrollTop=0;
   $("sBody").onclick=null;$("sBody").onchange=null;$("sBody").oninput=null;
 }
-function closeSheet(){$("sheet").hidden=true;document.body.style.overflow="";onSave=null;$("sBody").innerHTML=""}
+function closeSheet(fromBack){if(fromBack!==true&&sheetEntry){sheetEntry=false;backSkip++;history.back()}$("sheet").hidden=true;document.body.style.overflow="";onSave=null;$("sBody").innerHTML=""}
 $("sClose").addEventListener("click",closeSheet);
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("sheet").hidden)closeSheet()});
 $("sForm").addEventListener("submit",async e=>{e.preventDefault();if(!onSave)return;$("sSave").disabled=true;
