@@ -1618,8 +1618,8 @@ function renderReticle(){
 // scaled to the range (cm / range = angle). Parts: {t:"poly", points} | {t:"circle", cx, cy, r} |
 // {t:"line", x1, y1, x2, y2} | {t:"text", x, y, text, size}, each with optional fill / stroke / width (px).
 // A scored target is one more entry in TARGET_PRESETS: outline, zone lines and zone letters.
-const CARD="#cfa755",EDGE="#333";                  // cardboard and its outline, as in Strelok
-const plain=points=>[{t:"poly",points,fill:CARD}];
+const CARD="#cfa755",STEEL="#a9b4bf";             // SRA cardboard (as in Strelok); circle, rectangle, diamond: steel grey
+const plain=points=>[{t:"poly",points,fill:STEEL}];
 // SRA cardboard target from the SRA rules ver. 8.1 (RESUL), Annex 1 "Pahvitaulu 2024", in mm from the shoulder
 // line's centre; aimed at the centre of the A zone (165 mm below the shoulder). Outline = the cut edge (the
 // scoring line is 5 mm inside it), then the C and A zone lines and the zone letters.
@@ -1647,7 +1647,7 @@ function fillTargetUI(){
 function tgtFields(){const k=$("vTgt").value;$("vTgtDL").hidden=k!=="circle";$("vTgtWL").hidden=$("vTgtHL").hidden=k!=="rect"&&k!=="diamond"}
 /** The chosen target in cm: {parts, name} (null: none) */
 function targetCm(t){
-  if(t.kind==="circle"&&t.d>0)return{parts:[{t:"circle",r:t.d/2,fill:CARD}],name:`circle Ø ${t.d} cm`,w:t.d,h:t.d};
+  if(t.kind==="circle"&&t.d>0)return{parts:[{t:"circle",r:t.d/2,fill:STEEL}],name:`circle Ø ${t.d} cm`,w:t.d,h:t.d};
   if(t.kind==="rect"&&t.w>0&&t.h>0)return{parts:plain([[-t.w/2,-t.h/2],[t.w/2,-t.h/2],[t.w/2,t.h/2],[-t.w/2,t.h/2]]),name:`${t.w} × ${t.h} cm`,w:t.w,h:t.h};
   if(t.kind==="diamond"&&t.w>0&&t.h>0)return{parts:plain([[0,-t.h/2],[t.w/2,0],[0,t.h/2],[-t.w/2,0]]),name:`diamond ${t.w} × ${t.h} cm tip to tip`,w:t.w,h:t.h};
   const pre=TARGET_PRESETS[t.kind];return pre?{parts:pre.parts,name:`${pre.name} (${pre.size})`}:null;
