@@ -299,6 +299,7 @@ header.top{padding-top:6px!important}
 .rv-bar button:disabled{opacity:.5}
 .rtool{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,9rem);gap:10px;align-items:end}
 .rtool #vMagL{grid-column:1/-1}
+.rtgt{display:grid;grid-template-columns:minmax(0,1fr) repeat(2,minmax(0,6.5rem));gap:10px;align-items:end;margin-top:10px}
 .rview{position:relative;width:100%;max-width:560px;margin:0 auto;aspect-ratio:1/1;background:#000;border-radius:var(--r);overflow:hidden}
 .rview-box{position:absolute;inset:0;touch-action:none}
 .rview-box svg{width:100%;height:100%;display:block}
@@ -440,6 +441,12 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f">Show<select id="vMode"></select></label>
       <label class="f">View ±<select id="vZoom"></select></label>
       <label class="f" id="vMagL" hidden>Power ×<input type="text" inputmode="decimal" id="vMag"></label>
+    </div>
+    <div class="rtgt">
+      <label class="f">Target<select id="vTgt"></select></label>
+      <label class="f" id="vTgtDL">Ø cm<input type="text" inputmode="decimal" id="vTgtD" placeholder="30"></label>
+      <label class="f" id="vTgtWL">Width cm<input type="text" inputmode="decimal" id="vTgtW" placeholder="30"></label>
+      <label class="f" id="vTgtHL">Height cm<input type="text" inputmode="decimal" id="vTgtH" placeholder="45"></label>
     </div>
     <div class="rview">
       <div class="rview-box" id="vBox"></div>
@@ -1472,7 +1479,9 @@ function retScene(p,ret){
       out.dialled=$("vDial").checked?Math.round(e/click)*click:0;
       const y=toRet(e-out.dialled,s.unit,ret),x=-toRet(w,s.unit,ret);
       out.holds.push({x,y,main:true});                 // the range is on the readout; a tag would cover marks
+      const tg=targetShape(R,ret);if(tg)out.targets.push(Object.assign(tg.shape,{x,y}));
       out.info.push(`Put the target on the dot: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
+      if(tg)out.info.push(tg.info);
     }
   }else{
     const st=D.stages.find(x=>x.id===out.mode),rows=st?stageRows(st,p)||[]:[];
@@ -1603,6 +1612,33 @@ function renderReticle(){
 }
 ["vMode","vDial","vMag","vZoom"].forEach(id=>$(id).addEventListener(id==="vMag"?"input":"change",()=>{if(id==="vZoom"||id==="vMode")VZ.user=false;renderReticle()}));
 
+
+// ------------------------------------------------------------ target drawn at the point of impact (this shot)
+// Sizes in cm, drawn to scale at the range: cm / range = angle. Presets are outlines in cm from the target's
+// centre (x right, y down); the first part is the outline, the rest zone lines.
+const TARGET_PRESETS={};
+function tgtState(){return Object.assign({kind:"",d:30,w:30,h:45},U.tgt||{})}
+function fillTargetUI(){
+  const t=tgtState();
+  $("vTgt").innerHTML=`<option value="">No target</option><option value="circle">Circle</option><option value="rect">Rectangle</option>`
+    +Object.entries(TARGET_PRESETS).map(([k,v])=>`<option value="${k}">${esc(v.name)}</option>`).join("");
+  $("vTgt").value=[...$("vTgt").options].some(o=>o.value===t.kind)?t.kind:"";
+  setv("vTgtD",t.d);setv("vTgtW",t.w);setv("vTgtH",t.h);tgtFields();
+}
+function tgtFields(){const k=$("vTgt").value;$("vTgtDL").hidden=k!=="circle";$("vTgtWL").hidden=$("vTgtHL").hidden=k!=="rect"}
+/** {shape (reticle units, centred on 0,0), info} for the chosen target at range R, or null */
+function targetShape(R,ret){
+  const t=tgtState();if(!t.kind||!(R>0))return null;
+  const u=ret.unit==="MOA"?"MOA":"mil",ang=cm=>RT.convert(cm/100/R*1000,"MRAD",ret.unit),f=v=>(+v).toFixed(2);
+  if(t.kind==="circle"&&t.d>0)return{shape:{shape:"circle",r:ang(t.d)/2,fill:0.16,width:1.5},info:`Target: circle Ø ${t.d} cm = ${f(ang(t.d))} ${u} at ${R} m.`};
+  if(t.kind==="rect"&&t.w>0&&t.h>0)return{shape:{shape:"rect",w:ang(t.w),h:ang(t.h),fill:0.16,width:1.5,dashed:false},info:`Target: ${t.w} × ${t.h} cm = ${f(ang(t.w))} × ${f(ang(t.h))} ${u} at ${R} m.`};
+  const pre=TARGET_PRESETS[t.kind];if(!pre)return null;
+  const parts=pre.parts.map(q=>q.t==="circle"?{t:"circle",cx:ang(q.cx||0),cy:ang(q.cy||0),r:ang(q.r)}:{t:"poly",points:q.points.map(([x,y])=>[ang(x),ang(y)])});
+  return{shape:{shape:"parts",parts,fill:0.16,width:1.5},info:`Target: ${pre.name} (${pre.size}) at ${R} m.`};
+}
+$("vTgt").addEventListener("change",()=>{U.tgt=Object.assign(tgtState(),{kind:$("vTgt").value});saveUI();tgtFields();renderReticle()});
+for(const [id,k] of [["vTgtD","d"],["vTgtW","w"],["vTgtH","h"]])$(id).addEventListener("input",()=>{const v=num($(id).value);if(v>0&&v<=1000){U.tgt=Object.assign(tgtState(),{[k]:v});saveUI();renderReticle()}});
+fillTargetUI();
 // ---- full screen, Strelok-style
 function renderRV(){
   const p=prof(),ret=retOf(p);if(!ret){closeRV();return}

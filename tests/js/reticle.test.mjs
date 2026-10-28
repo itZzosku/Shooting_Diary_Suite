@@ -133,3 +133,13 @@ test("svg: view centre moves the window, scope draws a round field", () => {
   assert.ok(out.includes('viewBox="-1 1 4 4"'));
   assert.ok(out.includes('clip-path="url(#rt-clip)"') && out.includes('r="12"'));
 });
+
+test("svg: target shapes – circle, solid rectangle, zoned outline", () => {
+  const out = R.svg([{t: "dot", x: 0, y: 0, r: 0.05}], {half: 5, targets: [
+    {x: 1, y: 2, shape: "circle", r: 0.5},
+    {x: 0, y: 0, shape: "rect", w: 1, h: 1.5, dashed: false},
+    {x: 0, y: 1, shape: "parts", parts: [{t: "poly", points: [[-1, -1], [1, -1], [1, 1], [-1, 1]]}, {t: "circle", cx: 0, cy: 0, r: 0.2}]}]});
+  assert.ok(out.includes('cx="1" cy="2" r="0.5"'), "circle at the hold");
+  assert.ok(out.includes('x="-0.5" y="-0.75" width="1" height="1.5"') && !/height="1.5"[^>]*dasharray/.test(out), "solid rect");
+  assert.ok(out.includes('points="-1,0 1,0 1,2 -1,2"') && out.includes('cx="0" cy="1" r="0.2"'), "parts offset to the target");
+});

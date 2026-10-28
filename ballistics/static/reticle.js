@@ -174,7 +174,8 @@
   /** SVG markup. opts: {half (view half-width in true reticle units), cx, cy (view centre, default 0,0),
       px (one screen pixel in true units; default half/160), k (SFP factor), ink, accent, bg,
       scope: {r, fill, outside} (round field of view: fill inside, outside colour around it),
-      holds: [{x, y, label, main}] in true reticle units (x right, y down), targets: [{x, y, w, h}],
+      holds: [{x, y, label, main}] in true reticle units (x right, y down),
+      targets: [{x, y, shape?: "rect" (w, h) | "circle" (r) | "parts" (parts), color?, fill?, width?}],
       texts: [{x, y, text, color, size (screen px), anchor, weight, halo (outline colour)}], lines: [{x1, y1, x2, y2, color, width (screen px)}],
       image: {href, transform, opacity}, extra (raw svg)} */
   function svg(elements, opts) {
@@ -203,9 +204,20 @@
     for (const l of o.lines || [])
       parts.push(`<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${l.color || o.accent}" stroke-width="${px * (l.width || 1)}"/>`);
     for (const t of o.targets || []) {
-      if (t.w > 0) {
+      // shape: "rect" (default; w, h), "circle" (r), "parts" ([{t:"circle", cx, cy, r} | {t:"poly", points}],
+      // offsets from x, y; the first part is the outline, the rest zone lines). dashed: stage targets.
+      const st = `fill="${t.color || o.accent}" fill-opacity="${t.fill != null ? t.fill : 0.12}" stroke="${t.color || o.accent}" stroke-width="${px * (t.width || 1)}"` +
+                 (t.dashed !== false && !t.shape ? ` stroke-dasharray="${px * 4} ${px * 3}"` : "");
+      if (t.shape === "circle" && t.r > 0) parts.push(`<circle cx="${t.x}" cy="${t.y}" r="${t.r}" ${st}/>`);
+      else if (t.shape === "parts" && Array.isArray(t.parts)) {
+        t.parts.forEach((q, i) => {
+          const s2 = i ? `fill="none" stroke="${t.color || o.accent}" stroke-width="${px * (t.width || 1) * 0.8}"` : st;
+          if (q.t === "circle") parts.push(`<circle cx="${t.x + q.cx}" cy="${t.y + q.cy}" r="${q.r}" ${s2}/>`);
+          else if (q.t === "poly") parts.push(`<polygon points="${q.points.map(pt => `${t.x + pt[0]},${t.y + pt[1]}`).join(" ")}" ${s2}/>`);
+        });
+      } else if (t.w > 0) {
         const hh = t.h > 0 ? t.h : t.w;
-        parts.push(`<rect x="${t.x - t.w / 2}" y="${t.y - hh / 2}" width="${t.w}" height="${hh}" fill="${o.accent}" fill-opacity="0.12" stroke="${o.accent}" stroke-width="${px}" stroke-dasharray="${px * 4} ${px * 3}"/>`);
+        parts.push(`<rect x="${t.x - t.w / 2}" y="${t.y - hh / 2}" width="${t.w}" height="${hh}" ${st}/>`);
       }
     }
     for (const t of o.texts || [])
