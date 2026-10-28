@@ -401,9 +401,11 @@ def everything(conn):
         p["inputs"] = resolve_inputs(p, bullets, picks, conn)
     from .reticles import all_reticles
     me = bridge.current_user()
+    is_admin = bool(me and me["is_admin"] and not me.get("demo"))
     return {"profiles": profiles, "bullets": bullets,
-            "reticles": all_reticles({p["reticle_id"] for p in profiles if p["reticle_id"]}),
-            "is_admin": bool(me and me["is_admin"] and not me.get("demo")),
+            # admins see archived reticles too (to restore or delete them); others only those their profiles use
+            "reticles": all_reticles({p["reticle_id"] for p in profiles if p["reticle_id"]}, everything=is_admin),
+            "is_admin": is_admin,
             "matches": _rows(conn, "SELECT * FROM bal_matches ORDER BY archived, date DESC, name"),
             "stages": stage_rows(conn),
             "observations": _rows(conn, "SELECT * FROM bal_observations ORDER BY date, range_m, rowid"),

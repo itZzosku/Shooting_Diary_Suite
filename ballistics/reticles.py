@@ -61,15 +61,15 @@ def _row(r):
     return d
 
 
-def all_reticles(include_ids=()):
-    """Active reticles, plus archived ones in include_ids (used by this account's profiles)."""
+def all_reticles(include_ids=(), everything=False):
+    """Active reticles, plus archived ones in include_ids (used by this account's profiles); everything=True: all."""
     conn = connect()
     try:
         rows = [_row(r) for r in conn.execute("SELECT * FROM reticles ORDER BY maker, name")]
     finally:
         conn.close()
     keep = set(include_ids)
-    return [r for r in rows if not r["archived"] or r["id"] in keep]
+    return [r for r in rows if everything or not r["archived"] or r["id"] in keep]
 
 
 # ------------------------------------------------------------------ validation
@@ -206,3 +206,54 @@ def api_archive_reticle(rid):
     finally:
         conn.close()
     return jsonify(ok=True)
+
+
+def _profiles_using(rid, clear=False):
+    """Profiles in every account that use this reticle (clear=True: unlink them). → count"""
+    n = 0
+    for dbp in bridge.account_dbs():
+        conn = bridge.connect(dbp)
+        try:
+            have = {r[1] for r in conn.execute("PRAGMA table_info(bal_profiles)")}
+            if "reticle_id" not in have:
+                continue
+            n += conn.execute("SELECT COUNT(*) FROM bal_profiles WHERE reticle_id=?", (rid,)).fetchone()[0]
+            if clear:
+                conn.execute("UPDATE bal_profiles SET reticle_id=NULL WHERE reticle_id=?", (rid,))
+                conn.commit()
+        finally:
+            conn.close()
+    return n
+
+
+@bp.get("/api/ballistics/reticles/<rid>/usage")
+@login_required
+def api_reticle_usage(rid):
+    """How many profiles (all accounts) use it – for the delete confirmation."""
+    if not ID_RE.match(rid):
+        return jsonify(error="bad_id"), 400
+    if not _admin():
+        return jsonify(error="admin_only"), 403
+    return jsonify(profiles=_profiles_using(rid))
+
+
+@bp.delete("/api/ballistics/reticles/<rid>/purge")
+@login_required
+def api_delete_reticle(rid):
+    """Deletes for good: the library row goes, profiles that used it (any account) have no reticle.
+    The nightly library backup still has it."""
+    if request.headers.get("X-Requested-With") != "fetch":
+        return jsonify(error="fetch_only"), 403
+    if not ID_RE.match(rid):
+        return jsonify(error="bad_id"), 400
+    if not _admin():
+        return jsonify(error="admin_only"), 403
+    conn = connect()
+    try:
+        gone = conn.execute("DELETE FROM reticles WHERE id=?", (rid,)).rowcount
+        conn.commit()
+    finally:
+        conn.close()
+    if not gone:
+        return jsonify(error="not_found"), 404
+    return jsonify(ok=True, profiles_cleared=_profiles_using(rid, clear=True))

@@ -221,3 +221,29 @@ def test_library_backup(client, tmp_path):
     client.put("/diary/api/ballistics/reticles/r-gen", json=RET)
     p = reticles.backup(str(tmp_path), keep=2)
     assert p and os.path.exists(p)
+
+
+
+def test_reticle_delete_for_good(client):
+    """An admin deletes a reticle permanently; profiles that used it lose the link; others can't delete."""
+    assert client.put("/diary/api/ballistics/reticles/ret-del", json=RET).status_code == 200
+    assert client.put("/diary/api/ballistics/profiles/p-del", json={"name": "P", "sight_height_mm": 50,
+                                                                    "zero_range_m": 100, "reticle_id": "ret-del"}).status_code == 200
+    assert client.get("/diary/api/ballistics/reticles/ret-del/usage").get_json() == {"profiles": 1}
+    m = _mikko()
+    assert m.delete("/diary/api/ballistics/reticles/ret-del/purge", headers=H).status_code == 403
+    assert m.get("/diary/api/ballistics/reticles/ret-del/usage").status_code == 403
+    assert client.delete("/diary/api/ballistics/reticles/ret-del/purge").status_code == 403, "fetch only"
+    r = client.delete("/diary/api/ballistics/reticles/ret-del/purge", headers=H)
+    assert r.status_code == 200 and r.get_json()["profiles_cleared"] == 1
+    d = client.get("/diary/api/ballistics").get_json()
+    assert not any(x["id"] == "ret-del" for x in d["reticles"])
+    assert next(p for p in d["profiles"] if p["id"] == "p-del")["reticle_id"] is None
+    assert client.delete("/diary/api/ballistics/reticles/ret-del/purge", headers=H).status_code == 404
+
+
+def test_admin_sees_archived_reticles(client):
+    assert client.put("/diary/api/ballistics/reticles/ret-arch", json=RET).status_code == 200
+    assert client.delete("/diary/api/ballistics/reticles/ret-arch", headers=H).status_code == 200
+    assert any(x["id"] == "ret-arch" and x["archived"] for x in client.get("/diary/api/ballistics").get_json()["reticles"])
+    assert not any(x["id"] == "ret-arch" for x in _mikko().get("/diary/api/ballistics").get_json()["reticles"])

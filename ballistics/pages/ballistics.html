@@ -690,6 +690,7 @@ details summary{cursor:pointer;list-style:revert}
       <button class="ghost" type="button" id="rbExport">Export file</button>
       <label class="ghost" style="cursor:pointer">Import file<input type="file" accept="application/json,.json" id="rbImport" hidden></label>
       <button class="danger" type="button" id="rbArch" hidden>Archive</button>
+      <button class="danger" type="button" id="rbDel" hidden>Delete</button>
     </div>
   </form>
 </div>
@@ -1829,7 +1830,7 @@ function renderLib(){
     +Object.entries(RT.TEMPLATES).map(([k,t])=>`<button type="button" class="chip add" data-tpl="${k}">+ ${esc(t.name)}</button>`).join("");
   $("rbWho").innerHTML=D.is_admin?"The library is shared by every account on this server. Start from a template or a copy, fill in the numbers from the maker's subtension drawing, check against the drawing, save."
     :"The library is shared by every account and kept by an admin. You can build and preview a reticle here and <b>Export</b> it for an admin to add.";
-  $("rbSave").hidden=!D.is_admin;$("rbArch").hidden=!D.is_admin||!BS.ret||!!BS.ret.archived;
+  $("rbSave").hidden=!D.is_admin;$("rbArch").hidden=!D.is_admin||!BS.ret||!!BS.ret.archived;$("rbDel").hidden=!D.is_admin||!BS.ret;
 }
 function openLib(ret){
   BS.ret=ret||null;BS.img=null;BS.imgT=null;BS.mode=null;BS.pts=[];$("rbCal").hidden=$("rbOp").hidden=true;
@@ -1858,6 +1859,15 @@ $("rbArch").addEventListener("click",async()=>{
   if(!BS.ret||!confirm(`Archive “${BS.ret.name}”? Profiles that use it keep it; it disappears from the picker.`))return;
   const res=await send("DELETE","api/ballistics/reticles/"+encodeURIComponent(BS.ret.id));if(!res.ok)return msg("rbMsg",res.j.error);
   await load();BS.ret=null;renderLib();
+});
+$("rbDel").addEventListener("click",async()=>{
+  const r=BS.ret;if(!r)return;
+  let n=0;try{const u=await send("GET","api/ballistics/reticles/"+encodeURIComponent(r.id)+"/usage");if(u.ok)n=u.j.profiles}catch(e){return msg("rbMsg","Deleting needs a connection.")}
+  const who=n?`\n\n${n} profile${n>1?"s":""} (all accounts) use${n>1?"":"s"} it and will have no reticle.`:"";
+  if(!confirm(`Delete “${(r.maker?r.maker+" ":"")+r.name}” from the library for good?${who}\n\nThis can't be undone here (the nightly library backup still has it).`))return;
+  let res;try{res=await send("DELETE","api/ballistics/reticles/"+encodeURIComponent(r.id)+"/purge")}catch(e){return msg("rbMsg","Deleting needs a connection.")}
+  if(!res.ok)return msg("rbMsg",res.j.error==="admin_only"?"Only an admin can change the library.":res.j.error);
+  RET_ELS.clear();await load();BS.ret=null;fillForm(blankSpec(),{});renderLib();preview();toast("Deleted.");
 });
 $("rbExport").addEventListener("click",()=>{
   preview();const m=meta();
