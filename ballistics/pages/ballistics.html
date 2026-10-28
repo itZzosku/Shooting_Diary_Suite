@@ -363,6 +363,22 @@ details summary{cursor:pointer;list-style:revert}
     <div class="src" id="pInfo"></div>
   </section>
 
+  <section class="card" aria-label="Range and solution">
+    <div class="rangebox">
+      <button type="button" id="rMinus" aria-label="10 m closer">−</button>
+      <input type="text" inputmode="numeric" id="rIn" aria-label="Range in metres" value="300">
+      <button type="button" id="rPlus" aria-label="10 m further">+</button>
+      <span class="u">metres · slant range</span>
+    </div>
+    <div class="chips" id="rChips"></div>
+    <div class="sol" aria-live="polite">
+      <div><small>Elevation</small><b id="oE">–</b><span id="oEs"></span></div>
+      <div><small>Windage</small><b id="oW">–</b><span id="oWs"></span></div>
+    </div>
+    <div class="more" id="oMore"></div>
+    <div class="warns" id="oWarn"></div>
+  </section>
+
   <section class="card" aria-label="Conditions">
     <div class="wxbar">
       <button type="button" class="wxbtn" id="wxToggle" aria-expanded="false" aria-controls="wxPanel">
@@ -400,22 +416,6 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f">From o'clock<select id="wClock"></select></label>
       <label class="f">Angle °<span class="inbtn"><input type="text" inputmode="decimal" id="aAng" placeholder="0"><button type="button" id="aTilt" title="Hold the phone flat along the barrel" aria-label="Measure angle with the phone">∠</button></span></label>
     </div>
-  </section>
-
-  <section class="card" aria-label="Range and solution">
-    <div class="rangebox">
-      <button type="button" id="rMinus" aria-label="10 m closer">−</button>
-      <input type="text" inputmode="numeric" id="rIn" aria-label="Range in metres" value="300">
-      <button type="button" id="rPlus" aria-label="10 m further">+</button>
-      <span class="u">metres · slant range</span>
-    </div>
-    <div class="chips" id="rChips"></div>
-    <div class="sol" aria-live="polite">
-      <div><small>Elevation</small><b id="oE">–</b><span id="oEs"></span></div>
-      <div><small>Windage</small><b id="oW">–</b><span id="oWs"></span></div>
-    </div>
-    <div class="more" id="oMore"></div>
-    <div class="warns" id="oWarn"></div>
   </section>
 
   <div class="tabs" role="tablist">
