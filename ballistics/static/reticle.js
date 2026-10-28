@@ -175,7 +175,7 @@
       px (one screen pixel in true units; default half/160), k (SFP factor), ink, accent, bg,
       scope: {r, fill, outside} (round field of view: fill inside, outside colour around it),
       holds: [{x, y, label, main}] in true reticle units (x right, y down),
-      targets: [{x, y, shape?: "rect" (w, h) | "circle" (r) | "parts" (parts), color?, fill?, width?}],
+      targets: [{x, y, parts} | {x, y, w, h}] (see below; drawn under the reticle),
       texts: [{x, y, text, color, size (screen px), anchor, weight, halo (outline colour)}], lines: [{x1, y1, x2, y2, color, width (screen px)}],
       image: {href, transform, opacity}, extra (raw svg)} */
   function svg(elements, opts) {
@@ -190,6 +190,26 @@
     }
     if (o.image) parts.push(`<image href="${esc(o.image.href)}" transform="${esc(o.image.transform)}" opacity="${o.image.opacity ?? 0.5}" preserveAspectRatio="none"/>`);
     if (o.scope && o.scope.r > 0) parts.push(`<clipPath id="rt-clip"><circle cx="0" cy="0" r="${o.scope.r}"/></clipPath><g clip-path="url(#rt-clip)">`);
+    // Targets go under the reticle (like Strelok): solid shapes the marks are read against.
+    // A target: {x, y, parts: [...]} with parts offset from x, y in true units, drawn in order:
+    //   {t: "poly", points, fill, stroke, width} | {t: "circle", cx, cy, r, fill, stroke, width}
+    //   {t: "line", x1, y1, x2, y2, stroke, width} | {t: "text", x, y, text, size, color}
+    // fill defaults to none, stroke to #333, width (screen px) to 2; text size is in true units (scales with range).
+    // Without parts: a stage target, a dashed rectangle w × h in the accent colour.
+    for (const t of o.targets || []) {
+      if (Array.isArray(t.parts)) {
+        for (const q of t.parts) {
+          const st = `fill="${q.fill || "none"}" stroke="${q.stroke || "#333"}" stroke-width="${px * (q.width != null ? q.width : 2)}" stroke-linejoin="round"`;
+          if (q.t === "poly") parts.push(`<polygon points="${q.points.map(pt => `${t.x + pt[0]},${t.y + pt[1]}`).join(" ")}" ${st}/>`);
+          else if (q.t === "circle") parts.push(`<circle cx="${t.x + (q.cx || 0)}" cy="${t.y + (q.cy || 0)}" r="${q.r}" ${st}/>`);
+          else if (q.t === "line") parts.push(`<line x1="${t.x + q.x1}" y1="${t.y + q.y1}" x2="${t.x + q.x2}" y2="${t.y + q.y2}" ${st}/>`);
+          else if (q.t === "text") parts.push(`<text x="${t.x + q.x}" y="${t.y + q.y}" font-size="${q.size}" fill="${q.color || "#111"}" text-anchor="middle" dominant-baseline="central" font-family="IBM Plex Sans, sans-serif">${esc(q.text)}</text>`);
+        }
+      } else if (t.w > 0) {
+        const hh = t.h > 0 ? t.h : t.w;
+        parts.push(`<rect x="${t.x - t.w / 2}" y="${t.y - hh / 2}" width="${t.w}" height="${hh}" fill="${o.accent}" fill-opacity="0.12" stroke="${o.accent}" stroke-width="${px}" stroke-dasharray="${px * 4} ${px * 3}"/>`);
+      }
+    }
     parts.push(`<g transform="scale(${k})" fill="${o.ink}" stroke="${o.ink}">`);
     for (const e of elements) {
       const sw = Math.max((e.w || 0), px / k);
@@ -203,23 +223,6 @@
     parts.push(`</g>`);
     for (const l of o.lines || [])
       parts.push(`<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${l.color || o.accent}" stroke-width="${px * (l.width || 1)}"/>`);
-    for (const t of o.targets || []) {
-      // shape: "rect" (default; w, h), "circle" (r), "parts" ([{t:"circle", cx, cy, r} | {t:"poly", points}],
-      // offsets from x, y; the first part is the outline, the rest zone lines). dashed: stage targets.
-      const st = `fill="${t.color || o.accent}" fill-opacity="${t.fill != null ? t.fill : 0.12}" stroke="${t.color || o.accent}" stroke-width="${px * (t.width || 1)}"` +
-                 (t.dashed !== false && !t.shape ? ` stroke-dasharray="${px * 4} ${px * 3}"` : "");
-      if (t.shape === "circle" && t.r > 0) parts.push(`<circle cx="${t.x}" cy="${t.y}" r="${t.r}" ${st}/>`);
-      else if (t.shape === "parts" && Array.isArray(t.parts)) {
-        t.parts.forEach((q, i) => {
-          const s2 = i ? `fill="none" stroke="${t.color || o.accent}" stroke-width="${px * (t.width || 1) * 0.8}"` : st;
-          if (q.t === "circle") parts.push(`<circle cx="${t.x + q.cx}" cy="${t.y + q.cy}" r="${q.r}" ${s2}/>`);
-          else if (q.t === "poly") parts.push(`<polygon points="${q.points.map(pt => `${t.x + pt[0]},${t.y + pt[1]}`).join(" ")}" ${s2}/>`);
-        });
-      } else if (t.w > 0) {
-        const hh = t.h > 0 ? t.h : t.w;
-        parts.push(`<rect x="${t.x - t.w / 2}" y="${t.y - hh / 2}" width="${t.w}" height="${hh}" ${st}/>`);
-      }
-    }
     for (const t of o.texts || [])
       parts.push(`<text x="${t.x}" y="${t.y}" font-size="${px * (t.size || 12)}" fill="${t.color || o.accent}" text-anchor="${t.anchor || "start"}" font-weight="${t.weight || 500}" font-family="IBM Plex Sans, sans-serif"${t.halo ? ` stroke="${t.halo}" stroke-width="${px * 3}" stroke-linejoin="round" paint-order="stroke"` : ""}>${esc(t.text)}</text>`);
     if (o.scope && o.scope.r > 0) parts.push(`</g>`);

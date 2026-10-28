@@ -1614,16 +1614,27 @@ function renderReticle(){
 
 
 // ------------------------------------------------------------ target drawn at the point of impact (this shot)
-// Sizes in cm, drawn to scale at the range: cm / range = angle. Presets are outlines in cm from the target's
-// centre (x right, y down); the first part is the outline, the rest zone lines.
-// SRA cardboard target from the SRA rules ver. 8.1 (RESUL), Annex 1 "Pahvitaulu 2024", mm → cm.
-// Origin of the drawing: the shoulder line's centre; shifted so the aim point is the centre of the body A zone.
-// Outline = the cut edge (the scoring line is 5 mm inside it); then the C zone and the A zone(s).
-const SRA_OUTLINE=[[-75,-150],[75,-150],[75,0],[175,0],[225,50],[225,450],[150,600],[-150,600],[-225,450],[-225,50],[-175,0],[-75,0]];
-const SRA_C=[[-75,0],[75,0],[150,50],[150,330],[100,450],[-100,450],[-150,330],[-150,50]];
-const sraParts=(aimY,zones)=>[SRA_OUTLINE,SRA_C,...zones].map(pts=>({t:"poly",points:pts.map(([x,y])=>[x/10,(y-aimY)/10])}));
+// Every target is data: parts measured in cm from the aim point (x right, y down), drawn under the reticle and
+// scaled to the range (cm / range = angle). Parts: {t:"poly", points} | {t:"circle", cx, cy, r} |
+// {t:"line", x1, y1, x2, y2} | {t:"text", x, y, text, size}, each with optional fill / stroke / width (px).
+// A scored target is one more entry in TARGET_PRESETS: outline, zone lines and zone letters.
+const CARD="#cfa755",EDGE="#333";                  // cardboard and its outline, as in Strelok
+const plain=points=>[{t:"poly",points,fill:CARD}];
+// SRA cardboard target from the SRA rules ver. 8.1 (RESUL), Annex 1 "Pahvitaulu 2024", in mm from the shoulder
+// line's centre; aimed at the centre of the A zone (165 mm below the shoulder). Outline = the cut edge (the
+// scoring line is 5 mm inside it), then the C and A zone lines and the zone letters.
+function sraTarget(){
+  const aimY=165,mm=pts=>pts.map(([x,y])=>[x/10,(y-aimY)/10]),at=(x,y)=>[x/10,(y-aimY)/10];
+  const letter=(text,x,y)=>{const [cx,cy]=at(x,y);return{t:"text",x:cx,y:cy,text,size:4.5}};
+  return[
+    {t:"poly",points:mm([[-75,-150],[75,-150],[75,0],[175,0],[225,50],[225,450],[150,600],[-150,600],[-225,450],[-225,50],[-175,0],[-75,0]]),fill:CARD},
+    {t:"poly",points:mm([[-75,0],[75,0],[150,50],[150,330],[100,450],[-100,450],[-150,330],[-150,50]])},
+    {t:"poly",points:mm([[-75,0],[75,0],[75,330],[-75,330]])},
+    letter("B",0,-75),letter("A",0,aimY),letter("C",-112,aimY),letter("C",112,aimY),letter("D",-188,aimY),letter("D",188,aimY),
+  ];
+}
 const TARGET_PRESETS={
-  sra2024:{name:"SRA target",size:"45 × 75 cm, A 15 × 33",parts:sraParts(165,[[[-75,0],[75,0],[75,330],[-75,330]]])},
+  sra2024:{name:"SRA target",size:"45 × 75 cm",parts:sraTarget()},
 };
 function tgtState(){return Object.assign({kind:"",d:30,w:30,h:45},U.tgt||{})}
 function fillTargetUI(){
@@ -1634,17 +1645,26 @@ function fillTargetUI(){
   setv("vTgtD",t.d);setv("vTgtW",t.w);setv("vTgtH",t.h);tgtFields();
 }
 function tgtFields(){const k=$("vTgt").value;$("vTgtDL").hidden=k!=="circle";$("vTgtWL").hidden=$("vTgtHL").hidden=k!=="rect"&&k!=="diamond"}
-/** {shape (reticle units, centred on 0,0), info} for the chosen target at range R, or null */
+/** The chosen target in cm: {parts, name} (null: none) */
+function targetCm(t){
+  if(t.kind==="circle"&&t.d>0)return{parts:[{t:"circle",r:t.d/2,fill:CARD}],name:`circle Ø ${t.d} cm`,w:t.d,h:t.d};
+  if(t.kind==="rect"&&t.w>0&&t.h>0)return{parts:plain([[-t.w/2,-t.h/2],[t.w/2,-t.h/2],[t.w/2,t.h/2],[-t.w/2,t.h/2]]),name:`${t.w} × ${t.h} cm`,w:t.w,h:t.h};
+  if(t.kind==="diamond"&&t.w>0&&t.h>0)return{parts:plain([[0,-t.h/2],[t.w/2,0],[0,t.h/2],[-t.w/2,0]]),name:`diamond ${t.w} × ${t.h} cm tip to tip`,w:t.w,h:t.h};
+  const pre=TARGET_PRESETS[t.kind];return pre?{parts:pre.parts,name:`${pre.name} (${pre.size})`}:null;
+}
+/** {shape (reticle units, centred on the aim point), info} for the chosen target at range R, or null */
 function targetShape(R,ret){
   const t=tgtState();if(!t.kind||!(R>0))return null;
-  const u=ret.unit==="MOA"?"MOA":"mil",ang=cm=>RT.convert(cm/100/R*1000,"MRAD",ret.unit),f=v=>(+v).toFixed(2);
-  if(t.kind==="circle"&&t.d>0)return{shape:{shape:"circle",r:ang(t.d)/2,fill:0.16,width:1.5},info:`Target: circle Ø ${t.d} cm = ${f(ang(t.d))} ${u} at ${R} m.`};
-  if(t.kind==="rect"&&t.w>0&&t.h>0)return{shape:{shape:"rect",w:ang(t.w),h:ang(t.h),fill:0.16,width:1.5,dashed:false},info:`Target: ${t.w} × ${t.h} cm = ${f(ang(t.w))} × ${f(ang(t.h))} ${u} at ${R} m.`};
-  if(t.kind==="diamond"&&t.w>0&&t.h>0){const a=ang(t.w)/2,b=ang(t.h)/2;   // a square on its corner: sizes tip to tip
-    return{shape:{shape:"parts",parts:[{t:"poly",points:[[0,-b],[a,0],[0,b],[-a,0]]}],fill:0.16,width:1.5},info:`Target: diamond ${t.w} × ${t.h} cm tip to tip = ${f(ang(t.w))} × ${f(ang(t.h))} ${u} at ${R} m.`}}
-  const pre=TARGET_PRESETS[t.kind];if(!pre)return null;
-  const parts=pre.parts.map(q=>q.t==="circle"?{t:"circle",cx:ang(q.cx||0),cy:ang(q.cy||0),r:ang(q.r)}:{t:"poly",points:q.points.map(([x,y])=>[ang(x),ang(y)])});
-  return{shape:{shape:"parts",parts,fill:0.16,width:1.5},info:`Target: ${pre.name} (${pre.size}) at ${R} m.`};
+  const cm=targetCm(t);if(!cm)return null;
+  const u=ret.unit==="MOA"?"MOA":"mil",ang=v=>RT.convert(v/100/R*1000,"MRAD",ret.unit),f=v=>(+v).toFixed(2);
+  const parts=cm.parts.map(q=>{
+    const o=Object.assign({},q);
+    if(q.points)o.points=q.points.map(([x,y])=>[ang(x),ang(y)]);
+    for(const k of ["cx","cy","r","x","y","x1","y1","x2","y2","size"])if(q[k]!=null)o[k]=ang(q[k]);
+    return o;
+  });
+  const sz=cm.w?` = ${f(ang(cm.w))}${cm.w!==cm.h?" × "+f(ang(cm.h)):""} ${u}`:"";
+  return{shape:{parts},info:`Target: ${cm.name}${sz} at ${R} m.`};
 }
 $("vTgt").addEventListener("change",()=>{U.tgt=Object.assign(tgtState(),{kind:$("vTgt").value});saveUI();tgtFields();renderReticle()});
 for(const [id,k] of [["vTgtD","d"],["vTgtW","w"],["vTgtH","h"]])$(id).addEventListener("input",()=>{const v=num($(id).value);if(v>0&&v<=1000){U.tgt=Object.assign(tgtState(),{[k]:v});saveUI();renderReticle()}});

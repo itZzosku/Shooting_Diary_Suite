@@ -134,12 +134,15 @@ test("svg: view centre moves the window, scope draws a round field", () => {
   assert.ok(out.includes('clip-path="url(#rt-clip)"') && out.includes('r="12"'));
 });
 
-test("svg: target shapes – circle, solid rectangle, zoned outline", () => {
+test("svg: targets are drawn under the reticle, parts offset to the aim point", () => {
   const out = R.svg([{t: "dot", x: 0, y: 0, r: 0.05}], {half: 5, targets: [
-    {x: 1, y: 2, shape: "circle", r: 0.5},
-    {x: 0, y: 0, shape: "rect", w: 1, h: 1.5, dashed: false},
-    {x: 0, y: 1, shape: "parts", parts: [{t: "poly", points: [[-1, -1], [1, -1], [1, 1], [-1, 1]]}, {t: "circle", cx: 0, cy: 0, r: 0.2}]}]});
-  assert.ok(out.includes('cx="1" cy="2" r="0.5"'), "circle at the hold");
-  assert.ok(out.includes('x="-0.5" y="-0.75" width="1" height="1.5"') && !/height="1.5"[^>]*dasharray/.test(out), "solid rect");
-  assert.ok(out.includes('points="-1,0 1,0 1,2 -1,2"') && out.includes('cx="0" cy="1" r="0.2"'), "parts offset to the target");
+    {x: 1, y: 2, parts: [{t: "circle", r: 0.5, fill: "#cfa755"}]},
+    {x: 0, y: 1, parts: [{t: "poly", points: [[-1, -1], [1, -1], [1, 1], [-1, 1]], fill: "#cfa755"},
+                         {t: "line", x1: -1, y1: 0, x2: 1, y2: 0}, {t: "text", x: 0, y: 0.5, text: "A", size: 0.4}]},
+    {x: 3, y: 3, w: 1, h: 2}]});
+  assert.ok(out.includes('cx="1" cy="2" r="0.5" fill="#cfa755"'), "circle at the aim point");
+  assert.ok(out.includes('points="-1,0 1,0 1,2 -1,2" fill="#cfa755"') && out.includes('x1="-1" y1="1" x2="1" y2="1"'), "poly and line offset");
+  assert.ok(/<text x="0" y="1.5" font-size="0.4"[^>]*>A</.test(out), "zone letter");
+  assert.ok(out.indexOf("#cfa755") < out.indexOf('<g transform="scale('), "under the reticle marks");
+  assert.ok(/stroke-dasharray/.test(out), "a stage target without parts stays dashed");
 });
