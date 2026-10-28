@@ -268,6 +268,27 @@ header.top{padding-top:6px!important}
 .mm-nav{display:flex;gap:10px;margin-top:16px}
 .mm-nav button{flex:1;background:#1d211d;border:1px solid #3a413a;color:#f2f4f0;border-radius:10px;padding:16px;font-size:1.1rem}
 .req{color:var(--danger)}
+.rv{position:fixed;inset:0;z-index:16;background:#000;color:#f2f4f0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:max(10px,env(safe-area-inset-top,0px)) 10px calc(12px + env(safe-area-inset-bottom,0px));gap:10px;overflow:hidden}
+.rv-top{width:100%;display:flex;justify-content:center}
+.rv-turret{background:linear-gradient(#2a2d2a,#0f110f);border:1px solid #3a3f3a;border-radius:14px;color:#f2f4f0;padding:6px 26px 6px;min-width:58%;
+  display:flex;flex-direction:column;align-items:center;gap:0}
+.rv-turret small{color:#9aa398;font-size:.78rem}
+.rv-turret b{font-family:var(--f-mono);font-size:2.1rem;font-weight:600;line-height:1.05;display:flex;gap:8px;align-items:baseline}
+.rv-turret b i{font-style:normal;font-size:1rem;color:#9aa398;min-width:.8em}
+.rv-scale{width:100%;height:12px;background:repeating-linear-gradient(90deg,#9aa398 0 2px,transparent 2px 22px);opacity:.6;margin:2px 0 0}
+.rv-stage{position:relative;width:min(100vw - 20px,100vh - 260px);aspect-ratio:1/1;flex:none}
+.rv-box{position:absolute;inset:0;touch-action:none;cursor:grab;border-radius:6px;overflow:hidden}
+.rv-box svg{width:100%;height:100%;display:block}
+.rv-wind{position:absolute;left:11%;top:33%;color:#e040e0;font-size:clamp(.9rem,3.6vw,1.15rem);pointer-events:none;font-weight:500}
+.rv-target{position:absolute;right:11%;top:21%;color:#3d7be0;text-align:center;font-size:clamp(.85rem,3.4vw,1.1rem);pointer-events:none;line-height:1.25;font-weight:500}
+.rv-name{background:#d9dcd6;color:#c01818;font-weight:700;border-radius:6px;padding:10px 14px;width:min(100%,640px);font-size:1rem}
+.rv-bar{display:flex;gap:8px;width:min(100%,640px)}
+.rv-bar button{flex:1;background:#2b2f2b;border:1px solid #444;color:#f2f4f0;border-radius:10px;padding:13px 4px;font-size:.88rem}
+.rv-bar button[aria-pressed="true"]{background:#5a1a14;border-color:#a33}
+.rv-bar button:disabled{opacity:.5}
+#vBox{touch-action:none}
+
 .wxbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}
 .wxbtn{display:flex;gap:10px;align-items:center;text-align:left;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-width:0;color:var(--fg)}
 .wxbtn .chev{color:var(--muted);transition:transform .15s}
@@ -401,6 +422,7 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f">Show<select id="vMode"></select></label>
       <button class="ghost" type="button" id="vLib">Reticles</button>
     </div>
+    <button class="primary" type="button" id="vFull">Full-screen scope view</button>
     <div class="g3" id="vOpts">
       <label class="check" id="vDialL"><input type="checkbox" id="vDial" checked>Elevation dialled</label>
       <label class="f" id="vMagL" hidden>Magnification ×<input type="text" inputmode="decimal" id="vMag"></label>
@@ -430,6 +452,27 @@ details summary{cursor:pointer;list-style:revert}
   <div class="mm-nav"><button type="button" id="mmPrev">‹ Previous</button><button type="button" id="mmNext">Next ›</button></div>
 </div>
 
+<!-- full-screen reticle view (Strelok-style) -->
+<div class="rv" id="rv" hidden role="dialog" aria-modal="true" aria-label="Scope view">
+  <div class="rv-top">
+    <button type="button" class="rv-turret" id="rvTurret" aria-label="Turret: tap to switch between dialled and holding">
+      <small>Clicks</small><b><span id="rvClicks">0</span><i id="rvDir"></i></b><span class="rv-scale" aria-hidden="true"></span><small id="rvTurretSub"></small>
+    </button>
+  </div>
+  <div class="rv-stage">
+    <div class="rv-box" id="rvBox"></div>
+    <div class="rv-wind" id="rvWind"></div>
+    <div class="rv-target" id="rvTarget"></div>
+  </div>
+  <div class="rv-name" id="rvName"></div>
+  <div class="rv-bar">
+    <button type="button" id="rvDial">Dialled</button>
+    <button type="button" id="rvNight" aria-pressed="false">Night</button>
+    <button type="button" id="rvReset">Reset zoom</button>
+    <button type="button" id="rvPng">PNG</button>
+    <button type="button" id="rvClose">Close</button>
+  </div>
+</div>
 <!-- profile sheet -->
 <div class="sheet" id="pSheet" hidden role="dialog" aria-modal="true" aria-labelledby="pTitle">
   <form class="sheet-in" id="pForm" autocomplete="off">
@@ -1157,75 +1200,241 @@ $("mMode").addEventListener("click",openMM);$("mmClose").addEventListener("click
 $("mmPrev").addEventListener("click",()=>{mmIdx--;renderMM()});$("mmNext").addEventListener("click",()=>{mmIdx++;renderMM()});
 let tx=null;$("mm").addEventListener("touchstart",e=>{tx=e.touches[0].clientX},{passive:true});
 $("mm").addEventListener("touchend",e=>{if(tx==null)return;const dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>70){mmIdx+=dx<0?1:-1;renderMM()}});
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!$("mm").hidden)closeMM();else document.querySelectorAll(".sheet").forEach(s=>{if(!s.hidden)closeSheet(s)})}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!$("rv").hidden)closeRV();else if(!$("mm").hidden)closeMM();else document.querySelectorAll(".sheet").forEach(s=>{if(!s.hidden)closeSheet(s)})}});
 document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&!$("mm").hidden&&wake===null){try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(e){}}});
 
-// ------------------------------------------------------------ reticle view
+// ------------------------------------------------------------ reticle view (tab + full screen, pinch to zoom)
 const RT=window.Reticle;
 const retOf=p=>p&&p.inputs&&p.inputs.reticleId?(D.reticles||[]).find(r=>r.id===p.inputs.reticleId)||null:null;
 const toRet=(v,fromUnit,ret)=>RT.convert(v,fromUnit==="MOA"?"MOA":"MRAD",ret.unit);
+const fieldOf=ret=>(ret&&ret.spec&&ret.spec.field)||(ret&&ret.unit==="MOA"?30:10);
+const VZ={user:false,cx:0,cy:0,half:10};              // the tab's view
+const RV={user:false,cx:0,cy:0,half:12,night:false};  // the full-screen view
+const RED="#d61f1f",BLUE="#2f6fd6",MAGENTA="#d01fd0";
+
+/** What to draw for the current profile, reticle and mode (this shot / a stage): holds, targets, dialled value. */
+function retScene(p,ret){
+  const s=scopeOf(p),out={holds:[],targets:[],info:[],dialled:0,mode:$("vMode").value,R:null,wind:null,angle:null};
+  if(!ready(p))return out;
+  const c=cond();
+  if(out.mode==="shot"){
+    const R=num($("rIn").value);let r=null;
+    try{r=R>0?B.solve(solverInput(p,c),[R]).rows[0]:null}catch(e){}
+    out.R=R;out.wind={ms:c.ms,clock:c.clock};out.angle=c.angle;
+    if(r&&r.reached){
+      const e=B.toUnit(r.elevMrad,s.unit),w=B.toUnit(r.windMrad,s.unit),click=s.click||0.1;
+      out.dialled=$("vDial").checked?Math.round(e/click)*click:0;
+      const y=toRet(e-out.dialled,s.unit,ret),x=-toRet(w,s.unit,ret);
+      out.holds.push({x,y,label:`${R} m`,main:true});
+      out.info.push(`Put the target on the dot: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
+    }
+  }else{
+    const st=D.stages.find(x=>x.id===out.mode),rows=st?stageRows(st,p)||[]:[];
+    const w=st&&st.wind||{ms:c.ms,clock:c.clock};out.wind=w;out.angle=c.angle;
+    for(const x of rows){
+      if(x.bad)continue;
+      const y=toRet(x.hold,s.unit,ret),xx=-toRet(x.wind,s.unit,ret);
+      out.holds.push({x:xx,y,label:x.t.label});
+      if(x.t.w_cm){
+        const wm=x.t.w_cm/100/x.t.range_m*1000,hm=(x.t.h_cm||x.t.w_cm)/100/x.t.range_m*1000;
+        out.targets.push({x:xx,y,w:RT.convert(wm,"MRAD",ret.unit),h:RT.convert(hm,"MRAD",ret.unit)});
+      }
+    }
+    const d=rows.find(x=>!x.bad);
+    if(d){out.dialled=d.dial;out.R=d.t.range_m;out.info.push(`Dialled ${d.dial.toFixed(d.dec)} ${d.unit} for ${st.dial_mode==="each"?"each target (dots show the leftover hold)":"the stage"}; dots are where each target sits in the reticle.`)}
+  }
+  return out;
+}
+
+/** Red distances on the holdover marks (like Strelok): the range each mark is good for with what is dialled.
+    pxPer: screen pixels per reticle unit at the current zoom. Cached: pinch zoom redraws often. */
+let rangeCache={key:null,rows:null};
+function rangeMarks(p,ret,dialled,k,pxPer,halo){
+  const s=scopeOf(p),inp=solverInput(p,cond(),{wind:{ms:0,clock:12}});
+  const key=JSON.stringify([inp,dialled,ret.id,ret.rev,s.unit]);
+  if(rangeCache.key!==key){
+    const ranges=[];for(let r=5;r<=2500;r+=5)ranges.push(r);
+    let rows=[];
+    try{rows=B.solve(inp,ranges).rows.filter(r=>r.reached).map(r=>({range:r.range,hold:toRet(B.toUnit(r.elevMrad,s.unit)-dialled,s.unit,ret)}))}catch(e){}
+    rangeCache={key,rows};
+  }
+  const rows=rangeCache.rows,texts=[];
+  if(!rows.length)return texts;
+  const moa=ret.unit==="MOA",big=moa?4:1,small=moa?1:0.2,field=fieldOf(ret);
+  // the lowest mark on the reticle: the tree's last row, or the last hash below the centre (not a thick post)
+  const sp=ret.spec||{},lows=[];
+  if(sp.tree&&sp.tree.rows&&sp.tree.rows.to>0)lows.push(+sp.tree.rows.to);
+  for(const h of sp.hashes||[])if((h.arms||[]).includes("down")&&h.to>0)lows.push(+h.to);
+  const top=Math.min(field,lows.length?Math.max(...lows):field);
+  const tl=ret.spec&&ret.spec.tree&&ret.spec.tree.labels;
+  const bigX=(tl&&tl.x!=null?+tl.x+(moa?1.8:0.45):(moa?2:0.6))*k;
+  const nums=[];for(let v=small;v<=top+1e-9;v+=small)nums.push(+v.toFixed(3));
+  const res=RT.rangesForHolds(rows,nums.map(v=>v*k));
+  const showSmall=small*k*pxPer>=8,smallSize=Math.min(9,small*k*pxPer*0.85);
+  for(const r of res){
+    const v=r.value/k,isBig=Math.abs(v/big-Math.round(v/big))<1e-6;
+    if(isBig)texts.push({x:bigX,y:r.value+11/pxPer*0.35,text:String(Math.round(r.range)),color:RED,size:11,weight:600,halo});
+    else if(showSmall)texts.push({x:0.12*k+3/pxPer,y:r.value+smallSize/pxPer*0.35,text:String(Math.round(r.range)),color:RED,size:smallSize,weight:500,halo});
+  }
+  const zeros=RT.rangesForHolds(rows,[0]).map(z=>Math.round(z.range));
+  if(zeros[0]!=null)texts.push({x:-4/pxPer,y:-5/pxPer,text:String(zeros[0]),color:RED,size:10,anchor:"end",weight:600,halo});
+  if(zeros[1]!=null)texts.push({x:4/pxPer,y:-5/pxPer,text:String(zeros[1]),color:RED,size:10,anchor:"start",weight:600,halo});
+  return texts;
+}
+
+/** "30.0 cm": how big a mil (or 5 MOA) is at the target, drawn under the left arm. */
+function sizeMarker(ret,R,k){
+  if(!(R>0))return{lines:[],texts:[]};
+  const moa=ret.unit==="MOA",a=(moa?15:4)*k,b=(moa?20:5)*k,span=moa?5:1;
+  const cm=R*RT.convert(span,ret.unit,"MRAD")*k/10;
+  const y0=(moa?1.2:0.3)*k,y1=(moa?3:0.9)*k;
+  return{lines:[{x1:-a,y1:y0,x2:-a,y2:y1,color:BLUE},{x1:-b,y1:y0,x2:-b,y2:y1,color:BLUE}],
+         texts:[{x:-(a+b)/2,y:y1+(moa?2.4:0.55)*k,text:`${cm.toFixed(1)} cm`,color:BLUE,size:13,anchor:"middle"}]};
+}
+
+function viewSvg(box,Z,full){
+  const p=prof(),ret=retOf(p);if(!ret)return null;
+  const sc=retScene(p,ret),k=RT.sfpFactor(ret,num($("vMag").value)),field=fieldOf(ret);
+  const W=box.clientWidth||320,pxPer=W/(2*Z.half);
+  const night=full&&RV.night;
+  const marks=ready(p)?rangeMarks(p,ret,sc.dialled,k,pxPer,night?"#0b0d0b":"#fff"):[];
+  const size=full&&sc.mode==="shot"?sizeMarker(ret,sc.R,k):{lines:[],texts:[]};
+  const svg=RT.svg(ret.elements,{half:Z.half,cx:Z.cx,cy:Z.cy,px:1/pxPer,k,holds:sc.holds,targets:sc.targets,
+    texts:marks.concat(size.texts),lines:size.lines,accent:"#e2590f",ink:night?"#ff4a3a":"#111",
+    scope:full?{r:field*1.04,fill:night?"#0b0d0b":"#fff",outside:"#000"}:null});
+  return{svg,sc,ret,k};
+}
+
+function autoHalf(sc,ret){
+  const field=fieldOf(ret);
+  if($("vZoom").value!=="auto")return+$("vZoom").value||field;
+  const ext=Math.max(0,...sc.holds.map(h=>Math.max(Math.abs(h.x),Math.abs(h.y))),...sc.targets.map(t=>Math.max(Math.abs(t.x)+t.w/2,Math.abs(t.y)+(t.h||t.w)/2)));
+  return Math.min(field,Math.max(ret.unit==="MOA"?6:2,ext*1.35));
+}
+
 function renderReticle(){
   const p=prof(),ret=retOf(p),m=curMatch();
   const sts=m?stagesOf(m.id):[];
   const keep=$("vMode").value;
   $("vMode").innerHTML=`<option value="shot">This shot</option>`+sts.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
   $("vMode").value=[...$("vMode").options].some(o=>o.value===keep)?keep:"shot";
-  $("vDialL").hidden=$("vMode").value!=="shot";
+  $("vDialL").hidden=$("vMode").value!=="shot";$("vFull").disabled=!ret;
   if(!ret){
     $("vBox").innerHTML="";$("vMagL").hidden=true;
     $("vInfo").innerHTML=p?`No reticle on this profile. Pick one under <b>Edit</b> → Reticle${(D.reticles||[]).length?"":" – the library is empty; an admin adds reticles under <b>Reticles</b>"}.`:"";
     return;
   }
-  const sfp=ret.focal_plane==="SFP";
-  $("vMagL").hidden=!sfp;
+  const sfp=ret.focal_plane==="SFP";$("vMagL").hidden=!sfp;
   if(sfp&&!$("vMag").value)$("vMag").value=ret.design_mag||"";
-  const field=(ret.spec&&ret.spec.field)||(ret.unit==="MOA"?30:10);
   if(!$("vZoom").options.length||$("vZoom").dataset.u!==ret.unit){
     const zs=ret.unit==="MOA"?[10,20,30,45]:[3,5,8,10,15];
     $("vZoom").innerHTML=`<option value="auto">Fit</option>`+zs.map(z=>`<option value="${z}">${z} ${ret.unit==="MOA"?"MOA":"mil"}</option>`).join("");$("vZoom").dataset.u=ret.unit;
     $("vZoom").value="auto";
   }
-  let half=+$("vZoom").value||field;
-  const k=RT.sfpFactor(ret,num($("vMag").value));
-  const holds=[],targets=[],info=[];
-  const s=scopeOf(p);
-  if(!ready(p)){$("vBox").innerHTML=RT.svg(ret.elements,{half,k});$("vInfo").textContent="Add a bullet and velocity to the profile to see holds.";return}
-  if($("vMode").value==="shot"){
-    const R=num($("rIn").value);let r=null;
-    try{r=R>0?B.solve(solverInput(p,cond()),[R]).rows[0]:null}catch(e){}
-    if(r&&r.reached){
-      const e=B.toUnit(r.elevMrad,s.unit),w=B.toUnit(r.windMrad,s.unit);
-      const dialled=$("vDial").checked?Math.round(e/(s.click||0.1))*(s.click||0.1):0;
-      const y=toRet(e-dialled,s.unit,ret),x=-toRet(w,s.unit,ret);
-      holds.push({x,y,label:`${R} m`,main:true});
-      info.push(`Put the target on the dot: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
-      if($("vDial").checked)info.push(`Dialled ${dialled.toFixed(decs(s.click||0.1))} ${s.unit==="MOA"?"MOA":"mil"} up.`);
-    }
-  }else{
-    const st=D.stages.find(x=>x.id===$("vMode").value),rows=st?stageRows(st,p)||[]:[];
-    for(const x of rows){
-      if(x.bad)continue;
-      const y=toRet(x.hold,s.unit,ret),xx=-toRet(x.wind,s.unit,ret);
-      holds.push({x:xx,y,label:x.t.label});
-      if(x.t.w_cm){
-        const wm=x.t.w_cm/100/x.t.range_m*1000,hm=(x.t.h_cm||x.t.w_cm)/100/x.t.range_m*1000;
-        targets.push({x:xx,y,w:RT.convert(wm,"MRAD",ret.unit),h:RT.convert(hm,"MRAD",ret.unit)});
-      }
-    }
-    const d=rows.find(x=>!x.bad);
-    if(d)info.push(`Dialled ${d.dial.toFixed(d.dec)} ${d.unit} for ${st.dial_mode==="each"?"each target (dots show the leftover hold)":"the stage"}; dots are where each target sits in the reticle.`);
-  }
-  if($("vZoom").value==="auto"){
-    const ext=Math.max(0,...holds.map(h=>Math.max(Math.abs(h.x),Math.abs(h.y))),...targets.map(t=>Math.max(Math.abs(t.x)+t.w/2,Math.abs(t.y)+(t.h||t.w)/2)));
-    const unitMin=ret.unit==="MOA"?6:2;half=Math.min(field,Math.max(unitMin,ext*1.35));
-  }
+  if(!VZ.user){const sc=retScene(p,ret);VZ.half=autoHalf(sc,ret);VZ.cx=0;VZ.cy=0}
+  const v=viewSvg($("vBox"),VZ,false);
+  $("vBox").innerHTML=v.svg;
+  const info=v.sc.info.slice(),s=scopeOf(p),k=v.k;
+  if(!ready(p))info.push("Add a bullet and velocity to the profile to see holds.");
   if(sfp&&Math.abs(k-1)>1e-6)info.push(`Second focal plane at ${num($("vMag").value)}×: the marks are drawn at their true size (×${k.toFixed(2)}); holds read off the marks only match at ${ret.design_mag}×.`);
   if(ret.unit!==(s.unit==="MOA"?"MOA":"MRAD"))info.push(`The reticle is in ${ret.unit==="MOA"?"MOA":"mil"}, the turret in ${s.unit==="MOA"?"MOA":"mil"}: holds are converted.`);
   if(ret.archived)info.push("This reticle is archived in the library.");
-  $("vBox").innerHTML=RT.svg(ret.elements,{half,k,holds,targets,accent:"#e2590f"});
+  info.push("Red numbers: the distance each mark is good for. Pinch or scroll to zoom, drag to move, double-tap to reset.");
   $("vInfo").innerHTML=esc(`${ret.maker?ret.maker+" ":""}${ret.name} · ${ret.focal_plane} · rev ${ret.rev}`)+"<br>"+info.map(esc).join("<br>");
+  if(!$("rv").hidden)renderRV();
 }
-["vMode","vDial","vMag","vZoom"].forEach(id=>$(id).addEventListener(id==="vMag"?"input":"change",renderReticle));
+["vMode","vDial","vMag","vZoom"].forEach(id=>$(id).addEventListener(id==="vMag"?"input":"change",()=>{if(id==="vZoom"||id==="vMode")VZ.user=false;renderReticle()}));
+
+// ---- full screen, Strelok-style
+function renderRV(){
+  const p=prof(),ret=retOf(p);if(!ret){closeRV();return}
+  if(!RV.user){RV.half=fieldOf(ret)*1.06;RV.cx=0;RV.cy=0}
+  const v=viewSvg($("rvBox"),RV,true);
+  $("rvBox").innerHTML=v.svg;
+  const s=scopeOf(p),click=s.click||0.1,clicks=Math.round(v.sc.dialled/click);
+  $("rvClicks").textContent=Math.abs(clicks);$("rvDir").textContent=clicks>0?"U":clicks<0?"D":"";
+  $("rvTurretSub").textContent=`${Math.abs(v.sc.dialled).toFixed(decs(click))} ${s.unit==="MOA"?"MOA":"mil"}`;
+  const w=v.sc.wind;
+  $("rvWind").textContent=w?`Wind: ${(+w.ms||0).toFixed(1)} m/s${w.ms?` from ${w.clock}`:""}`:"";
+  $("rvTarget").innerHTML=v.sc.R?`${v.sc.mode==="shot"?"Target":esc((D.stages.find(x=>x.id===v.sc.mode)||{}).name||"Stage")}<br>Distance: ${v.sc.R}<br>∠ ${v.sc.angle||0}°`:"";
+  const zoomed=RV.user&&RV.half<fieldOf(ret)*0.7;          // zoomed in: the texts would cover marks
+  $("rvWind").hidden=$("rvTarget").hidden=zoomed;
+  $("rvName").textContent=`${ret.name}${ret.maker?", "+ret.maker:""} · ${ret.focal_plane}`;
+  $("rvDial").textContent=$("vMode").value==="shot"?($("vDial").checked?"Dialled":"Holding"):"Stage dial";
+  $("rvDial").disabled=$("vMode").value!=="shot";
+  $("rvNight").setAttribute("aria-pressed",RV.night);
+}
+let rvWake=null;
+async function openRV(){
+  RV.user=false;$("rv").hidden=false;document.body.style.overflow="hidden";renderRV();
+  try{if(navigator.wakeLock)rvWake=await navigator.wakeLock.request("screen")}catch(e){}
+}
+function closeRV(){$("rv").hidden=true;if($("mm").hidden&&[...document.querySelectorAll(".sheet")].every(s=>s.hidden))document.body.style.overflow="";try{rvWake&&rvWake.release()}catch(e){}rvWake=null}
+$("vFull").addEventListener("click",openRV);$("rvClose").addEventListener("click",closeRV);
+$("rvDial").addEventListener("click",()=>{$("vDial").checked=!$("vDial").checked;renderReticle()});
+$("rvTurret").addEventListener("click",()=>{if($("vMode").value==="shot"){$("vDial").checked=!$("vDial").checked;renderReticle()}});
+$("rvNight").addEventListener("click",()=>{RV.night=!RV.night;renderRV()});
+$("rvReset").addEventListener("click",()=>{RV.user=false;renderRV()});
+$("rvPng").addEventListener("click",()=>{
+  const svg=$("rvBox").querySelector("svg");if(!svg)return;
+  const S=1080,src=new XMLSerializer().serializeToString(svg).replace("<svg ",`<svg width="${S}" height="${S}" `);
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.createElement("canvas");cv.width=S;cv.height=S+120;const g=cv.getContext("2d");
+    g.fillStyle="#000";g.fillRect(0,0,S,S+120);g.drawImage(img,0,60,S,S);
+    g.font="600 34px 'IBM Plex Sans', sans-serif";g.fillStyle=MAGENTA;g.fillText($("rvWind").textContent,30,44);
+    g.fillStyle="#7fb0ff";g.textAlign="right";g.fillText($("rvTarget").textContent.replace(/\s+/g," ").trim(),S-30,44);
+    g.textAlign="left";g.fillStyle="#fff";g.font="500 30px 'IBM Plex Sans', sans-serif";
+    g.fillText(`${$("rvName").textContent} · clicks ${$("rvClicks").textContent} ${$("rvDir").textContent}`,30,S+105);
+    cv.toBlob(b=>{const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="reticle.png";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)},"image/png");
+  };
+  img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(src);
+});
+
+/** Two fingers pinch, one finger (or mouse) drags, wheel zooms, double-tap resets. Z: {cx, cy, half, user}. */
+function zoomable(box,Z,limits,redraw){
+  const pts=new Map();let start=null,lastTap=0,frame=0;
+  const schedule=()=>{if(!frame)frame=requestAnimationFrame(()=>{frame=0;redraw()})};
+  const lim=()=>limits();
+  const snap=()=>({cx:Z.cx,cy:Z.cy,half:Z.half,pts:[...pts.values()].map(p=>({x:p.x,y:p.y}))});
+  const clampZ=()=>{const L=lim();Z.half=Math.max(L.min,Math.min(L.max,Z.half));Z.cx=Math.max(-L.pan,Math.min(L.pan,Z.cx));Z.cy=Math.max(-L.pan,Math.min(L.pan,Z.cy))};
+  const at=(x,y,s,r)=>({ux:s.cx+((x-r.left)/r.width*2-1)*s.half,uy:s.cy+((y-r.top)/r.height*2-1)*s.half});
+  box.addEventListener("pointerdown",e=>{
+    try{box.setPointerCapture(e.pointerId)}catch(_){}
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now(),x0:e.clientX,y0:e.clientY});start=snap();
+  });
+  box.addEventListener("pointermove",e=>{
+    if(!pts.has(e.pointerId))return;
+    const q=pts.get(e.pointerId);q.x=e.clientX;q.y=e.clientY;
+    const a=[...pts.values()],r=box.getBoundingClientRect();
+    if(!start||a.length!==start.pts.length)return;
+    if(a.length===1){
+      const u=2*start.half/r.width;Z.cx=start.cx-(a[0].x-start.pts[0].x)*u;Z.cy=start.cy-(a[0].y-start.pts[0].y)*u;
+    }else{
+      const d=(p,q)=>Math.hypot(p.x-q.x,p.y-q.y),m=ps=>({x:(ps[0].x+ps[1].x)/2,y:(ps[0].y+ps[1].y)/2});
+      const d0=d(start.pts[0],start.pts[1]),d1=d(a[0],a[1]);if(!(d0>10&&d1>10))return;
+      const m0=m(start.pts),m1=m(a),u=at(m0.x,m0.y,start,r);
+      Z.half=start.half*d0/d1;clampZ();
+      Z.cx=u.ux-((m1.x-r.left)/r.width*2-1)*Z.half;Z.cy=u.uy-((m1.y-r.top)/r.height*2-1)*Z.half;
+    }
+    clampZ();Z.user=true;schedule();
+  });
+  const up=e=>{
+    const q=pts.get(e.pointerId);pts.delete(e.pointerId);start=snap();
+    if(q&&!pts.size&&Date.now()-q.t<250&&Math.hypot(q.x-q.x0,q.y-q.y0)<10){        // a tap
+      if(Date.now()-lastTap<350){Z.user=false;lastTap=0;schedule()}else lastTap=Date.now();
+    }
+  };
+  box.addEventListener("pointerup",up);box.addEventListener("pointercancel",up);
+  box.addEventListener("wheel",e=>{
+    e.preventDefault();const r=box.getBoundingClientRect(),s={cx:Z.cx,cy:Z.cy,half:Z.half},u=at(e.clientX,e.clientY,s,r);
+    Z.half=s.half*Math.exp(e.deltaY*0.0015);clampZ();
+    Z.cx=u.ux-((e.clientX-r.left)/r.width*2-1)*Z.half;Z.cy=u.uy-((e.clientY-r.top)/r.height*2-1)*Z.half;clampZ();Z.user=true;schedule();
+  },{passive:false});
+}
+const zLimits=()=>{const f=fieldOf(retOf(prof()));return{min:f/40,max:f*1.6,pan:f*1.2}};
+zoomable($("vBox"),VZ,zLimits,renderReticle);
+zoomable($("rvBox"),RV,zLimits,renderRV);
 
 // ------------------------------------------------------------ reticle builder
 const BS={ret:null,spec:null,half:10,img:null,mode:null,pts:[],imgT:null};

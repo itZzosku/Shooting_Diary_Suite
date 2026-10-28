@@ -171,40 +171,74 @@
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 
-  /** SVG markup. opts: {half (view half-width in true reticle units), k (SFP factor), ink, accent, bg,
+  /** SVG markup. opts: {half (view half-width in true reticle units), cx, cy (view centre, default 0,0),
+      px (one screen pixel in true units; default half/160), k (SFP factor), ink, accent, bg,
+      scope: {r, fill, outside} (round field of view: fill inside, outside colour around it),
       holds: [{x, y, label, main}] in true reticle units (x right, y down), targets: [{x, y, w, h}],
+      texts: [{x, y, text, color, size (screen px), anchor, weight, halo (outline colour)}], lines: [{x1, y1, x2, y2, color, width (screen px)}],
       image: {href, transform, opacity}, extra (raw svg)} */
   function svg(elements, opts) {
-    const o = Object.assign({half: 10, k: 1, ink: "currentColor", accent: "#e2590f", bg: "none"}, opts || {});
-    const h = o.half, k = o.k, px = h / 160;               // ~1 px at a 320 px wide view
+    const o = Object.assign({half: 10, cx: 0, cy: 0, k: 1, ink: "currentColor", accent: "#e2590f", bg: "none"}, opts || {});
+    const h = o.half, k = o.k, cx = o.cx, cy = o.cy, px = o.px > 0 ? o.px : h / 160;
+    const x0 = cx - h, y0 = cy - h;
     const parts = [];
+    if (o.bg !== "none") parts.push(`<rect x="${x0}" y="${y0}" width="${2 * h}" height="${2 * h}" fill="${o.bg}"/>`);
+    if (o.scope && o.scope.r > 0) {
+      parts.push(`<rect x="${x0}" y="${y0}" width="${2 * h}" height="${2 * h}" fill="${o.scope.outside || "#000"}"/>`);
+      parts.push(`<circle cx="0" cy="0" r="${o.scope.r}" fill="${o.scope.fill || "#fff"}"/>`);
+    }
     if (o.image) parts.push(`<image href="${esc(o.image.href)}" transform="${esc(o.image.transform)}" opacity="${o.image.opacity ?? 0.5}" preserveAspectRatio="none"/>`);
+    if (o.scope && o.scope.r > 0) parts.push(`<clipPath id="rt-clip"><circle cx="0" cy="0" r="${o.scope.r}"/></clipPath><g clip-path="url(#rt-clip)">`);
     parts.push(`<g transform="scale(${k})" fill="${o.ink}" stroke="${o.ink}">`);
     for (const e of elements) {
-      const sw = Math.max((e.w || 0) , px / k);
+      const sw = Math.max((e.w || 0), px / k);
       if (e.t === "line") parts.push(`<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke-width="${sw}" stroke-linecap="butt"/>`);
       else if (e.t === "rect") parts.push(`<rect x="${e.x}" y="${e.y}" width="${e.width}" height="${e.height}" stroke="none"/>`);
-      else if (e.t === "dot") parts.push(`<circle cx="${e.x}" cy="${e.y}" r="${Math.max(e.r, px / k)}" stroke="none"/>`);
+      else if (e.t === "dot") parts.push(`<circle cx="${e.x}" cy="${e.y}" r="${Math.max(e.r, 0.8 * px / k)}" stroke="none"/>`);
       else if (e.t === "circle") parts.push(`<circle cx="${e.x}" cy="${e.y}" r="${e.r}" fill="none" stroke-width="${sw}"/>`);
-      else if (e.t === "poly") parts.push(`<${e.closed ? "polygon" : "polyline"} points="${e.points.map(p => p.join(",")).join(" ")}" fill="${e.closed ? o.ink : "none"}" stroke-width="${sw}"/>`);
+      else if (e.t === "poly") parts.push(`<${e.closed ? "polygon" : "polyline"} points="${e.points.map(p => p.join(",")).join(" ")}" fill="${e.closed ? o.ink : "none"}" stroke-width="${e.closed ? 0 : sw}"/>`);
       else if (e.t === "text") parts.push(`<text x="${e.x}" y="${e.y}" font-size="${e.size}" text-anchor="${e.anchor || "middle"}" stroke="none" font-family="IBM Plex Mono, monospace">${esc(e.text)}</text>`);
     }
     parts.push(`</g>`);
+    for (const l of o.lines || [])
+      parts.push(`<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${l.color || o.accent}" stroke-width="${px * (l.width || 1)}"/>`);
     for (const t of o.targets || []) {
       if (t.w > 0) {
         const hh = t.h > 0 ? t.h : t.w;
         parts.push(`<rect x="${t.x - t.w / 2}" y="${t.y - hh / 2}" width="${t.w}" height="${hh}" fill="${o.accent}" fill-opacity="0.12" stroke="${o.accent}" stroke-width="${px}" stroke-dasharray="${px * 4} ${px * 3}"/>`);
       }
     }
+    for (const t of o.texts || [])
+      parts.push(`<text x="${t.x}" y="${t.y}" font-size="${px * (t.size || 12)}" fill="${t.color || o.accent}" text-anchor="${t.anchor || "start"}" font-weight="${t.weight || 500}" font-family="IBM Plex Sans, sans-serif"${t.halo ? ` stroke="${t.halo}" stroke-width="${px * 3}" stroke-linejoin="round" paint-order="stroke"` : ""}>${esc(t.text)}</text>`);
+    if (o.scope && o.scope.r > 0) parts.push(`</g>`);
     for (const p of o.holds || []) {
-      const off = Math.abs(p.x) > h || Math.abs(p.y) > h;
-      const x = Math.max(-h * 0.94, Math.min(h * 0.94, p.x)), y = Math.max(-h * 0.94, Math.min(h * 0.94, p.y));
+      const lim = h * 0.94, off = Math.abs(p.x - cx) > h || Math.abs(p.y - cy) > h;
+      const x = Math.max(cx - lim, Math.min(cx + lim, p.x)), y = Math.max(cy - lim, Math.min(cy + lim, p.y));
       parts.push(`<circle cx="${x}" cy="${y}" r="${px * (p.main ? 5 : 4)}" fill="${o.accent}" stroke="${o.bg === "none" ? "#fff" : o.bg}" stroke-width="${px * 1.2}"/>`);
       if (p.label) parts.push(`<text x="${x + px * 8}" y="${y - px * 6}" font-size="${px * 13}" fill="${o.accent}" font-weight="700" font-family="IBM Plex Sans, sans-serif">${esc(p.label)}${off ? " ⇢" : ""}</text>`);
     }
     if (o.extra) parts.push(o.extra);
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-h} ${-h} ${2 * h} ${2 * h}" role="img">` +
-      (o.bg !== "none" ? `<rect x="${-h}" y="${-h}" width="${2 * h}" height="${2 * h}" fill="${o.bg}"/>` : "") + parts.join("") + `</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${2 * h} ${2 * h}" role="img">` + parts.join("") + `</svg>`;
+  }
+
+  /** Which range each holdover mark is good for. rows: [{range, hold}] with hold in the reticle's unit (below the
+      centre +), ascending range. Returns [{value, range}]: for 0 every crossing (the near and the far zero); for any
+      other mark the last crossing, where the falling bullet passes it – close to the muzzle the bullet also starts
+      below the line of sight and passes the marks rising, which is not what a holdover mark is for. */
+  function rangesForHolds(rows, values) {
+    const out = [];
+    for (const v of values) {
+      const hits = [];
+      for (let i = 1; i < rows.length; i++) {
+        const a = rows[i - 1], b = rows[i];
+        if (a.hold == null || b.hold == null) continue;
+        if (((a.hold - v) * (b.hold - v) < 0 || b.hold === v) && a.hold !== b.hold)   // exact hits counted once
+          hits.push({value: v, range: a.range + (v - a.hold) / (b.hold - a.hold) * (b.range - a.range)});
+      }
+      if (v === 0) out.push(...hits);
+      else if (hits.length) out.push(hits[hits.length - 1]);
+    }
+    return out;
   }
 
   // ------------------------------------------------------------ generic templates (not copies of any product)
@@ -228,5 +262,5 @@
                 major: {every: 5, len: 1.6}, labels: {every: 5, size: 1, offset: 0.8}}]}}
   };
 
-  return {compile, svg, sfpFactor, convert, TEMPLATES, MAX};
+  return {compile, svg, sfpFactor, convert, rangesForHolds, TEMPLATES, MAX};
 });

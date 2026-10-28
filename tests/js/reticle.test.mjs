@@ -114,3 +114,22 @@ test("svg draws holds, pins off-view holds to the edge", () => {
   assert.ok(out.startsWith("<svg") && out.includes(">T1<") && out.includes("T2 ⇢"));
   assert.ok(!out.includes('cy="9"'), "pinned inside the view");
 });
+
+test("ranges for holdover marks, including both zero crossings", () => {
+  // a rising-then-falling hold curve: under the line at the muzzle, crosses 0 near and far, then drops
+  const rows = [];
+  for (let r = 0; r <= 400; r += 5) rows.push({range: r, hold: 0.0002 * (r - 25) * (r - 50)});   // 0.25 below at the muzzle
+  const res = R.rangesForHolds(rows, [0, 2, 4]);
+  const zeros = res.filter(x => x.value === 0).map(x => Math.round(x.range));
+  assert.deepEqual(zeros, [25, 50], "near and far zero");
+  const two = res.find(x => x.value === 2);
+  assert.ok(Math.abs(0.0002 * (two.range - 25) * (two.range - 50) - 2) < 0.05, "2 mil mark lands on the curve");
+  assert.ok(res.find(x => x.value === 4).range > two.range, "further marks are further away");
+  assert.ok(two.range > 50, "the falling bullet's crossing, not the rising one near the muzzle");
+});
+
+test("svg: view centre moves the window, scope draws a round field", () => {
+  const out = R.svg([{t: "dot", x: 0, y: 0, r: 0.05}], {half: 2, cx: 1, cy: 3, scope: {r: 12}});
+  assert.ok(out.includes('viewBox="-1 1 4 4"'));
+  assert.ok(out.includes('clip-path="url(#rt-clip)"') && out.includes('r="12"'));
+});
