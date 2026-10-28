@@ -69,7 +69,6 @@
       m = fast.length ? "velocity" : "drag";
     }
     if (m === "velocity" && !fast.length) warnings.push("velocity_from_slow");   // works, but drag error leaks in
-    if (m === "drag" && !slow.length) warnings.push("drag_from_fast");           // little drag information up there
     if (Math.max(...usable.map(o => o.range)) < 300) warnings.push("short_range");
 
     const sc = Object.assign({}, start);

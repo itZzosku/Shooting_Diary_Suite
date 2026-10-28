@@ -470,14 +470,15 @@ details summary{cursor:pointer;list-style:revert}
     <div id="oList"></div>
     <div class="tfit" id="tFit">
       <div class="prow" style="grid-template-columns:minmax(0,1fr) auto">
-        <label class="f">Fit<select id="tMode">
+        <label class="f" id="tModeL">Fit<select id="tMode">
           <option value="auto">Auto (by Mach at the target)</option><option value="velocity">Muzzle velocity only</option>
           <option value="drag">Drag only</option><option value="both">Velocity and drag</option></select></label>
         <button class="ghost" type="button" id="tCalc">Calculate</button>
       </div>
+      <div class="hint" id="tMeasured" hidden>Velocity is measured by the chrono, so truing fits the drag only.</div>
       <div id="tOut"></div>
     </div>
-    <p class="hint" style="margin:0">Log the elevation from your zero that centred a group, with that day's conditions. Shots still above Mach 1.2 true the velocity; shots further out true the drag. A group of 3–5, read from the group's centre, beats single shots.</p>
+    <p class="hint" style="margin:0">Log the elevation from your zero that centred a group, with that day's conditions. A group of 3–5, read from the group's centre, beats single shots. <span id="tHow">Shots still above Mach 1.2 true the velocity; shots further out true the drag.</span></p>
   </section>
 </div>
 
@@ -1033,15 +1034,21 @@ function obsInput(p,o){
 }
 const obsFit=(p,o)=>({id:o.id,input:obsInput(p,o),range:o.range_m,elevMrad:toMrad(o.elev,o.unit)});
 const scalesOf=p=>({mvScale:p.inputs.mvScale||1,dragScale:p.inputs.dragScale||1});
+const measuredMv=p=>p.inputs.mvSource==="chrono";           // chrono velocity: nothing to true there, drag only
+const fitMode=p=>measuredMv(p)?"drag":$("tMode").value;
 let TFIT=null;            // the last fit: {key, r}; dropped when the dope or the profile changes
-const fitKey=(p,used)=>JSON.stringify([p.id,scalesOf(p),$("tMode").value,used.map(o=>[o.id,o.range_m,o.elev,o.unit,o.temp_c,o.hpa,o.rh,o.powder_c,o.angle_deg,o.wind_ms,o.wind_clock])]);
+const fitKey=(p,used)=>JSON.stringify([p.id,scalesOf(p),fitMode(p),used.map(o=>[o.id,o.range_m,o.elev,o.unit,o.temp_c,o.hpa,o.rh,o.powder_c,o.angle_deg,o.wind_ms,o.wind_clock])]);
 function renderTrue(){
   const p=prof();
   $("oAdd").disabled=!ready(p);
   if(!ready(p)){$("tNow").innerHTML=`<span class="hint">Set up a profile with a bullet and velocity first.</span>`;$("oList").innerHTML="";$("tFit").hidden=true;return}
   const i=p.inputs,sc=scalesOf(p),s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil",dec=decs(s.click||0.1)+1;
   const trued=Math.abs(sc.mvScale-1)>1e-9||Math.abs(sc.dragScale-1)>1e-9;
-  $("tNow").innerHTML=`<span>Velocity ×<b>${sc.mvScale.toFixed(3)}</b> → <b>${Math.round(i.mv*sc.mvScale)}</b> m/s</span><span>Drag ×<b>${sc.dragScale.toFixed(3)}</b></span>`
+  const meas=measuredMv(p);
+  $("tModeL").hidden=meas;$("tMeasured").hidden=!meas;
+  $("tHow").textContent=meas?"Far dope, where the bullet slows down, says the most about drag.":"Shots still above Mach 1.2 true the velocity; shots further out true the drag.";
+  $("tNow").innerHTML=(meas&&sc.mvScale===1?`<span>Velocity <b>${Math.round(i.mv)}</b> m/s from the chrono</span>`
+      :`<span>Velocity ×<b>${sc.mvScale.toFixed(3)}</b> → <b>${Math.round(i.mv*sc.mvScale)}</b> m/s</span>`)+`<span>Drag ×<b>${sc.dragScale.toFixed(3)}</b></span>`
     +(trued?`<button class="ghost" type="button" id="tReset">Back to untrued</button>`:`<span class="hint">not trued</span>`);
   const obs=obsOf(p.id);
   if(!obs.length){$("oList").innerHTML=`<div class="empty">No dope logged for this profile yet. After a session, tap <b>Log dope</b> for each distance where you confirmed the elevation.</div>`;$("tFit").hidden=true;return}
@@ -1052,7 +1059,7 @@ function renderTrue(){
     const day=o.date?o.date.slice(8,10).replace(/^0/,"")+"."+o.date.slice(5,7).replace(/^0/,"")+".":"";
     return`<tr data-oedit="${esc(o.id)}"${r&&r.mach<1.2?' class="ts"':""}><td><input type="checkbox" data-ouse="${esc(o.id)}"${o.use_for_truing?" checked":""} aria-label="Use for truing"></td><td>${o.range_m}<small>${esc(day)} · ${esc(air)}</small></td>`
       +`<td class="${o.use_for_truing?"":"off"}">${(+o.elev).toFixed(dec)}${cu!==(s.unit==="MOA"?"MOA":"MRAD")?" "+(cu==="MOA"?"MOA":"mil"):""}</td><td>${calc!=null?calc.toFixed(dec):"–"}</td><td>${d!=null?sgn(+d.toFixed(dec),dec):"–"}</td><td class="dim">${r?r.mach.toFixed(2):"–"}</td></tr>`;
-  }).join("")+`</table></div><p class="hint" style="margin:0">Δ = calculated − logged: + means the calculator asks for more than you needed. Tinted rows are below Mach 1.2 (they true the drag). Tap a row to edit it.</p>`;
+  }).join("")+`</table></div><p class="hint" style="margin:0">Δ = calculated − logged: + means the calculator asks for more than you needed. ${measuredMv(p)?"Tinted rows are below Mach 1.2.":"Tinted rows are below Mach 1.2 (they true the drag)."} Tap a row to edit it.</p>`;
   const used=obs.filter(o=>o.use_for_truing);
   $("tFit").hidden=!used.length;
   if(TFIT&&TFIT.key!==fitKey(p,used))TFIT=null;
@@ -1062,14 +1069,13 @@ const TWARN={not_reached:"Some logged ranges are past where the bullet goes with
   both_needs_slow:"Velocity and drag need shots on both sides of Mach 1.2 – these are all faster, so only the velocity was trued.",
   both_needs_fast:"Velocity and drag need shots on both sides of Mach 1.2 – these are all slower, so only the drag was trued.",
   velocity_from_slow:"Truing velocity from shots below Mach 1.2: a drag error ends up in the velocity. Fine for dope at these ranges.",
-  drag_from_fast:"Truing drag from fast shots only: drag says little up there – check it again further out.",
   short_range:"All dope is inside 300 m, where small velocity errors barely show – true again from further out.",
   at_limit:"A factor hit its limit (velocity 0.8–1.2, drag 0.5–1.5): check the logged values, zero and profile."};
 function fitHtml(p,r){
   const s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil",cu=s.unit==="MOA"?"MOA":"MRAD",dec=decs(s.click||0.1)+1,f=v=>v==null?"–":fromMrad(v,cu).toFixed(dec);
   const what={velocity:"velocity",drag:"drag",both:"velocity and drag"}[r.mode]||"nothing";
   if(r.mode==="none")return`<div class="tres"><div class="hint">Nothing to fit: none of the logged ranges is reached with this profile.</div></div>`;
-  return`<div class="tres"><div class="big">Velocity ×${r.mvScale.toFixed(3)} → ${Math.round(p.inputs.mv*r.mvScale)} m/s<br>Drag ×${r.dragScale.toFixed(3)}</div>`
+  return`<div class="tres"><div class="big">${r.mode==="drag"&&measuredMv(p)?"":`Velocity ×${r.mvScale.toFixed(3)} → ${Math.round(p.inputs.mv*r.mvScale)} m/s<br>`}Drag ×${r.dragScale.toFixed(3)}</div>`
     +`<div class="hint">Trued ${what}. Average miss: ${f(r.rmsBefore)} → <b>${f(r.rmsAfter)}</b> ${u}.</div>`
     +`<div class="scroll"><table class="tbl"><tr><th>m</th><th>Logged</th><th>Now</th><th>Trued</th></tr>`
     +r.rows.map(x=>`<tr><td>${x.range}</td><td>${f(x.observed)}</td><td>${f(x.before)}</td><td><b>${f(x.after)}</b></td></tr>`).join("")+`</table></div>`
@@ -1081,7 +1087,7 @@ $("tCalc").addEventListener("click",()=>{
   const used=obsOf(p.id).filter(o=>o.use_for_truing);if(!used.length)return;
   $("tCalc").disabled=true;$("tCalc").textContent="Calculating…";
   setTimeout(()=>{
-    try{TFIT={key:fitKey(p,used),r:T.fit(used.map(o=>obsFit(p,o)),$("tMode").value,scalesOf(p))}}
+    try{TFIT={key:fitKey(p,used),r:T.fit(used.map(o=>obsFit(p,o)),fitMode(p),scalesOf(p))}}
     finally{$("tCalc").disabled=false;$("tCalc").textContent="Calculate"}
     renderTrue();
   },30);
