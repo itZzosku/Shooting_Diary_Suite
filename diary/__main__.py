@@ -130,6 +130,8 @@ def import_json(path, replace):
     z = zero.import_rows(conn, data, replace)
     from . import loans
     ln = loans.import_rows(conn, data, replace)
+    from . import ballistics
+    bal = ballistics.import_rows(conn, data, replace)
     conn.commit()
     conn.close()
     extra = f", {c['chrono_strings']} strings / {c['chrono_shots']} velocities" if c["chrono_shots"] else ""
@@ -137,6 +139,8 @@ def import_json(path, replace):
         extra += f", {z['scopes']} scopes / {z['scope_zeros']} zeroes"
     if ln:
         extra += f", {ln} loans"
+    if bal["bal_profiles"] or bal["bal_stages"]:
+        extra += f", {bal['bal_profiles']} ballistic profiles / {bal['bal_stages']} stages"
     print(f"Imported {n} visits and {g} guns{extra} → {DATA_DIR}")
 
 

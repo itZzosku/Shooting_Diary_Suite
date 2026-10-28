@@ -5,7 +5,7 @@
    - Logging out clears everything cached. Writes are never cached; the page queues them itself.
    - Share target: a file shared to the installed app (e.g. from ShotView) is POSTed to chrono/share;
      it is kept in the SHARE cache and the velocity page (/velocity) opens and imports it. */
-const VERSION = "v53";
+const VERSION = "v54";
 const PAGE = "diary-page-" + VERSION, DATA = "diary-data", ASSETS = "diary-assets-" + VERSION, SHARE = "diary-share";
 const BASE = new URL("./", self.registration.scope).pathname;            // "/diary/"
 const ASSET_HOSTS = [];                     // fonts and the PDF library are served from /diary/static now
@@ -29,6 +29,8 @@ const PRECACHE = [
   "static/fonts/ibm-plex-sans-latin-ext-500-normal.woff2",
   "static/fonts/ibm-plex-sans-latin-ext-600-normal.woff2",
   "static/drafts.js",
+  "static/ballistics/drag.js",
+  "static/ballistics/solver.js",
   "static/vendor/jspdf.umd.min.js",
   "static/vendor/jspdf.plugin.autotable.min.js",
   "static/icons/apple-touch-icon.png",
@@ -103,7 +105,7 @@ self.addEventListener("fetch", e => {
   }
   if (req.method !== "GET") return;
 
-  if (local && req.mode === "navigate" && ["", "log", "velocity", "zeroes", "loans", "calculator"].map(p => BASE + p).includes(url.pathname)) {
+  if (local && req.mode === "navigate" && ["", "log", "velocity", "zeroes", "ballistics", "loans", "calculator"].map(p => BASE + p).includes(url.pathname)) {
     e.respondWith(networkFirst(req, PAGE, url.pathname).catch(() =>
       new Response("<p style='font:16px system-ui;padding:24px'>Offline. Open the app once while online and it will work offline after that.</p>",
                    {headers: {"Content-Type": "text/html; charset=utf-8"}})));

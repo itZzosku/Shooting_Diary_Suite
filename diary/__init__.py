@@ -139,6 +139,8 @@ def init_db(path=None):
     init_loans(conn)
     from .zero import init_zero
     init_zero(conn)
+    from .ballistics import init_ballistics
+    init_ballistics(conn)
     conn.commit()
     conn.close()
 
@@ -660,6 +662,8 @@ def delete_gun(gid):
 from . import chrono  # noqa: E402,F401
 # Scope zeroes (dial positions per rifle, swap calculator, PDF zeroing card).
 from . import zero  # noqa: E402,F401
+# Ballistic calculator (profiles, matches, stages; the solver runs in the browser).
+from . import ballistics  # noqa: E402,F401
 # Guns loaned to friends + ammo cost.
 from . import loans  # noqa: E402,F401
 # Landing-page summary.

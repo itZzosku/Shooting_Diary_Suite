@@ -86,6 +86,16 @@
       ]
     },
     {
+      "name": "Ballistics",
+      "url": "ballistics",
+      "icons": [
+        {
+          "src": "static/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
       "name": "Guns loaned",
       "url": "loans",
       "icons": [

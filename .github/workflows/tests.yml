@@ -16,5 +16,8 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+      - uses: actions/setup-node@v4        # the ballistic solver's tests run under Node (tests/test_ballistics_js.py)
+        with:
+          node-version: "22"
       - run: pip install -r requirements.txt pytest
       - run: python -m pytest -q tests

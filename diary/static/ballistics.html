@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Ballistics</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Shooting Diary">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141714" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="static/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="static/icons/favicon-32.png">
+<link rel="preload" href="static/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="static/fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="static/fonts/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="static/fonts/fonts.css">
+<style>
+/* Ballistics: profile, conditions, range → hold; range card and match stages below. */
+:root{
+  --bg:#eef0ec; --surface:#ffffff; --surface-2:#e3e6e0; --line:#c9cec4;
+  --fg:#1c211c; --muted:#5b6359; --accent:#e2590f; --accent-ink:#ffffff; --accent-soft:#fbe3d4;
+  --danger:#b3261e;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141714; --surface:#1d211d; --surface-2:#272c27; --line:#363d36;
+  --fg:#e8ebe6; --muted:#9aa398; --accent:#ff7a33; --accent-ink:#1a0d05; --accent-soft:#3a2416;
+  --danger:#ff8a80; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#141714; --surface:#1d211d; --surface-2:#272c27; --line:#363d36;
+  --fg:#e8ebe6; --muted:#9aa398; --accent:#ff7a33; --accent-ink:#1a0d05; --accent-soft:#3a2416;
+  --danger:#ff8a80; color-scheme:dark }
+
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+[hidden]{display:none!important}
+body{font-family:var(--f-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:env(safe-area-inset-top,0px) calc(120px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+header.top{padding-top:20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:700;font-size:min(2.4rem,7.6vw);line-height:1;margin:0;letter-spacing:.01em;text-transform:uppercase}
+h1 span{color:var(--accent)}
+.hbtns{display:flex;gap:8px;flex-wrap:wrap}
+.ghost{background:none;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:.85rem;color:var(--fg)}
+.ghost:hover{border-color:var(--fg)}
+.ghost.icon{display:inline-flex;align-items:center;justify-content:center;padding:7px 11px}
+.ghost.icon svg{width:18px;height:18px}
+.banner{background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;font-size:.9rem}
+
+/* Licence strip */
+.ids{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 16px;padding:12px 0;border-top:2px solid var(--fg)}
+.ids div{min-width:0}
+.ids small,.lbl{display:block;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.ids b{font-weight:600;overflow-wrap:anywhere}
+.ids .num{font-weight:600}
+
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stat{padding:12px 4px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat+.stat{border-left:1px solid var(--line);padding-left:12px}
+.stat b{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:1.7rem;font-weight:600;line-height:1.1}
+.stat small{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em}
+.types{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.9rem;padding-top:10px}
+.types span{color:var(--muted)}
+.types b{font-family:var(--f-mono);font-weight:600;color:var(--fg)}
+
+h2{font-family:var(--f-display);font-weight:700;font-size:1.35rem;text-transform:uppercase;letter-spacing:.04em;margin:0}
+.loghead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.yrs{display:flex;gap:6px;flex-wrap:wrap}
+.search{position:relative;margin-bottom:12px}
+.search input{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:11px 40px 11px 16px;font-size:1rem;color:var(--fg)}
+.search input::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+.search button{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:0;border-radius:50%;background:var(--surface-2);color:var(--muted);font-size:1rem;line-height:1}
+.found{font-size:.85rem;color:var(--muted);margin:-4px 0 12px}
+.found b{color:var(--fg);font-family:var(--f-mono)}
+.yr{background:none;border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:.82rem;font-family:var(--f-mono)}
+.yr[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.month{font-family:var(--f-display);font-weight:600;font-size:1rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px;display:flex;justify-content:space-between}
+.month:first-child{margin-top:0}
+
+.entry{display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:8px}
+.entry:hover{border-color:var(--muted)}
+.day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-right:1px solid var(--line);padding-right:10px}
+.day b{font-family:var(--f-mono);font-size:.92rem;font-weight:600;line-height:1.1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.day small{font-size:.72rem;color:var(--muted)}
+.e-head{display:flex;gap:4px 10px;align-items:baseline;flex-wrap:wrap}
+.e-place{font-weight:600}
+.e-meta{color:var(--muted);font-size:.85rem}
+.e-lines{display:flex;flex-direction:column;gap:2px;margin-top:6px;font-size:.88rem}
+.e-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+.e-line .what{min-width:0;overflow-wrap:anywhere}
+.e-line .what span{color:var(--muted)}
+.e-line .num{font-weight:600}
+.tm{display:inline-block;font-family:var(--f-mono);font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:4px;color:var(--muted)}
+
+.empty{border:1.5px dashed var(--line);border-radius:var(--r);padding:24px;text-align:center;color:var(--muted)}
+
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:16px 28px;
+  font-family:var(--f-display);font-weight:700;font-size:1.25rem;letter-spacing:.06em;text-transform:uppercase;
+  box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:5;white-space:nowrap}
+
+/* Sheets */
+.sheet{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet-in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.sheet-bar{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);padding-block:12px;z-index:1;border-bottom:1px solid var(--line)}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;min-width:0}
+.field{display:flex;flex-direction:column;gap:6px}
+input[type=text],input[type=password],input[type=date],input[type=time],input[type=number],select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:1rem;color:var(--fg);font-weight:400;text-transform:none;letter-spacing:0;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.9rem}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.chip.add{border-style:dashed}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
+
+.line{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:inset 4px 0 0 var(--accent)}
+.line-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.line-top .lbl{font-size:.75rem}
+.rm{background:none;border:0;color:var(--muted);font-size:.85rem;padding:4px 6px}
+.lgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.step{display:flex;align-items:center;gap:4px}
+.step button{width:44px;height:44px;flex:0 0 44px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:1.3rem;line-height:1}
+.step input{text-align:center;font-family:var(--f-mono);font-weight:600}
+.total{font-family:var(--f-mono);font-size:.9rem;color:var(--muted);text-align:right}
+
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:14px 22px;font-weight:600;font-size:1rem;flex:1 1 auto}
+.danger{background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:13px 16px}
+.msg{font-size:.88rem;color:var(--danger)}
+.opt{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.opt>label.r{display:flex;gap:10px;align-items:center;font-weight:600;cursor:pointer}
+.opt input[type=radio]{width:20px;height:20px;accent-color:var(--accent)}
+.opt .sub{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding-left:30px}
+.hint{font-size:.85rem;color:var(--muted)}
+.hint b{color:var(--fg);font-family:var(--f-mono)}
+/* Guns */
+.guns{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.gunrow{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:stretch;border-top:1px solid var(--line);background:var(--surface)}
+.gunrow:first-child{border-top:0;border-radius:var(--r) var(--r) 0 0}
+.gunrow:last-child{border-radius:0 0 var(--r) var(--r)}
+.grip{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.1rem;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.gunrow.dragging{position:relative;z-index:2;box-shadow:0 6px 18px rgba(0,0,0,.18);background:var(--surface-2)}
+.gunrow.dragging .grip{cursor:grabbing;color:var(--accent)}
+.gun{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;width:100%;text-align:left;background:none;border:0;padding:12px 14px 12px 0}
+.gun:hover{background:var(--surface-2)}
+.gun b{font-weight:600}
+.gun .g-sub{color:var(--muted);font-size:.82rem;grid-column:1}
+.gun .g-r{grid-row:1/3;grid-column:2;text-align:right}
+.gun .g-r .num{font-size:1.3rem;font-weight:600;display:block;line-height:1.1}
+.gun .g-r small{color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+.gun.archived{opacity:.55}
+.sechead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.toggle{display:flex;align-items:baseline;gap:10px;background:none;border:0;padding:4px 0;color:var(--fg);text-align:left}
+.toggle .cnt{font-size:.85rem;color:var(--muted)}
+.toggle .chev{display:inline-block;color:var(--muted);transition:transform .15s}
+.toggle[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.check{display:flex;gap:10px;align-items:center;font-size:.95rem;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.e-line .gname{color:var(--fg);font-weight:500}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:20}
+
+@media (max-width:560px){ .ids{grid-template-columns:repeat(2,minmax(0,1fr))} .grid3{grid-template-columns:1fr 1fr} .grid3>:first-child{grid-column:1/-1} }
+@media (max-width:420px){ .stat b{font-size:1.35rem} .lgrid{grid-template-columns:1fr} }
+@media (prefers-reduced-motion:no-preference){ .toast{animation:up .2s ease-out} @keyframes up{from{opacity:0;transform:translate(-50%,8px)}} }
+/* Page switcher (same on every page) */
+.pnav{display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px;margin-top:max(12px,env(safe-area-inset-top,0px))}
+.pnav a{display:flex;align-items:center;justify-content:center;gap:5px;min-height:38px;padding:4px 6px;border-radius:999px;color:var(--fg);text-decoration:none;font-weight:600;font-size:.86rem;white-space:nowrap;overflow:hidden}
+.pnav a:hover{background:var(--surface)}
+.pnav a[aria-current="page"]{background:var(--fg);color:var(--bg)}
+.pnav svg{width:16px;height:16px;flex:0 0 auto}
+.pnav a:first-child{padding-inline:12px}
+@media (max-width:360px){.pnav a .t{display:none}}
+header.top{padding-top:6px!important}
+/* ---- landing page ---- */
+.who{color:var(--muted);font-size:.9rem;margin-top:6px}
+.tiles{display:flex;flex-direction:column;gap:12px}
+.tile{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:4px 14px;align-items:center;text-decoration:none;color:var(--fg);
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 16px 16px 14px;box-shadow:inset 4px 0 0 var(--accent)}
+.tile:hover{border-color:var(--muted)}
+.tile:active{background:var(--surface-2)}
+.tile .ic{grid-row:1/3;width:52px;height:52px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.tile .ic svg{width:28px;height:28px}
+.tile b{font-family:var(--f-display);font-weight:700;font-size:1.55rem;text-transform:uppercase;letter-spacing:.03em;line-height:1}
+.tile .go{grid-row:1/3;grid-column:3;color:var(--muted);font-size:1.4rem}
+.tile .what{grid-column:2;color:var(--muted);font-size:.86rem;line-height:1.35}
+.tile .now{grid-column:1/-1;margin-top:8px;padding-top:10px;border-top:1px solid var(--line);font-size:.88rem;line-height:1.4;min-height:1.4em}
+.tile .now b{font-family:var(--f-mono);font-size:.9rem;font-weight:600;text-transform:none;letter-spacing:0}
+.tile .now span{color:var(--muted)}
+.foot{display:flex;gap:8px;flex-wrap:wrap}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px}
+.check{display:flex;gap:10px;align-items:center;font-size:.95rem;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.urow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:6px}
+.urow b{font-family:var(--f-mono);font-weight:600}
+.urow .st{grid-column:1/-1;color:var(--muted);font-size:.82rem}
+.urow .bt{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.urow .bt button{padding:6px 10px;font-size:.8rem}
+.badge{display:inline-block;font-size:.68rem;font-weight:600;border-radius:4px;padding:1px 6px;border:1px solid var(--line);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-left:6px;font-family:var(--f-body)}
+.badge.warn{border-color:var(--danger);color:var(--danger)}
+/* ---- ballistics ---- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px}
+.card.hl{box-shadow:inset 4px 0 0 var(--accent)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end}
+.src{font-size:.84rem;color:var(--muted);line-height:1.45}
+.src b{color:var(--fg);font-family:var(--f-mono);font-weight:600}
+.rangebox{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center}
+.rangebox button{width:56px;height:56px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font-size:1.5rem;line-height:1}
+.rangebox input{font-family:var(--f-mono);font-weight:600;font-size:2rem;text-align:center;padding:6px}
+.rangebox .u{font-family:var(--f-mono);color:var(--muted);font-size:.85rem;text-align:center;grid-column:2;margin-top:-4px}
+.sol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:2px solid var(--fg);border-bottom:1px solid var(--line)}
+.sol>div{padding:12px 4px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.sol>div+div{border-left:1px solid var(--line);padding-left:14px}
+.sol small{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.sol b{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:clamp(2rem,10vw,3rem);font-weight:600;line-height:1}
+.sol b em{font-style:normal;font-size:.45em;color:var(--muted);margin-left:4px}
+.sol span{font-family:var(--f-mono);font-size:.82rem;color:var(--muted);line-height:1.45;white-space:pre-line}
+.more{font-family:var(--f-mono);font-size:.82rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 14px}
+.more b{color:var(--fg);font-weight:600}
+.warns{display:flex;flex-direction:column;gap:3px;font-size:.84rem;color:var(--danger)}
+.warns .i{color:var(--muted)}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line)}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px;font-family:var(--f-display);font-weight:700;font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.tbl{width:100%;border-collapse:collapse;font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:.88rem}
+.tbl th{font-family:var(--f-body);font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:right;padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{text-align:right;padding:7px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl tr.ts td{background:var(--accent-soft)}
+.tbl tr.ss td{color:var(--muted)}
+.tbl tr.cur td{font-weight:700;box-shadow:inset 0 -2px 0 var(--accent)}
+.tbl .dim{color:var(--muted)}
+.scroll{overflow-x:auto;margin:0 -4px;padding:0 4px}
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
+.stage-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.stage-top b{font-family:var(--f-display);font-size:1.2rem;text-transform:uppercase;letter-spacing:.04em}
+.stage-top span{color:var(--muted);font-size:.82rem}
+.trow{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,.8fr) 34px;gap:6px;align-items:end}
+.trow .rm{height:44px}
+.mm{position:fixed;inset:0;z-index:15;background:#0e100e;color:#f2f4f0;overflow-y:auto;
+  padding:max(14px,env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
+.mm-bar{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mm-bar b{font-family:var(--f-display);font-size:1.6rem;text-transform:uppercase;letter-spacing:.04em}
+.mm-bar button{background:none;border:1px solid #3a413a;color:#f2f4f0;border-radius:999px;padding:10px 16px;font-size:1rem}
+.mm-sub{color:#9aa398;font-size:.95rem;margin:6px 0 12px;font-family:var(--f-mono)}
+.mm-t{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);gap:2px 14px;padding:14px 0;border-top:1px solid #2c322c;align-items:baseline}
+.mm-t .lab{font-family:var(--f-display);font-weight:700;font-size:1.6rem;grid-row:1/3}
+.mm-t .big{font-family:var(--f-mono);font-size:clamp(1.9rem,9vw,2.8rem);font-weight:600;line-height:1}
+.mm-t .big em{font-style:normal;font-size:.45em;color:#9aa398;margin-left:3px}
+.mm-t .sm{font-family:var(--f-mono);font-size:.88rem;color:#9aa398}
+.mm-t .acc{color:#ff7a33}
+.mm-nav{display:flex;gap:10px;margin-top:16px}
+.mm-nav button{flex:1;background:#1d211d;border:1px solid #3a413a;color:#f2f4f0;border-radius:10px;padding:16px;font-size:1.1rem}
+.req{color:var(--danger)}
+#rChips{min-height:38px;flex-wrap:nowrap;overflow-x:auto}
+#rChips:empty::before{content:"Recent ranges show here";color:var(--muted);font-size:.84rem;align-self:center}
+@media (max-width:560px){ .g4{grid-template-columns:repeat(2,minmax(0,1fr))} .tbl{font-size:.8rem} .tbl th,.tbl td{padding:6px 4px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a></nav>
+  <header class="top">
+    <h1>Ballis<span>tics</span></h1>
+    <div class="hbtns"><button class="ghost" type="button" id="bulBtn">Bullets</button><form method="post" action="logout" style="display:contents"><button class="ghost icon" type="submit" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></form></div>
+  </header>
+  <div class="banner" id="offNote" hidden>Offline – using the profiles last fetched. Holds are still computed here.</div>
+  <div class="banner" id="pendNote" hidden></div>
+
+  <section class="card hl" aria-label="Profile">
+    <div class="prow">
+      <label class="f">Profile<select id="pSel"></select></label>
+      <button class="ghost" type="button" id="pEdit">Edit</button>
+      <button class="ghost" type="button" id="pNew">New</button>
+    </div>
+    <div class="src" id="pInfo"></div>
+  </section>
+
+  <section class="card" aria-label="Conditions">
+    <div class="g4">
+      <label class="f">Temp °C<input type="text" inputmode="decimal" id="aT" placeholder="15"></label>
+      <label class="f">Pressure hPa<input type="text" inputmode="decimal" id="aP" placeholder="1013"></label>
+      <label class="f">Humidity %<input type="text" inputmode="decimal" id="aRH" placeholder="50"></label>
+      <label class="f">Powder °C<input type="text" inputmode="decimal" id="aPow" placeholder="= air"></label>
+    </div>
+    <div class="g3">
+      <label class="f">Wind m/s<input type="text" inputmode="decimal" id="wMs" placeholder="0"></label>
+      <label class="f">From o'clock<select id="wClock"></select></label>
+      <label class="f">Angle °<input type="text" inputmode="decimal" id="aAng" placeholder="0"></label>
+    </div>
+    <div class="actions" style="justify-content:space-between">
+      <span class="hint" style="margin:0">Pressure is <b>station</b> pressure (Kestrel, phone barometer), not the sea-level value weather services give.</span>
+      <button class="ghost" type="button" id="aStd">Standard air</button>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Range and solution">
+    <div class="rangebox">
+      <button type="button" id="rMinus" aria-label="10 m closer">−</button>
+      <input type="text" inputmode="numeric" id="rIn" aria-label="Range in metres" value="300">
+      <button type="button" id="rPlus" aria-label="10 m further">+</button>
+      <span class="u">metres · slant range</span>
+    </div>
+    <div class="chips" id="rChips"></div>
+    <div class="sol" aria-live="polite">
+      <div><small>Elevation</small><b id="oE">–</b><span id="oEs"></span></div>
+      <div><small>Windage</small><b id="oW">–</b><span id="oWs"></span></div>
+    </div>
+    <div class="more" id="oMore"></div>
+    <div class="warns" id="oWarn"></div>
+  </section>
+
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="card" aria-selected="true">Range card</button>
+    <button type="button" role="tab" data-tab="match" aria-selected="false">Match</button>
+  </div>
+
+  <section id="tabCard" class="card" aria-label="Range card">
+    <div class="g3">
+      <label class="f">From m<input type="text" inputmode="numeric" id="cStart"></label>
+      <label class="f">Step m<input type="text" inputmode="numeric" id="cStep"></label>
+      <label class="f">To m<input type="text" inputmode="numeric" id="cEnd"></label>
+    </div>
+    <div class="scroll"><table class="tbl" id="cTable"></table></div>
+    <p class="hint" style="margin:0">Tinted rows are transonic (Mach 1.0–1.2), muted rows subsonic: drag data is least reliable there.</p>
+  </section>
+
+  <section id="tabMatch" aria-label="Match" hidden>
+    <div class="card">
+      <div class="prow">
+        <label class="f">Match<select id="mSel"></select></label>
+        <button class="ghost" type="button" id="mEdit">Edit</button>
+        <button class="ghost" type="button" id="mNew">New</button>
+      </div>
+      <div class="actions"><button class="primary" type="button" id="mMode">Match mode</button><button class="ghost" type="button" id="stNew">Add stage</button></div>
+    </div>
+    <div id="stList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
+  </section>
+</div>
+
+<!-- match mode -->
+<div class="mm" id="mm" hidden role="dialog" aria-modal="true" aria-label="Match mode">
+  <div class="mm-bar"><b id="mmName"></b><button type="button" id="mmClose">Close</button></div>
+  <div class="mm-sub" id="mmSub"></div>
+  <div id="mmRows"></div>
+  <div class="mm-nav"><button type="button" id="mmPrev">‹ Previous</button><button type="button" id="mmNext">Next ›</button></div>
+</div>
+
+<!-- profile sheet -->
+<div class="sheet" id="pSheet" hidden role="dialog" aria-modal="true" aria-labelledby="pTitle">
+  <form class="sheet-in" id="pForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="pTitle">Profile</h2><button class="ghost" type="button" data-close>Close</button></div>
+    <label class="f">Name<input type="text" id="fName" required placeholder="e.g. T3x 6.5 CM match"></label>
+    <div class="grid2"><label class="f">Gun<select id="fGun"></select></label><label class="f">Load<select id="fLoad"></select></label></div>
+    <div class="grid2"><label class="f">Scope<select id="fScope"></select></label><label class="f">Scope zero<select id="fZero"></select></label></div>
+    <div class="prow"><label class="f">Bullet<select id="fBullet"></select></label><button class="ghost" type="button" id="fBulEdit">Edit</button><button class="ghost" type="button" id="fBulNew">New</button></div>
+    <div class="g3"><label class="f">Sight height mm<input type="text" inputmode="decimal" id="fSight" required placeholder="50"></label>
+      <label class="f">Twist mm / turn<input type="text" inputmode="decimal" id="fTwist" placeholder="203"></label>
+      <label class="f">Twist<select id="fTwistDir"><option value="R">Right</option><option value="L">Left</option></select></label></div>
+    <div class="g3"><label class="f">Muzzle velocity m/s<input type="text" inputmode="decimal" id="fMv" placeholder="823"></label>
+      <label class="f">At powder °C<input type="text" inputmode="decimal" id="fMvT" placeholder="15"></label>
+      <label class="f">m/s per °C<input type="text" inputmode="decimal" id="fTs" placeholder="none"></label></div>
+    <h2 style="font-size:1.05rem">Zero</h2>
+    <div class="g4"><label class="f">Range m<input type="text" inputmode="decimal" id="fZr" required placeholder="100"></label>
+      <label class="f">Temp °C<input type="text" inputmode="decimal" id="fZt" placeholder="15"></label>
+      <label class="f">Station hPa<input type="text" inputmode="decimal" id="fZp" placeholder="1013"></label>
+      <label class="f">Humidity %<input type="text" inputmode="decimal" id="fZh" placeholder="0"></label></div>
+    <p class="hint" style="margin:0">The zero is computed in the zero-day conditions; leave them empty for standard air (15 °C, 1013 hPa).</p>
+    <label class="check"><input type="checkbox" id="fArch">Hide from the profile list</label>
+    <div class="msg" id="pMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="pDel" hidden>Delete</button></div>
+  </form>
+</div>
+
+<!-- bullet sheet -->
+<div class="sheet" id="bSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bTitle">
+  <form class="sheet-in" id="bForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="bTitle">Bullet</h2><button class="ghost" type="button" data-close>Close</button></div>
+    <div id="bList" class="chips"></div>
+    <div class="grid2"><label class="f">Name<input type="text" id="gName" required placeholder="e.g. 140 ELD-M"></label><label class="f">Maker<input type="text" id="gMaker"></label></div>
+    <div class="g3"><label class="f">Diameter mm<input type="text" inputmode="decimal" id="gDia" required placeholder="6.71"></label>
+      <label class="f">Length mm<input type="text" inputmode="decimal" id="gLen" placeholder="35.3"></label>
+      <label class="f">Weight gr<input type="text" inputmode="decimal" id="gWt" required placeholder="140"></label></div>
+    <div class="grid2"><label class="f">Drag model<select id="gModel"><option>G7</option><option>G1</option></select></label>
+      <label class="f">BC (lb/in²)<input type="text" inputmode="decimal" id="gBc" required placeholder="0.305"></label></div>
+    <p class="hint" style="margin:0">A BC only means something with its drag model: use the G7 value for long boat-tail bullets, G1 when that is all the maker gives. Length is only needed for spin drift and stability.</p>
+    <div class="msg" id="bMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="bDel" hidden>Delete</button></div>
+  </form>
+</div>
+
+<!-- match sheet -->
+<div class="sheet" id="mSheet" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <form class="sheet-in" id="mForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="mTitle">Match</h2><button class="ghost" type="button" data-close>Close</button></div>
+    <div class="grid2"><label class="f">Name<input type="text" id="hName" required placeholder="e.g. Club PRS November"></label><label class="f">Date<input type="date" id="hDate"></label></div>
+    <div class="msg" id="mMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="mDel" hidden>Delete match and its stages</button></div>
+  </form>
+</div>
+
+<!-- stage sheet -->
+<div class="sheet" id="sSheet" hidden role="dialog" aria-modal="true" aria-labelledby="sTitle">
+  <form class="sheet-in" id="sForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="sTitle">Stage</h2><button class="ghost" type="button" data-close>Close</button></div>
+    <label class="f">Name<input type="text" id="sName" required placeholder="e.g. Stage 3 – barricade"></label>
+    <div class="prow" style="grid-template-columns:minmax(0,1fr) auto">
+      <label class="f">Quick entry: ranges in shooting order<input type="text" id="sQuick" placeholder="300 455 520 610"></label>
+      <button class="ghost" type="button" id="sQuickAdd">Add</button>
+    </div>
+    <div id="sTargets" style="display:flex;flex-direction:column;gap:8px"></div>
+    <button class="chip add" type="button" id="sAddT" style="align-self:flex-start">+ Target</button>
+    <div class="grid2"><label class="f">Dial<select id="sDial">
+        <option value="each">Dial each target</option><option value="first_hold_rest">Dial the first, hold the rest</option><option value="one">Dial for one target, hold the rest</option></select></label>
+      <label class="f" id="sDialTL" hidden>Dial for<select id="sDialT"></select></label></div>
+    <div class="grid2"><label class="f">Stage wind m/s<input type="text" inputmode="decimal" id="sWms" placeholder="0"></label><label class="f">From<select id="sWclock"></select></label></div>
+    <div class="msg" id="sMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="sDel" hidden>Delete</button></div>
+  </form>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="static/ballistics/drag.js"></script>
+<script src="static/ballistics/solver.js"></script>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num=v=>{v=parseFloat(String(v??"").replace(",",".").trim());return isFinite(v)?v:null};
+const B=window.Ballistics;
+const CACHE="bal-cache",OUTBOX="bal-outbox",RECENT="bal-recent",COND="bal-cond:",UI="bal-ui";
+const ls={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const ERR={name_required:"Give it a name.",bad_sight_height_mm:"Sight height must be 10–150 mm.",sight_height_mm_required:"Sight height is needed.",
+  bad_mv_ms:"Muzzle velocity must be 100–1500 m/s.",bad_twist_mm:"Twist must be 150–800 mm per turn.",bad_zero_range_m:"Zero range must be 25–600 m.",
+  zero_range_m_required:"Zero range is needed.",bad_zero_hpa:"Zero pressure must be 500–1100 hPa (station pressure).",bad_zero_temp_c:"Zero temperature must be −40–60 °C.",
+  bad_zero_rh:"Humidity must be 0–100 %.",bad_temp_sens:"Temperature sensitivity must be −5…5 m/s per °C.",bad_bc:"BC must be 0.05–1.5.",bc_required:"Enter the BC.",
+  diameter_mm_required:"Enter the diameter.",bad_diameter_mm:"Diameter must be 2–20 mm.",weight_gr_required:"Enter the weight.",bad_weight_gr:"Weight must be 10–1000 gr.",
+  bad_length_mm:"Length must be 3–80 mm.",in_use:"A profile uses this bullet – change the profile first.",bad_targets:"Each target needs a range (1–3000 m); up to 30 targets.",
+  bad_range:"Each target needs a range (1–3000 m).",bad_wind_ms:"Wind must be 0–30 m/s.",bad_date:"Check the date."};
+const CLOCK=[[12,"12 head"],[1,"1"],[2,"2"],[3,"3 right"],[4,"4"],[5,"5"],[6,"6 tail"],[7,"7"],[8,"8"],[9,"9 left"],[10,"10"],[11,"11"]];
+for(const id of ["wClock","sWclock"])$(id).innerHTML=CLOCK.map(([v,t])=>`<option value="${v}">${t}</option>`).join("");
+
+let D=ls.get(CACHE)||{profiles:[],bullets:[],matches:[],stages:[],settings:{card_start:100,card_step:50,card_end:1000},pickers:{guns:[],loads:[],scopes:[]}};
+const U=Object.assign({profile:null,match:null,tab:"card"},ls.get(UI)||{});
+const saveUI=()=>ls.set(UI,U);
+function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2800)}
+const newId=(text,prefix)=>(prefix+String(text||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")).slice(0,50).replace(/-$/,"")+"-"+Math.random().toString(16).slice(2,6);
+
+// ------------------------------------------------------------ server, cache and outbox
+async function load(){
+  let r;try{r=await fetch("api/ballistics",{credentials:"same-origin",headers:{"X-Requested-With":"fetch"}})}catch(e){$("offNote").hidden=false;return}
+  if(r.status===401){location.href="login";return}
+  if(!r.ok)return;
+  $("offNote").hidden=!r.headers.get("X-Offline");
+  try{D=await r.json()}catch(e){return}
+  ls.set(CACHE,D);applyOutbox();render();
+}
+function outbox(){return ls.get(OUTBOX)||[]}
+function applyOutbox(){                                   // queued edits show before they reach the server
+  for(const o of outbox()){
+    const [kind,id]=o.url.split("/").slice(-2),list={profiles:D.profiles,bullets:D.bullets,matches:D.matches,stages:D.stages}[kind];
+    if(!list)continue;const i=list.findIndex(x=>x.id===id);
+    if(o.method==="DELETE"){if(i>=0)list.splice(i,1)}
+    else{const row=Object.assign({},i>=0?list[i]:{},o.body,{id});if(i>=0)list[i]=row;else list.push(row)}
+  }
+  const n=outbox().length;$("pendNote").hidden=!n;$("pendNote").textContent=n?`${n} change${n>1?"s":""} waiting for a connection – saved on this phone.`:"";
+}
+async function send(method,url,body){
+  const opt={method,credentials:"same-origin",headers:{"X-Requested-With":"fetch"}};
+  if(body){opt.headers["Content-Type"]="application/json";opt.body=JSON.stringify(body)}
+  const r=await fetch(url,opt);
+  let j={};try{j=await r.json()}catch(e){}
+  return {ok:r.ok,status:r.status,j};
+}
+/** Save now; offline → queue it. Returns an error code to show, or null. */
+async function write(method,url,body){
+  try{
+    const res=await send(method,url,body);
+    if(res.status===401){location.href="login";return "login"}
+    if(!res.ok)return res.j.error||("http_"+res.status);
+    await load();return null;
+  }catch(e){
+    const box=outbox().filter(o=>o.url!==url);box.push({method,url,body});ls.set(OUTBOX,box);
+    applyOutbox();render();toast("Offline – saved on this phone, sent when back online.");return null;
+  }
+}
+async function flush(){
+  const box=outbox();if(!box.length)return;
+  const left=[];
+  for(const o of box){
+    try{const res=await send(o.method,o.url,o.body);if(!res.ok&&res.status>=500)left.push(o);else if(!res.ok)toast("The server rejected a change ("+(res.j.error||res.status)+")")}
+    catch(e){left.push(o)}
+  }
+  ls.set(OUTBOX,left);await load();
+}
+window.addEventListener("online",flush);
+
+// ------------------------------------------------------------ helpers
+const prof=()=>D.profiles.find(p=>p.id===U.profile)||D.profiles.find(p=>!p.archived)||null;
+const scopeOf=p=>(p&&p.inputs&&p.inputs.scope)||{unit:"MRAD",click:0.1};
+const decs=c=>{const s=String(+c);return s.includes(".")?Math.min(3,s.split(".")[1].length):0};
+function cond(){
+  return {tempC:num($("aT").value),hpa:num($("aP").value),rh:num($("aRH").value),powder:num($("aPow").value),
+          ms:num($("wMs").value)||0,clock:+$("wClock").value,angle:num($("aAng").value)||0};
+}
+function solverInput(p,c,extra){
+  const i=p.inputs;
+  return Object.assign({bullet:i.bullet,mv:i.mv,mvTempC:i.mvTempC,tempSens:i.tempSens,mvScale:i.mvScale,dragScale:i.dragScale,
+    sightHeightMm:i.sightHeightMm,zeroRangeM:i.zeroRangeM,zeroAtmo:clean(i.zeroAtmo),twistMm:i.twistMm,twistDir:i.twistDir,
+    atmo:clean({tempC:c.tempC,hpa:c.hpa,rh:c.rh}),powderC:c.powder,wind:{ms:c.ms,clock:c.clock},angleDeg:c.angle},extra||{});
+}
+const clean=o=>{const r={};for(const k in o||{})if(o[k]!=null)r[k]=o[k];return r};
+function ready(p){return p&&p.inputs&&p.inputs.bullet&&p.inputs.mv}
+/** One hold, in the scope's unit, rounded to clicks: {val, clicks, txt} */
+function fmtHold(mrad,scope,pos,neg){
+  const u=scope.unit||"MRAD",h=B.toUnit(mrad,u),d=B.dial(h,{click:scope.click||0.1}),dec=decs(scope.click||0.1);
+  const dir=d.clicks>0?pos:d.clicks<0?neg:"";
+  return {val:Math.abs(d.value).toFixed(dec),dir,clicks:Math.abs(d.clicks),signed:d.value,dec,unit:u==="MOA"?"MOA":"mil"};
+}
+function turret(signedHold,offset,scope,turn){
+  const reading=(offset||0)+signedHold,dec=decs(scope.click||0.1);
+  const out={reading:+reading.toFixed(dec)};
+  if(turn>0){const a=Math.abs(reading),n=Math.floor(a/turn+1e-9);out.turns=n;out.rest=(a-n*turn).toFixed(dec)}
+  return out;
+}
+
+// ------------------------------------------------------------ render
+function renderProfiles(){
+  const list=D.profiles.filter(p=>!p.archived||p.id===U.profile);
+  $("pSel").innerHTML=list.length?list.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join(""):`<option value="">No profiles yet – tap New</option>`;
+  const p=prof();if(p){U.profile=p.id;$("pSel").value=p.id}
+  $("pEdit").disabled=!p;
+  if(!p){$("pInfo").innerHTML="A profile is a gun + load + bullet + scope. Start with <b>New</b>.";return}
+  const i=p.inputs,b=i.bullet,s=i.scope;
+  const parts=[];
+  if(i.gun)parts.push(esc(i.gun));
+  if(b)parts.push(`${esc(b.name)} · <b>${b.model} ${b.bc!=null?(+b.bc).toFixed(3):"bands"}</b>`);
+  if(i.mv)parts.push(`<b>${i.mv}</b> m/s${i.mvTempC!=null?" at "+i.mvTempC+" °C":""}${i.tempSens?" · "+i.tempSens+" m/s/°C":""}`);
+  parts.push(`zero <b>${i.zeroRangeM} m</b>`);
+  if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
+  else parts.push("no scope linked: 0.1 mil clicks");
+  $("pInfo").innerHTML=parts.join(" · ");
+}
+function renderSolution(){
+  const p=prof(),c=cond();const R=num($("rIn").value);
+  const warn=[],info=[];
+  $("oE").textContent=$("oW").textContent="–";$("oEs").textContent=$("oWs").textContent="";$("oMore").innerHTML="";
+  if(!p){$("oWarn").innerHTML="";return}
+  if(!p.inputs.bullet)warn.push("No bullet on this profile – edit the profile.");
+  if(!p.inputs.mv)warn.push("No muzzle velocity on this profile – edit the profile.");
+  if(!ready(p)||!(R>0)){$("oWarn").innerHTML=warn.map(w=>`<div>${esc(w)}</div>`).join("");return}
+  let res;
+  try{res=B.solve(solverInput(p,c),[R])}catch(e){$("oWarn").innerHTML=`<div>Can't compute: ${esc(e.message==="zero_not_found"?"no zero found – check sight height, zero range and velocity":e.message)}</div>`;return}
+  const r=res.rows[0],s=scopeOf(p),z=p.inputs.zero;
+  if(!r.reached){$("oWarn").innerHTML="<div>The bullet doesn't reach that range.</div>";return}
+  const e=fmtHold(r.elevMrad,s,"UP","DOWN"),w=fmtHold(r.windMrad,s,"R","L");
+  $("oE").innerHTML=`${e.val}<em>${e.unit}</em>`;
+  const tu=turret(e.signed,z&&z.elev,s,s.elevTurn);
+  let es=`${e.clicks} click${e.clicks===1?"":"s"} ${e.dir||""}`.trim();
+  if(z&&z.elev)es+=`\nturret ${tu.reading}`;
+  if(s.elevTurn>0)es+=`\n${tu.turns} turn${tu.turns===1?"":"s"} + ${tu.rest}`;
+  $("oEs").textContent=es;
+  $("oW").innerHTML=c.ms?`${w.val}<em>${w.unit} ${w.dir}</em>`:`0<em>${w.unit}</em>`;
+  const per=B.toUnit(r.windPer1Mrad,s.unit).toFixed(e.dec+1);
+  $("oWs").textContent=(c.ms?`${w.clicks} click${w.clicks===1?"":"s"} ${w.dir==="R"?"right":"left"}\n`:"")+`${per} per 1 m/s`;
+  $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
+    +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span>`+(r.dropM!=null?`<span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`:"");
+  if(r.subsonic)warn.push("Subsonic at this range – expect more spread and less reliable dope.");
+  else if(r.transonic)warn.push("Transonic at this range (Mach 1.0–1.2).");
+  if(res.muzzleMach>1&&res.muzzleMach<1.15)warn.push("Muzzle velocity is just above the speed of sound in this air.");
+  if(s.zeroStop!=null&&z&&tu.reading<s.zeroStop-1e-9)warn.push(`Below the zero stop (${s.zeroStop}).`);
+  if(c.hpa!=null&&c.hpa>1040)info.push("That pressure is high for station pressure – is it the sea-level value?");
+  for(const k of p.inputs.warnings||[])if(k==="bullet_weight_differs")info.push("The load's bullet weight differs from the bullet on this profile.");
+  $("oWarn").innerHTML=warn.map(w=>`<div>${esc(w)}</div>`).join("")+info.map(w=>`<div class="i">${esc(w)}</div>`).join("");
+}
+function renderCard(){
+  const p=prof(),c=cond(),st=D.settings;
+  const a=num($("cStart").value)??st.card_start,step=num($("cStep").value)??st.card_step,end=num($("cEnd").value)??st.card_end;
+  if(!ready(p)||!(step>0)||!(end>a)){$("cTable").innerHTML="";return}
+  const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<300;x+=step)ranges.push(Math.round(x*10)/10);
+  let res;try{res=B.solve(solverInput(p,c),ranges.filter(x=>x>0))}catch(e){$("cTable").innerHTML="";return}
+  const s=scopeOf(p),R=num($("rIn").value),u=s.unit==="MOA"?"MOA":"mil";
+  const head=`<tr><th>m</th><th>Elev ${u}</th><th>Clicks</th><th>Wind ${u}</th><th>/1 m/s</th><th>m/s</th><th>TOF</th></tr>`;
+  $("cTable").innerHTML=head+res.rows.map(r=>{
+    if(!r.reached)return`<tr><td>${r.range}</td><td colspan="6" class="dim">not reached</td></tr>`;
+    const e=fmtHold(r.elevMrad,s,"U","D"),w=fmtHold(r.windMrad,s,"R","L");
+    const cls=[r.subsonic?"ss":r.transonic?"ts":"",r.range===R?"cur":""].join(" ").trim();
+    return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${e.signed<0?"−":""}${e.val}</td><td>${e.clicks}${e.dir?" "+e.dir[0]:""}</td><td>${c.ms?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
+  }).join("");
+}
+
+// ------------------------------------------------------------ match
+const stagesOf=mid=>D.stages.filter(s=>s.match_id===mid).sort((a,b)=>(a.ord||0)-(b.ord||0));
+const curMatch=()=>D.matches.find(m=>m.id===U.match)||D.matches.find(m=>!m.archived)||null;
+/** Rows for one stage: per target elevation, dial, hold, wind; null when the profile can't be solved. */
+function stageRows(stage,p){
+  if(!ready(p))return null;
+  const c=cond(),s=scopeOf(p);
+  const w=stage.wind||{ms:c.ms,clock:c.clock};
+  const rows=stage.targets.map(t=>{
+    const tw=t.wind||w;
+    let r;try{r=B.solve(solverInput(p,c,{wind:{ms:tw.ms,clock:tw.clock},angleDeg:t.angle_deg||c.angle}),[t.range_m]).rows[0]}catch(e){r=null}
+    return {t,r};
+  });
+  const elev=rows.map(x=>x.r&&x.r.reached?B.toUnit(x.r.elevMrad,s.unit):null);
+  let dialAt=null;
+  if(stage.dial_mode==="first_hold_rest")dialAt=0;
+  if(stage.dial_mode==="one")dialAt=Math.min(stage.dial_target||0,rows.length-1);
+  const click=s.click||0.1,dec=decs(click),rnd=v=>Math.round(v/click)*click;
+  return rows.map((x,i)=>{
+    if(elev[i]==null)return Object.assign(x,{bad:true});
+    const dial=rnd(dialAt==null?elev[i]:(elev[dialAt]??0));
+    const hold=rnd(elev[i]-dial);
+    const prev=i>0&&dialAt==null&&elev[i-1]!=null?rnd(elev[i-1]):null;
+    const wind=B.toUnit(x.r.windMrad,s.unit);
+    const wUnit=x.t.w_cm?B.toUnit(x.t.w_cm/100/x.t.range_m*1000,s.unit):null;
+    return Object.assign(x,{dial,hold,change:prev==null?null:dial-prev,wind,wUnit,dec,unit:s.unit==="MOA"?"MOA":"mil",
+      per1:B.toUnit(x.r.windPer1Mrad,s.unit)});
+  });
+}
+const ud=(v,dec)=>(v>0?"↑":v<0?"↓":"")+Math.abs(v).toFixed(dec);
+const sgn=(v,dec)=>(v>0?"+":v<0?"−":"")+Math.abs(v).toFixed(dec);
+const lr=(v,dec)=>Math.abs(v)<0.5*Math.pow(10,-dec)?"0":Math.abs(v).toFixed(dec)+(v>0?" R":" L");
+function widths(x){if(!x.wUnit||!x.wind)return"";const f=Math.abs(x.wind)/x.wUnit;return ` · ${f<0.13?"inside":f.toFixed(1)+"×"} target`}
+function renderMatch(){
+  const ms=D.matches.filter(m=>!m.archived||m.id===U.match);
+  const m=curMatch();if(m)U.match=m.id;
+  $("mSel").innerHTML=ms.length?ms.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}${x.date?" · "+x.date:""}</option>`).join(""):`<option value="">No matches yet – tap New</option>`;
+  if(m)$("mSel").value=m.id;
+  $("mEdit").disabled=$("stNew").disabled=$("mMode").disabled=!m;
+  const p=prof();
+  if(!m){$("stList").innerHTML="";return}
+  const sts=stagesOf(m.id);
+  if(!sts.length){$("stList").innerHTML=`<div class="empty">No stages yet. Tap <b>Add stage</b> and type the ranges in shooting order.</div>`;return}
+  $("stList").innerHTML=sts.map(st=>{
+    const rows=stageRows(st,p);
+    const w=st.wind?`${st.wind.ms} m/s from ${st.wind.clock}`:"conditions above";
+    const mode={each:"dial each",first_hold_rest:"dial first, hold rest",one:"dial one, hold rest"}[st.dial_mode]||"";
+    let body=`<div class="hint">Set up a profile with a bullet and velocity to see the dope.</div>`;
+    if(rows){
+      const u=rows.find(x=>!x.bad);const unit=u?u.unit:"mil";
+      body=`<div class="scroll"><table class="tbl"><tr><th>Target</th><th>m</th><th>Dial ${unit}</th><th>Hold</th><th>Wind</th><th>±1 m/s</th></tr>`+rows.map(x=>x.bad
+        ?`<tr><td>${esc(x.t.label)}</td><td>${x.t.range_m}</td><td colspan="4" class="dim">–</td></tr>`
+        :`<tr><td>${esc(x.t.label)}${x.t.w_cm?`<span class="dim"> ${x.t.w_cm}${x.t.h_cm?"×"+x.t.h_cm:""}</span>`:""}</td><td>${x.t.range_m}</td><td>${x.dial.toFixed(x.dec)}${x.change!=null?`<span class="dim"> ${sgn(x.change,x.dec)}</span>`:""}</td><td>${x.hold?ud(x.hold,x.dec):"–"}</td><td>${lr(x.wind,x.dec)}</td><td class="dim">${x.per1.toFixed(2)}</td></tr>`).join("")+`</table></div>`;
+    }
+    return`<div class="stage"><div class="stage-top"><b>${esc(st.name)}</b><span>${esc(mode)} · wind ${esc(w)}</span><button class="ghost" type="button" data-stage="${esc(st.id)}">Edit</button></div>${body}</div>`;
+  }).join("");
+}
+let mmIdx=0;
+function renderMM(){
+  const m=curMatch(),sts=m?stagesOf(m.id):[],p=prof();
+  if(!sts.length){$("mm").hidden=true;return}
+  mmIdx=Math.max(0,Math.min(mmIdx,sts.length-1));
+  const st=sts[mmIdx],rows=stageRows(st,p)||[],c=cond();
+  $("mmName").textContent=st.name;
+  const w=st.wind||{ms:c.ms,clock:c.clock};
+  $("mmSub").textContent=`${mmIdx+1}/${sts.length} · ${p?p.name:"no profile"} · wind ${w.ms} m/s from ${w.clock} · ${c.tempC??15} °C`;
+  $("mmRows").innerHTML=rows.map(x=>x.bad?`<div class="mm-t"><span class="lab">${esc(x.t.label)}</span><span class="big">–</span><span class="sm">${x.t.range_m} m</span></div>`
+    :`<div class="mm-t"><span class="lab">${esc(x.t.label)}</span>
+      <span class="big ${x.hold?"":"acc"}">${x.hold?ud(x.hold,x.dec):x.dial.toFixed(x.dec)}<em>${x.hold?"hold":"dial"}</em></span>
+      <span class="big">${lr(x.wind,x.dec)}<em>wind</em></span>
+      <span class="sm">${x.t.range_m} m${x.change!=null?" · "+sgn(x.change,x.dec):""}${x.hold?" · dialled "+x.dial.toFixed(x.dec):""}</span>
+      <span class="sm">±1 m/s ${x.per1.toFixed(2)}${widths(x)}</span></div>`).join("");
+  $("mmPrev").disabled=mmIdx===0;$("mmNext").disabled=mmIdx===sts.length-1;
+}
+let wake=null;
+async function openMM(){
+  mmIdx=0;$("mm").hidden=false;document.body.style.overflow="hidden";renderMM();
+  try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(e){}
+}
+function closeMM(){$("mm").hidden=true;document.body.style.overflow="";try{wake&&wake.release()}catch(e){}wake=null}
+
+function render(){
+  renderProfiles();
+  const st=D.settings||{};
+  if(!$("cStart").value)$("cStart").value=st.card_start;if(!$("cStep").value)$("cStep").value=st.card_step;if(!$("cEnd").value)$("cEnd").value=st.card_end;
+  renderSolution();renderCard();renderMatch();if(!$("mm").hidden)renderMM();
+  saveUI();
+}
+
+// ------------------------------------------------------------ conditions, range, tabs
+function loadCond(){
+  const c=ls.get(COND+(U.profile||""))||{};
+  $("aT").value=c.t??"";$("aP").value=c.p??"";$("aRH").value=c.rh??"";$("aPow").value=c.pow??"";
+  $("wMs").value=c.ms??"";$("wClock").value=c.clock??9;$("aAng").value=c.ang??"";
+  if(c.range)$("rIn").value=c.range;
+}
+function saveCond(){
+  ls.set(COND+(U.profile||""),{t:$("aT").value,p:$("aP").value,rh:$("aRH").value,pow:$("aPow").value,ms:$("wMs").value,clock:$("wClock").value,ang:$("aAng").value,range:$("rIn").value});
+}
+function recent(){
+  const R=num($("rIn").value);if(!(R>0))return;
+  let list=(ls.get(RECENT)||[]).filter(x=>x!==R);list.unshift(R);list=list.slice(0,6);ls.set(RECENT,list);
+}
+function renderChips(){$("rChips").innerHTML=(ls.get(RECENT)||[]).map(r=>`<button type="button" class="chip" data-r="${r}">${r}</button>`).join("")}
+let tmr=null;
+function changed(){saveCond();renderSolution();clearTimeout(tmr);tmr=setTimeout(()=>{renderCard();renderMatch();if(!$("mm").hidden)renderMM()},120)}
+document.querySelectorAll("#aT,#aP,#aRH,#aPow,#wMs,#wClock,#aAng,#rIn").forEach(el=>el.addEventListener("input",changed));
+$("wClock").addEventListener("change",changed);
+$("rIn").addEventListener("change",()=>{recent();renderChips()});
+const stepR=d=>{const v=(num($("rIn").value)||0)+d;$("rIn").value=Math.max(10,Math.round(v));recent();renderChips();changed()};
+$("rMinus").addEventListener("click",()=>stepR(-10));$("rPlus").addEventListener("click",()=>stepR(10));
+$("rChips").addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b){$("rIn").value=b.dataset.r;changed()}});
+$("aStd").addEventListener("click",()=>{$("aT").value=15;$("aP").value=1013;$("aRH").value=0;$("aPow").value="";changed()});
+$("pSel").addEventListener("change",()=>{U.profile=$("pSel").value;loadCond();render()});
+$("mSel").addEventListener("change",()=>{U.match=$("mSel").value;render()});
+for(const id of ["cStart","cStep","cEnd"])$(id).addEventListener("change",async()=>{
+  renderCard();const s={card_start:num($("cStart").value),card_step:num($("cStep").value),card_end:num($("cEnd").value)};
+  if(s.card_start!=null&&s.card_step>0&&s.card_end>s.card_start){try{await send("PUT","api/ballistics/settings",s);D.settings=s;ls.set(CACHE,D)}catch(e){}}
+});
+document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;U.tab=b.dataset.tab;showTab();saveUI()});
+function showTab(){document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===U.tab));$("tabCard").hidden=U.tab!=="card";$("tabMatch").hidden=U.tab!=="match"}
+
+// ------------------------------------------------------------ sheets
+function openSheet(id){$(id).hidden=false;document.body.style.overflow="hidden";const m=$(id).querySelector(".msg");if(m)m.hidden=true}
+function closeSheet(el){el.hidden=true;if([...document.querySelectorAll(".sheet")].every(s=>s.hidden)&&$("mm").hidden)document.body.style.overflow=""}
+document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>closeSheet(b.closest(".sheet"))));
+const msg=(id,code)=>{$(id).textContent=ERR[code]||("Couldn't save: "+code);$(id).hidden=false};
+const opt=(v,t,sel)=>`<option value="${esc(v)}"${sel?" selected":""}>${esc(t)}</option>`;
+const setv=(id,v)=>{$(id).value=v==null?"":v};
+
+let editP=null;
+function fillScopeZero(scopeId,zeroId){
+  const sc=D.pickers.scopes.find(s=>s.id===scopeId);
+  $("fZero").innerHTML=opt("","– none –")+(sc?sc.zeros.filter(z=>!z.archived||z.id===zeroId).map(z=>opt(z.id,`${z.name}${z.distance_m?" · "+z.distance_m+" m":""}`,z.id===zeroId)).join(""):"");
+}
+function fillBullets(sel){$("fBullet").innerHTML=opt("","– none –")+D.bullets.filter(b=>!b.archived||b.id===sel).map(b=>opt(b.id,`${b.name} · ${b.drag_model} ${b.bc??"bands"}`,b.id===sel)).join("")}
+function openProfile(p){
+  editP=p;$("pTitle").textContent=p?"Edit profile":"New profile";$("pDel").hidden=!p;
+  const P=D.pickers,x=p||{sight_height_mm:50,zero_range_m:100,twist_dir:"R"};
+  $("fGun").innerHTML=opt("","– none –")+P.guns.filter(g=>!g.archived||g.id===x.gun_id).map(g=>opt(g.id,g.name+(g.cal?" · "+g.cal:""),g.id===x.gun_id)).join("");
+  $("fLoad").innerHTML=opt("","– none –")+P.loads.filter(l=>!l.archived||l.id===x.load_id).map(l=>opt(l.id,l.name,l.id===x.load_id)).join("");
+  $("fScope").innerHTML=opt("","– none –")+P.scopes.filter(s=>!s.archived||s.id===x.scope_id).map(s=>opt(s.id,`${s.name} · ${+s.click} ${s.unit}`,s.id===x.scope_id)).join("");
+  fillScopeZero(x.scope_id,x.zero_id);fillBullets(x.bullet_id);
+  setv("fName",x.name);setv("fSight",x.sight_height_mm);setv("fTwist",x.twist_mm);$("fTwistDir").value=x.twist_dir||"R";
+  setv("fMv",x.mv_ms);setv("fMvT",x.mv_temp_c);setv("fTs",x.temp_sens);setv("fZr",x.zero_range_m);
+  setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
+  openSheet("pSheet");if(!p)$("fName").focus();
+}
+$("fScope").addEventListener("change",()=>fillScopeZero($("fScope").value,null));
+$("fZero").addEventListener("change",()=>{       // a scope zero knows its rifle and distance
+  const sc=D.pickers.scopes.find(s=>s.id===$("fScope").value),z=sc&&sc.zeros.find(z=>z.id===$("fZero").value);
+  if(!z)return;if(z.distance_m)$("fZr").value=z.distance_m;if(z.gun_id&&!$("fGun").value)$("fGun").value=z.gun_id;if(z.load_id&&!$("fLoad").value)$("fLoad").value=z.load_id;
+});
+$("pEdit").addEventListener("click",()=>openProfile(prof()));
+$("pNew").addEventListener("click",()=>openProfile(null));
+$("pForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const body={name:$("fName").value,gun_id:$("fGun").value||null,load_id:$("fLoad").value||null,scope_id:$("fScope").value||null,zero_id:$("fZero").value||null,
+    bullet_id:$("fBullet").value||null,sight_height_mm:num($("fSight").value),twist_mm:num($("fTwist").value),twist_dir:$("fTwistDir").value,
+    mv_ms:num($("fMv").value),mv_temp_c:num($("fMvT").value),temp_sens:num($("fTs").value),zero_range_m:num($("fZr").value),
+    zero_temp_c:num($("fZt").value),zero_hpa:num($("fZp").value),zero_rh:num($("fZh").value),archived:$("fArch").checked,
+    ord:editP?editP.ord:D.profiles.length,mv_scale:editP?editP.mv_scale:1,drag_scale:editP?editP.drag_scale:1};
+  const id=editP?editP.id:newId(body.name,"p-");
+  const err=await write("PUT","api/ballistics/profiles/"+encodeURIComponent(id),body);
+  if(err)return msg("pMsg",err);
+  U.profile=id;closeSheet($("pSheet"));render();
+});
+$("pDel").addEventListener("click",async()=>{
+  if(!editP||!confirm(`Delete the profile “${editP.name}”?`))return;
+  const err=await write("DELETE","api/ballistics/profiles/"+encodeURIComponent(editP.id));
+  if(err)return msg("pMsg",err);U.profile=null;closeSheet($("pSheet"));render();
+});
+
+let editB=null;
+function openBullet(b){
+  editB=b;$("bTitle").textContent=b?"Edit bullet":"New bullet";$("bDel").hidden=!b;
+  $("bList").innerHTML=D.bullets.map(x=>`<button type="button" class="chip" data-bul="${esc(x.id)}" aria-pressed="${!!b&&x.id===b.id}">${esc(x.name)}</button>`).join("")+`<button type="button" class="chip add" data-bul="">+ New</button>`;
+  const x=b||{drag_model:"G7"};
+  setv("gName",x.name);setv("gMaker",x.maker);setv("gDia",x.diameter_mm);setv("gLen",x.length_mm);setv("gWt",x.weight_gr);$("gModel").value=x.drag_model||"G7";setv("gBc",x.bc);
+  if(!b&&!$("pSheet").hidden){const l=D.pickers.loads.find(l=>l.id===$("fLoad").value);if(l&&l.bullet_gr)setv("gWt",l.bullet_gr)}
+  openSheet("bSheet");
+}
+$("bList").addEventListener("click",e=>{const c=e.target.closest("[data-bul]");if(c)openBullet(D.bullets.find(b=>b.id===c.dataset.bul)||null)});
+$("bulBtn").addEventListener("click",()=>openBullet(D.bullets[0]||null));
+$("fBulNew").addEventListener("click",()=>openBullet(null));
+$("fBulEdit").addEventListener("click",()=>openBullet(D.bullets.find(b=>b.id===$("fBullet").value)||null));
+$("bForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const body={name:$("gName").value,maker:$("gMaker").value,diameter_mm:num($("gDia").value),length_mm:num($("gLen").value),weight_gr:num($("gWt").value),drag_model:$("gModel").value,bc:num($("gBc").value)};
+  const id=editB?editB.id:newId(body.name,"b-");
+  const err=await write("PUT","api/ballistics/bullets/"+encodeURIComponent(id),body);
+  if(err)return msg("bMsg",err);
+  closeSheet($("bSheet"));if(!$("pSheet").hidden)fillBullets(id);
+});
+$("bDel").addEventListener("click",async()=>{
+  if(!editB||!confirm(`Delete the bullet “${editB.name}”?`))return;
+  const err=await write("DELETE","api/ballistics/bullets/"+encodeURIComponent(editB.id));
+  if(err)return msg("bMsg",err);closeSheet($("bSheet"));if(!$("pSheet").hidden)fillBullets($("fBullet").value);
+});
+
+let editM=null;
+function openMatch(m){editM=m;$("mTitle").textContent=m?"Edit match":"New match";$("mDel").hidden=!m;setv("hName",m&&m.name);setv("hDate",m?m.date:new Date().toISOString().slice(0,10));openSheet("mSheet")}
+$("mNew").addEventListener("click",()=>openMatch(null));$("mEdit").addEventListener("click",()=>openMatch(curMatch()));
+$("mForm").addEventListener("submit",async e=>{
+  e.preventDefault();const body={name:$("hName").value,date:$("hDate").value||null};
+  const id=editM?editM.id:newId(body.name,"m-");
+  const err=await write("PUT","api/ballistics/matches/"+encodeURIComponent(id),body);if(err)return msg("mMsg",err);
+  U.match=id;closeSheet($("mSheet"));render();
+});
+$("mDel").addEventListener("click",async()=>{
+  if(!editM||!confirm(`Delete “${editM.name}” and all its stages?`))return;
+  const err=await write("DELETE","api/ballistics/matches/"+encodeURIComponent(editM.id));if(err)return msg("mMsg",err);
+  U.match=null;closeSheet($("mSheet"));render();
+});
+
+let editS=null;
+function targetRow(t,i){
+  return`<div class="trow" data-t><label class="f">Target<input type="text" data-k="label" value="${esc(t.label||"T"+(i+1))}"></label>
+    <label class="f">Range m<input type="text" inputmode="numeric" data-k="range_m" value="${esc(t.range_m??"")}"></label>
+    <label class="f">W cm<input type="text" inputmode="decimal" data-k="w_cm" value="${esc(t.w_cm??"")}"></label>
+    <label class="f">H cm<input type="text" inputmode="decimal" data-k="h_cm" value="${esc(t.h_cm??"")}"></label>
+    <button type="button" class="rm" data-rm aria-label="Remove target">✕</button></div>`;
+}
+function readTargets(){return[...$("sTargets").querySelectorAll("[data-t]")].map(r=>{const o={};r.querySelectorAll("[data-k]").forEach(i=>{o[i.dataset.k]=i.dataset.k==="label"?i.value:num(i.value)});return o})}
+function drawTargets(list){$("sTargets").innerHTML=list.map(targetRow).join("");fillDialT()}
+function fillDialT(){const ts=readTargets(),keep=+$("sDialT").value||0;$("sDialT").innerHTML=ts.map((t,i)=>opt(i,`${t.label||"T"+(i+1)} · ${t.range_m??"?"} m`,i===keep)).join("");$("sDialTL").hidden=$("sDial").value!=="one"}
+function openStage(st){
+  editS=st;$("sTitle").textContent=st?"Edit stage":"New stage";$("sDel").hidden=!st;
+  const m=curMatch();setv("sName",st?st.name:`Stage ${stagesOf(m?m.id:null).length+1}`);$("sQuick").value="";
+  $("sDial").value=st?st.dial_mode:"each";drawTargets(st?st.targets:[]);if(st&&st.dial_target!=null)$("sDialT").value=st.dial_target;
+  setv("sWms",st&&st.wind?st.wind.ms:"");$("sWclock").value=st&&st.wind?st.wind.clock:9;
+  openSheet("sSheet");
+}
+$("stNew").addEventListener("click",()=>openStage(null));
+$("stList").addEventListener("click",e=>{const b=e.target.closest("[data-stage]");if(b)openStage(D.stages.find(s=>s.id===b.dataset.stage))});
+$("sQuickAdd").addEventListener("click",()=>{
+  const toks=$("sQuick").value.split(/[\s,;]+/).filter(Boolean),bad=toks.filter(t=>!(num(t)>0&&num(t)<=3000));
+  if(bad.length)return msg("sMsg","Not a range: "+bad.join(" "));
+  const cur=readTargets(),last=cur[cur.length-1]||{};
+  drawTargets(cur.concat(toks.map((t,i)=>({label:"T"+(cur.length+i+1),range_m:num(t),w_cm:last.w_cm,h_cm:last.h_cm}))));$("sQuick").value="";$("sMsg").hidden=true;
+});
+$("sAddT").addEventListener("click",()=>{const cur=readTargets(),last=cur[cur.length-1]||{};drawTargets(cur.concat([{label:"T"+(cur.length+1),w_cm:last.w_cm,h_cm:last.h_cm}]))});
+$("sTargets").addEventListener("click",e=>{if(e.target.closest("[data-rm]")){e.target.closest("[data-t]").remove();fillDialT()}});
+$("sTargets").addEventListener("change",fillDialT);$("sDial").addEventListener("change",fillDialT);
+$("sForm").addEventListener("submit",async e=>{
+  e.preventDefault();const m=curMatch();
+  const ms=num($("sWms").value);
+  const body={name:$("sName").value,match_id:m?m.id:null,ord:editS?editS.ord:stagesOf(m?m.id:null).length,profile_id:U.profile||null,
+    dial_mode:$("sDial").value,dial_target:$("sDial").value==="one"?+$("sDialT").value:null,
+    wind:ms!=null?{ms,clock:+$("sWclock").value}:null,targets:readTargets()};
+  if(!body.targets.length)return msg("sMsg","bad_targets");
+  const id=editS?editS.id:newId(body.name,"st-");
+  const err=await write("PUT","api/ballistics/stages/"+encodeURIComponent(id),body);if(err)return msg("sMsg",err);
+  closeSheet($("sSheet"));render();
+});
+$("sDel").addEventListener("click",async()=>{
+  if(!editS||!confirm(`Delete “${editS.name}”?`))return;
+  const err=await write("DELETE","api/ballistics/stages/"+encodeURIComponent(editS.id));if(err)return msg("sMsg",err);
+  closeSheet($("sSheet"));render();
+});
+
+$("mMode").addEventListener("click",openMM);$("mmClose").addEventListener("click",closeMM);
+$("mmPrev").addEventListener("click",()=>{mmIdx--;renderMM()});$("mmNext").addEventListener("click",()=>{mmIdx++;renderMM()});
+let tx=null;$("mm").addEventListener("touchstart",e=>{tx=e.touches[0].clientX},{passive:true});
+$("mm").addEventListener("touchend",e=>{if(tx==null)return;const dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>70){mmIdx+=dx<0?1:-1;renderMM()}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!$("mm").hidden)closeMM();else document.querySelectorAll(".sheet").forEach(s=>{if(!s.hidden)closeSheet(s)})}});
+document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&!$("mm").hidden&&wake===null){try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(e){}}});
+
+// ------------------------------------------------------------ start
+showTab();applyOutbox();U.profile=(prof()||{}).id||null;loadCond();renderChips();render();
+load().then(()=>{loadCond();render();flush()});
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js",{scope:"./"}).catch(()=>{});
+})();
+</script>
+</body>
+</html>

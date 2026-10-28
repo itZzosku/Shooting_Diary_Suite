@@ -1,7 +1,7 @@
 # Shooting Diary Suite
 
 A self-hosted shooting diary for a few people: range visits and the licence record, muzzle velocities
-(Garmin Xero), scope zeroes, guns loaned to friends and a click calculator. Flask + SQLite, served by Waitress,
+(Garmin Xero), scope zeroes, a ballistic calculator, guns loaned to friends and a click calculator. Flask + SQLite, served by Waitress,
 installable on the phone. Each person has their own account and their own database file.
 
 The site is the diary: the bare domain (`/`) redirects to `/diary/`. Everything under `/diary/` needs a login
@@ -18,6 +18,7 @@ New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the
 | `/diary/log` | **Diary** – range visits, guns and their round counts, licence export (PDF/CSV) |
 | `/diary/velocity` | **Velocity** – Garmin Xero strings, loads, trends, charge ladders |
 | `/diary/zeroes` | **Zeroes** – scope dial positions, swaps, zeroing card (PDF) |
+| `/diary/ballistics` | **Ballistics** – holds and clicks for any range, range card, match stages and match mode (solver runs in the browser, works offline) |
 | `/diary/loans` | **Guns loaned** – friends' shots with your guns/ammo and what they owe (tile only) |
 | `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
 | `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |
