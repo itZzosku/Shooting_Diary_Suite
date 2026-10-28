@@ -278,7 +278,7 @@ header.top{padding-top:6px!important}
 .rv-turret b i{font-style:normal;font-size:1rem;color:#9aa398;min-width:.8em}
 .rv-scale{width:100%;height:12px;background:repeating-linear-gradient(90deg,#9aa398 0 2px,transparent 2px 22px);opacity:.6;margin:2px 0 0}
 .rv-stage{position:relative;width:min(100vw - 20px,100vh - 260px);aspect-ratio:1/1;flex:none}
-.rv-box{position:absolute;inset:0;touch-action:none;cursor:grab;border-radius:6px;overflow:hidden}
+.rv-box{position:absolute;inset:0;touch-action:none;border-radius:6px;overflow:hidden}
 .rv-box svg{width:100%;height:100%;display:block}
 .rv-wind{position:absolute;left:11%;top:33%;color:#e040e0;font-size:clamp(.9rem,3.6vw,1.15rem);pointer-events:none;font-weight:500}
 .rv-target{position:absolute;right:11%;top:21%;color:#3d7be0;text-align:center;font-size:clamp(.85rem,3.4vw,1.1rem);pointer-events:none;line-height:1.25;font-weight:500}
@@ -1340,7 +1340,7 @@ function renderReticle(){
   if(sfp&&Math.abs(k-1)>1e-6)info.push(`Second focal plane at ${num($("vMag").value)}×: the marks are drawn at their true size (×${k.toFixed(2)}); holds read off the marks only match at ${ret.design_mag}×.`);
   if(ret.unit!==(s.unit==="MOA"?"MOA":"MRAD"))info.push(`The reticle is in ${ret.unit==="MOA"?"MOA":"mil"}, the turret in ${s.unit==="MOA"?"MOA":"mil"}: holds are converted.`);
   if(ret.archived)info.push("This reticle is archived in the library.");
-  info.push("Red numbers: the distance each mark is good for. Pinch or scroll to zoom, drag to move, double-tap to reset.");
+  info.push("Red numbers: the distance each mark is good for. Pinch or scroll to zoom, double-tap to reset.");
   $("vInfo").innerHTML=esc(`${ret.maker?ret.maker+" ":""}${ret.name} · ${ret.focal_plane} · rev ${ret.rev}`)+"<br>"+info.map(esc).join("<br>");
   if(!$("rv").hidden)renderRV();
 }
@@ -1401,6 +1401,10 @@ function zoomable(box,Z,limits,redraw){
   const clampZ=()=>{const L=lim();Z.half=Math.max(L.min,Math.min(L.max,Z.half));Z.cx=Math.max(-L.pan,Math.min(L.pan,Z.cx));Z.cy=Math.max(-L.pan,Math.min(L.pan,Z.cy))};
   const at=(x,y,s,r)=>({ux:s.cx+((x-r.left)/r.width*2-1)*s.half,uy:s.cy+((y-r.top)/r.height*2-1)*s.half});
   box.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="mouse"){                     // a computer: the wheel zooms, no dragging the picture around
+      const t=Date.now();if(t-lastTap<350){Z.user=false;lastTap=0;schedule()}else lastTap=t;   // double-click resets
+      return;
+    }
     try{box.setPointerCapture(e.pointerId)}catch(_){}
     pts.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now(),x0:e.clientX,y0:e.clientY});start=snap();
   });
