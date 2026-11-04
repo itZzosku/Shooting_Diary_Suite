@@ -9,6 +9,7 @@
   chrono_days, chrono_shots      velocities for a gun + load (Velocity page figures)
   stats, temp_sensitivity        the Velocity page's statistics
   register(...)                  per-account schema, backup export and import (diary.EXTENSIONS)
+  fmi                            the diary's FMI weather client
 """
 import json
 import os
@@ -17,7 +18,7 @@ from functools import wraps
 from flask import jsonify, redirect, request, send_from_directory
 
 import diary
-from diary import users
+from diary import fmi, users  # noqa: F401  (fmi: weather for "Fetch weather", see weather.py)
 
 ID_RE = diary.ID_RE
 DATE_RE = diary.DATE_RE

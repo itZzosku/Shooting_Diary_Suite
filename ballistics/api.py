@@ -651,6 +651,13 @@ def api_bal_put_settings():
 RANGE = {"name": _text(60, True), "lat": _num(-90, 90, True), "lon": _num(-180, 180, True), "alt_m": _num(-500, 9000)}
 
 
+@bp.get("/api/ballistics/ranges")
+@login_required
+def api_bal_get_ranges():
+    """Saved shooting places (also offered by the velocity import's "Fetch weather")."""
+    return jsonify(ranges=saved_ranges(db()))
+
+
 @bp.put("/api/ballistics/ranges")
 @login_required
 def api_bal_put_ranges():

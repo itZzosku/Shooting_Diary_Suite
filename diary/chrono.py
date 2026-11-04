@@ -745,6 +745,56 @@ def api_weather():
     return jsonify(shots_filled=n)
 
 
+FMI_TZ = "Europe/Helsinki"          # shot times in the files are the phone's local time; FMI covers Finland
+
+
+def _local_epoch(date, t):
+    """'2026-10-15', '13:23:05' (Finnish local time) → UTC epoch seconds."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+    hh, mm, *ss = (int(x) for x in str(t).split(":"))
+    d = _dt.datetime(*(int(x) for x in date.split("-")), hh, mm, ss[0] if ss else 0, tzinfo=ZoneInfo(FMI_TZ))
+    return d.timestamp()
+
+
+@bp.post("/api/chrono/fmi")
+@login_required
+def api_fmi_weather():
+    """Weather for imported strings from FMI's observations: JSON {lat, lon, alt_m?, at: [{date, t}]} (local
+    times) → {results: [{temp_c, rh, hpa (station pressure, needs alt_m), hpa_sea, station, distance_km,
+    time} | null]} in the same order."""
+    from . import fmi
+    b = _body()
+    try:
+        lat, lon = _f(b.get("lat"), -90, 90), _f(b.get("lon"), -180, 180)
+        alt = _f(b.get("alt_m"), -500, 9000)
+        at = b.get("at")
+        if lat is None or lon is None or not isinstance(at, list) or not 1 <= len(at) <= 200:
+            raise ValueError
+        times = []
+        for x in at:
+            if not (isinstance(x, dict) and DATE_RE.match(str(x.get("date", ""))) and
+                    re.match(r"^\d{1,2}:\d{2}(:\d{2})?$", str(x.get("t", "")))):
+                raise ValueError
+            times.append(_local_epoch(x["date"], x["t"]))
+    except (TypeError, ValueError):
+        return jsonify(error="bad_request"), 400
+    try:
+        rows = fmi.observed(lat, lon, times, alt)
+    except Exception:                    # FMI down, timeout, bad XML: say so, the import still works
+        return jsonify(error="weather_unavailable"), 502
+    out = []
+    for r in rows:
+        if not r:
+            out.append(None)
+            continue
+        src = r["sources"].get("t2m") or next(iter(r["sources"].values()))
+        out.append({"temp_c": r["temp_c"], "rh": r["rh"], "hpa": r.get("hpa_station"), "hpa_sea": r["hpa_sea"],
+                    "station": src["station"], "distance_km": src["distance_km"], "time": src["time"],
+                    "sources": r["sources"]})
+    return jsonify(results=out)
+
+
 @bp.get("/api/chrono/days")
 @login_required
 def api_days():
