@@ -447,8 +447,7 @@ def list_strings(conn, f=None):
     for r in conn.execute("SELECT * FROM chrono_strings st" + w + " ORDER BY date DESC, started_at DESC", args):
         s = dict(r)
         inc = [x["v_ms"] for x in shots.get(s["id"], []) if not x["excluded"]]
-        bgr = s["bullet_gr"] or (lmap.get(s["load_id"]) or {}).get("bullet_gr")
-        s["stats"] = stats(inc, bgr)
+        s["stats"] = stats(inc, bullet_weight(s, lmap.get(s["load_id"])))
         s["shot_count"] = len(shots.get(s["id"], []))
         out.append(s)
     return out
@@ -461,9 +460,15 @@ def get_string(conn, sid):
     s = dict(r)
     s["shots"] = _shots_by_string(conn, " WHERE st.id=?", (sid,)).get(sid, [])
     load = conn.execute("SELECT bullet_gr FROM loads WHERE id=?", (s["load_id"],)).fetchone() if s["load_id"] else None
-    s["stats"] = stats([x["v_ms"] for x in s["shots"] if not x["excluded"]],
-                       s["bullet_gr"] or (load["bullet_gr"] if load else None))
+    s["stats"] = stats([x["v_ms"] for x in s["shots"] if not x["excluded"]], bullet_weight(s, load))
     return s
+
+
+def bullet_weight(s, load):
+    """Bullet weight for energy: the linked load's, else the one in the imported file. The file's is whatever
+    the chronograph app was set to (ShotView keeps its last projectile weight), so a load picked for the
+    string is the better source."""
+    return (load["bullet_gr"] if load and load["bullet_gr"] else None) or s.get("bullet_gr")
 
 
 def days(conn, gun=None, load=None, cold_bore=True):

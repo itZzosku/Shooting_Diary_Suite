@@ -464,3 +464,21 @@ def test_fmi_endpoint(client, monkeypatch):
     monkeypatch.setattr(fmi.observed, "__defaults__", (None, boom))
     r = client.post("/diary/api/chrono/fmi", json={"lat": 63.0, "lon": 22.7, "at": [{"date": "2026-10-15", "t": "12:00"}]})
     assert r.status_code == 502 and r.get_json()["error"] == "weather_unavailable"
+
+
+def test_energy_uses_the_loads_bullet_weight(client):
+    """ShotView keeps its last projectile weight: a file saying 123 gr for a 55 gr load must not set the energy."""
+    conn = diary.connect()
+    conn.execute("INSERT OR REPLACE INTO loads(id,name,kind,cal,bullet_gr) VALUES('l-55','S&B 55 gr','factory','.223 Rem',55)")
+    conn.commit()
+    r = client.post("/diary/api/chrono/commit", json={"strings": [
+        {"date": "2025-02-18", "started_at": "11:55", "name": "x", "bullet_gr": 123, "load_id": "l-55",
+         "shots": [{"v_ms": 898.2, "t": "11:55:00"}]},
+        {"date": "2025-02-18", "started_at": "12:30", "name": "y", "bullet_gr": 123,
+         "shots": [{"v_ms": 898.2, "t": "12:30:00"}]}]})
+    assert r.status_code == 200, r.get_json()
+    a, b = (client.get("/diary/api/chrono/strings/" + c["id"]).get_json() for c in r.get_json()["created"])
+    assert a["stats"]["ke_j"] == pytest.approx(1438, abs=1), "the load's 55 gr"
+    assert b["stats"]["ke_j"] == pytest.approx(3215, abs=2), "no load: the file's 123 gr"
+    listed = {s["id"]: s for s in client.get("/diary/api/chrono/strings?date=2025-02-18").get_json()}
+    assert listed[a["id"]]["stats"]["ke_j"] == pytest.approx(1438, abs=1)
