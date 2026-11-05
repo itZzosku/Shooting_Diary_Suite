@@ -888,6 +888,8 @@ function renderSolution(){
   if(res.sg!=null&&res.sg<(slowRound?1:1.4))warn.push(slowRound?`Stability factor ${res.sg.toFixed(2)} – under 1, the bullet may not be stable.`:`Stability factor ${res.sg.toFixed(2)} – marginal (under 1.4).`);
   $("oWarn").innerHTML=warn.map(w=>`<div>${esc(w)}</div>`).join("")+info.map(w=>`<div class="i">${esc(w)}</div>`).join("");
 }
+/** Where the bullet is against the line of sight, in cm: + below it (drop), − above it (near the zero). */
+const dropCm=r=>{const d=Math.round(-r.dropM*100);return d<0?"−"+(-d):String(d)};
 function renderCard(){
   const p=prof(),c=cond(),st=D.settings;
   const [a,step,end]=cardRange();
@@ -895,12 +897,12 @@ function renderCard(){
   const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<300;x+=step)ranges.push(Math.round(x*10)/10);
   let res;try{res=B.solve(solverInput(p,c),ranges.filter(x=>x>0))}catch(e){$("cTable").innerHTML="";return}
   const s=scopeOf(p),R=num($("rIn").value),u=s.unit==="MOA"?"MOA":"mil";
-  const head=`<tr><th>m</th><th>Elev ${u}</th><th>Clicks</th><th>Wind ${u}</th><th>/1 m/s</th><th>m/s</th><th>TOF</th></tr>`;
+  const head=`<tr><th>m</th><th>Elev ${u}</th><th>Clicks</th><th>Drop cm</th><th>Wind ${u}</th><th>/1 m/s</th><th>m/s</th><th>TOF</th></tr>`;
   $("cTable").innerHTML=head+res.rows.map(r=>{
-    if(!r.reached)return`<tr><td>${r.range}</td><td colspan="6" class="dim">not reached</td></tr>`;
+    if(!r.reached)return`<tr><td>${r.range}</td><td colspan="7" class="dim">not reached</td></tr>`;
     const e=fmtHold(r.elevMrad,s,"U","D"),w=fmtHold(r.windMrad,s,"R","L");
     const cls=[r.subsonic?"ss":r.transonic?"ts":"",r.range===R?"cur":""].join(" ").trim();
-    return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${e.signed<0?"−":""}${e.val}</td><td>${e.clicks}${e.dir?" "+e.dir[0]:""}</td><td>${w.clicks?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
+    return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${e.signed<0?"−":""}${e.val}</td><td>${e.clicks}${e.dir?" "+e.dir[0]:""}</td><td>${dropCm(r)}</td><td>${w.clicks?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
   }).join("");
 }
 
@@ -2014,8 +2016,8 @@ $("pdfDope").addEventListener("click",()=>withPdf($("pdfDope"),async()=>{
     doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(70);
     const cl=doc.splitTextToSize(PT(condLine(p,c)),colW);doc.text(cl,x0,M+24);doc.setTextColor(0);
     doc.autoTable({startY:M+26+cl.length*8,margin:{left:x0,right:W-x0-colW},tableWidth:colW,theme:"grid",
-      head:[["m",`Elev ${u}`,"Clicks",`Wind/1m/s`,"TOF"]],
-      body:rows.map(r=>{const e=fmtHold(r.elevMrad,s,"U","D");return[r.range,(e.signed<0?"-":"")+e.val,e.clicks+(e.dir?" "+e.dir:""),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}),
+      head:[["m",`Elev ${u}`,"Clicks","Drop cm",`Wind/1m/s`,"TOF"]],
+      body:rows.map(r=>{const e=fmtHold(r.elevMrad,s,"U","D");return[r.range,(e.signed<0?"-":"")+e.val,e.clicks+(e.dir?" "+e.dir:""),dropCm(r).replace("−","-"),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}),
       styles:{font:"helvetica",fontSize:fs,cellPadding:2,halign:"right",lineColor:[170,170,170],lineWidth:.3},headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
       columnStyles:{0:{halign:"left",fontStyle:"bold"},1:{fontStyle:"bold"}},
       didParseCell:d=>{if(d.section==="body"){const r=rows[d.row.index];if(r.subsonic)d.cell.styles.textColor=120;else if(r.transonic)d.cell.styles.fillColor=[251,227,212]}}});
