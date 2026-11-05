@@ -319,3 +319,14 @@ def test_iron_sights(client):
         assert client.put("/diary/api/ballistics/profiles/p-ir", json=dict(base, sight=bad)).status_code == 400, bad
     assert client.put("/diary/api/ballistics/profiles/p-ir", json=dict(base, sight=None)).status_code == 200
     assert next(p for p in _all(client)["profiles"] if p["id"] == "p-ir")["inputs"]["sight"] is None
+
+
+def test_notch_zero_check(client):
+    base = {"name": "M39", "sight_height_mm": 35, "zero_range_m": 100}
+    marks = [{"label": "1", "range_m": 100}, {"label": "2", "range_m": 200}]
+    ok = {"type": "notch", "marks": marks, "check": {"setting": "1", "range_m": 100, "cm": 15}}
+    assert client.put("/diary/api/ballistics/profiles/p-ck", json=dict(base, sight=ok)).status_code == 200
+    g = next(p for p in _all(client)["profiles"] if p["id"] == "p-ck")["inputs"]["sight"]
+    assert g["check"] == {"setting": "1", "range_m": 100, "cm": 15}
+    bad = dict(ok, check={"setting": "7", "range_m": 100, "cm": 15})
+    assert client.put("/diary/api/ballistics/profiles/p-ck", json=dict(base, sight=bad)).get_json()["error"] == "bad_sight_check_setting"

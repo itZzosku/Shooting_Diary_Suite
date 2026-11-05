@@ -238,7 +238,9 @@ def _sight(v, name):
       {"type": "notch", "name", "marks": [{"label", "range_m"}], "radius_mm", "post_mm", "notch_mm"}
         – a range-marked notch rear sight (M39 tangent leaf style): the nearest setting and a hold in cm.
         Each mark is "true at" its range for this load (by default the range on the leaf); moving a mark's range
-        is how the leaf is calibrated to dope.
+        is how the leaf is calibrated to dope. "check": {"setting", "range_m", "cm"} – where a group landed on a
+        setting at a range (cm above the aim, − below): every setting is shifted by that angle (the front post
+        shooting high or low, as M39s often do on their lowest setting).
     radius_mm (sight radius) and post_mm (front post width) size the sight picture and the post-width holds."""
     if v in (None, "", {}):
         return None
@@ -268,6 +270,15 @@ def _sight(v, name):
             clean_marks.append({"label": label, "range_m": _num(10, 3000, True)(m.get("range_m"), f"{name}_mark_range")})
         clean_marks.sort(key=lambda m: m["range_m"])
         out.update(marks=clean_marks, notch_mm=num("notch_mm", 0.3, 10))
+        chk = v.get("check")
+        if chk:                # where a group actually landed: "at 100 m on setting 1, 15 cm high" (cm: + high)
+            if not isinstance(chk, dict):
+                raise ValueError(f"bad_{name}_check")
+            label = _text(8, True)(chk.get("setting"), f"{name}_check_setting")
+            if label not in {m["label"] for m in clean_marks}:
+                raise ValueError(f"bad_{name}_check_setting")
+            out["check"] = {"setting": label, "range_m": _num(10, 3000, True)(chk.get("range_m"), f"{name}_check_range"),
+                            "cm": _num(-300, 300, True)(chk.get("cm"), f"{name}_check_cm")}
     return json.dumps({k: x for k, x in out.items() if x is not None})
 
 

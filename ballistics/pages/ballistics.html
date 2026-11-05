@@ -534,6 +534,10 @@ details summary{cursor:pointer;list-style:revert}
         <label class="f" data-dio>Click unit<select id="fIrUnit"><option value="MOA">MOA</option><option value="MRAD">mil</option></select></label></div>
       <div class="grid2" data-dio><label class="f">Elevation click<input type="text" inputmode="decimal" id="fIrE"></label><label class="f">Windage click<input type="text" inputmode="decimal" id="fIrW"></label></div>
       <label class="f" data-notch>Leaf marks (setting = range m)<input type="text" id="fIrMarks" placeholder="1=100, 2=200, 3=300"></label>
+      <div class="g4" data-notch><label class="f">Check: at m<input type="text" inputmode="numeric" id="fIrCkR" placeholder="100"></label>
+        <label class="f">on setting<input type="text" id="fIrCkS" placeholder="1"></label>
+        <label class="f">group cm<input type="text" inputmode="decimal" id="fIrCkC" placeholder="0"></label>
+        <label class="f">high / low<select id="fIrCkD"><option value="1">high</option><option value="-1">low</option></select></label></div>
       <div class="grid2"><label class="f">Sight radius mm<input type="text" inputmode="decimal" id="fIrRad"></label><label class="f">Front post width mm<input type="text" inputmode="decimal" id="fIrPost"></label></div>
       <p class="hint" style="margin:0" id="fIrHint"></p>
     </div>
@@ -730,7 +734,9 @@ const num=v=>{v=parseFloat(String(v??"").replace(",",".").trim());return isFinit
 const B=window.Ballistics;
 const CACHE="bal-cache",OUTBOX="bal-outbox",RECENT="bal-recent",COND="bal-cond:",UI="bal-ui";
 const ls={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const ERR={sight_elev_click_required:"Type the elevation click (e.g. 1.4).",sight_wind_click_required:"Type the windage click (e.g. 0.7).",
+const ERR={bad_sight_check_setting:"The check's setting must be one of the leaf marks.",sight_check_cm_required:"Type how many cm the group was off.",
+  sight_check_range_required:"Type the range of the check.",sight_check_setting_required:"Type the setting of the check.",bad_sight_check_cm:"The check must be within ±300 cm.",
+  sight_elev_click_required:"Type the elevation click (e.g. 1.4).",sight_wind_click_required:"Type the windage click (e.g. 0.7).",
   sight_mark_label_required:"Each leaf mark needs a setting, e.g. 3=300.",sight_mark_range_required:"Each leaf mark needs a range, e.g. 3=300.",
   bad_sight:"Check the sight.",bad_sight_elev_click:"Type the elevation click (e.g. 1.4).",bad_sight_wind_click:"Type the windage click (e.g. 0.7).",
   bad_sight_marks:"Type the leaf marks as setting=range, e.g. 1=100, 2=200.",bad_sight_mark_label:"Each leaf mark needs a setting, e.g. 3=300.",
@@ -839,12 +845,20 @@ const MARKS=new Map();
 /** The notch sight's marks with the angle each gives (mil from the zero): this load's elevation at the mark's
     range in the zero conditions, no wind. Cached per profile state. */
 function notchMarks(p){
-  const g=ironOf(p),i=p.inputs,key=JSON.stringify([p.id,g.marks,i.mv,i.mvScale,i.dragScale,i.zeroRangeM,i.sightHeightMm,i.bullet,i.zeroAtmo]);
+  const g=ironOf(p),i=p.inputs,key=JSON.stringify([p.id,g.marks,g.check,i.mv,i.mvScale,i.dragScale,i.zeroRangeM,i.sightHeightMm,i.bullet,i.zeroAtmo]);
   if(MARKS.has(key))return MARKS.get(key);
   const za=clean(i.zeroAtmo||{});let rows=[];
   try{rows=B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
     {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),g.marks.map(m=>m.range_m)).rows}catch(e){}
-  const out=g.marks.map((m,k)=>({label:m.label,range:m.range_m,mil:rows[k]&&rows[k].reached?rows[k].elevMrad:null})).filter(m=>m.mil!=null);
+  let out=g.marks.map((m,k)=>({label:m.label,range:m.range_m,mil:rows[k]&&rows[k].reached?rows[k].elevMrad:null})).filter(m=>m.mil!=null);
+  // the zero check: on setting S at range R the group landed C cm above the aim → every setting gives
+  // (C / R·10) − (setting's angle − what R needs) more than the leaf says
+  const ck=g.check,ms=ck&&out.find(m=>m.label===ck.setting);
+  if(ms){
+    let need=null;try{const r=B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
+      {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),[ck.range_m]).rows[0];if(r.reached)need=r.elevMrad}catch(e){}
+    if(need!=null){const off=ck.cm/(ck.range_m/10)-(ms.mil-need);out=out.map(m=>Object.assign({},m,{mil:m.mil+off}));out.offset=off}
+  }
   MARKS.set(key,out);return out;
 }
 /** For a solved row: the nearest notch setting and the hold left over, plus the setting on the other side.
@@ -891,6 +905,7 @@ function renderProfiles(){
   if((i.mvScale||1)!==1||(i.dragScale||1)!==1)parts.push(`trued: velocity ×${(i.mvScale||1).toFixed(3)}, drag ×${(i.dragScale||1).toFixed(3)}`);
   const g=i.sight;
   if(g&&g.type==="diopter")parts.push(`${esc(s.name)} · diopter ${+g.elev_click}/${+g.wind_click} ${g.unit==="MOA"?"MOA":"mil"} clicks`);
+  else if(g&&g.check)parts.push(`${esc(s.name)} · notch ${esc(g.marks.length>4?`${g.marks[0].label}–${g.marks[g.marks.length-1].label}`:g.marks.map(m=>m.label).join(" "))} · shoots ${Math.round(Math.abs(g.check.cm))} cm ${g.check.cm>=0?"high":"low"} at ${g.check.range_m} m on ${esc(g.check.setting)}`);
   else if(g)parts.push(`${esc(s.name)} · notch ${esc(g.marks.length>4?`${g.marks[0].label}–${g.marks[g.marks.length-1].label} (${g.marks[0].range_m}–${g.marks[g.marks.length-1].range_m} m)`:g.marks.map(m=>m.label+"="+m.range_m).join(" "))}`);
   else if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
   else parts.push("no scope linked: 0.1 mil clicks");
@@ -1440,6 +1455,7 @@ function parseMarks(t){return String(t||"").split(/[,;\n]+/).map(x=>x.trim()).fi
 function fillIron(g){
   setv("fIrName",g.name);$("fIrUnit").value=g.unit||"MOA";setv("fIrE",g.elev_click);setv("fIrW",g.wind_click);
   setv("fIrMarks",marksText(g.marks));setv("fIrRad",g.radius_mm);setv("fIrPost",g.post_mm);
+  const ck=g.check;setv("fIrCkR",ck&&ck.range_m);setv("fIrCkS",ck&&ck.setting);setv("fIrCkC",ck&&Math.abs(ck.cm));$("fIrCkD").value=ck&&ck.cm<0?"-1":"1";
 }
 function sightState(){
   const t=$("fSightType").value;
@@ -1447,7 +1463,7 @@ function sightState(){
   $("fIron").querySelectorAll("[data-dio]").forEach(e=>e.hidden=t!=="diopter");$("fIron").querySelectorAll("[data-notch]").forEach(e=>e.hidden=t!=="notch");
   $("fIrPre").innerHTML=(IRON_PRESETS[t]||[]).map(([n],k)=>`<button type="button" class="chip" data-irpre="${k}">${esc(n)}</button>`).join("");
   $("fIrHint").textContent=t==="diopter"?"Clicks up/down and left/right from the zero, like a scope. Set the sight height to the sight line over the bore (about 65 mm on an AR-15)."
-    :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. If a setting shoots high or low, change its range here (e.g. 3=320). Wind is a hold in cm and post widths.":"";
+    :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. If it shoots high or low on a setting (an M39 on its lowest setting often does), fill in the check: every setting is shifted by that angle. One setting off on its own: change its range here (e.g. 3=320). Wind is a hold in cm and post widths.":"";
 }
 $("fSightType").addEventListener("change",sightState);
 $("fIrPre").addEventListener("click",e=>{const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(pr)fillIron(pr[1])});
@@ -1455,7 +1471,11 @@ function readIron(){
   const t=$("fSightType").value;if(!t)return null;
   const g={type:t,name:$("fIrName").value.trim()||null,radius_mm:num($("fIrRad").value),post_mm:num($("fIrPost").value)};
   if(t==="diopter")Object.assign(g,{unit:$("fIrUnit").value,elev_click:num($("fIrE").value),wind_click:num($("fIrW").value)});
-  else g.marks=parseMarks($("fIrMarks").value);
+  else{
+    g.marks=parseMarks($("fIrMarks").value);
+    const R=num($("fIrCkR").value),S=$("fIrCkS").value.trim(),C=num($("fIrCkC").value);
+    if(R&&S&&C!=null)g.check={range_m:R,setting:S,cm:C*+$("fIrCkD").value};
+  }
   return g;
 }
 function spinState(){const on=$("fSpin").checked;$("fSpinSL").hidden=$("fSpinH").hidden=!on}
