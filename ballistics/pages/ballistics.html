@@ -529,16 +529,20 @@ details summary{cursor:pointer;list-style:revert}
     <label class="f">Sight<select id="fSightType"><option value="">Scope</option><option value="diopter">Iron sights – diopter with clicks (AR-15 style)</option><option value="notch">Iron sights – notch with a range leaf (M39 style)</option></select></label>
     <div class="grid2" id="fScopeRow"><label class="f">Scope<select id="fScope"></select></label><label class="f">Scope zero<select id="fZero"></select></label></div>
     <div class="ironbox" id="fIron" hidden>
+      <label class="f">Saved sight<select id="fIrSaved"></select></label>
+      <div class="hint" id="fIrSavedH" hidden></div>
       <div class="chips" id="fIrPre"></div>
       <div class="grid2"><label class="f">Sight name<input type="text" id="fIrName" placeholder="e.g. A2 rear"></label>
         <label class="f" data-dio>Click unit<select id="fIrUnit"><option value="MOA">MOA</option><option value="MRAD">mil</option></select></label></div>
       <div class="grid2" data-dio><label class="f">Elevation click<input type="text" inputmode="decimal" id="fIrE"></label><label class="f">Windage click<input type="text" inputmode="decimal" id="fIrW"></label></div>
       <label class="f" data-notch>Leaf marks (setting = range m)<input type="text" id="fIrMarks" placeholder="1=100, 2=200, 3=300"></label>
+      <div class="grid2"><label class="f">Sight radius mm<input type="text" inputmode="decimal" id="fIrRad"></label><label class="f">Front post width mm<input type="text" inputmode="decimal" id="fIrPost"></label></div>
+      <label class="check" id="fIrKeepL"><input type="checkbox" id="fIrKeep">Save this sight for other profiles</label>
+      <div class="lbl" data-notch>This rifle and load</div>
       <div class="g4" data-notch><label class="f">Check: at m<input type="text" inputmode="numeric" id="fIrCkR" placeholder="100"></label>
         <label class="f">on setting<input type="text" id="fIrCkS" placeholder="1"></label>
         <label class="f">group cm<input type="text" inputmode="decimal" id="fIrCkC" placeholder="0"></label>
         <label class="f">high / low<select id="fIrCkD"><option value="1">high</option><option value="-1">low</option></select></label></div>
-      <div class="grid2"><label class="f">Sight radius mm<input type="text" inputmode="decimal" id="fIrRad"></label><label class="f">Front post width mm<input type="text" inputmode="decimal" id="fIrPost"></label></div>
       <p class="hint" style="margin:0" id="fIrHint"></p>
     </div>
     <div class="prow"><label class="f">Bullet<select id="fBullet"></select></label><button class="ghost" type="button" id="fBulEdit">Edit</button><button class="ghost" type="button" id="fBulNew">New</button></div>
@@ -771,7 +775,8 @@ async function load(){
 function outbox(){return ls.get(OUTBOX)||[]}
 function applyOutbox(){                                   // queued edits show before they reach the server
   for(const o of outbox()){
-    const [kind,id]=o.url.split("/").slice(-2),list={profiles:D.profiles,bullets:D.bullets,matches:D.matches,stages:D.stages,observations:D.observations=D.observations||[]}[kind];
+    const [kind,id]=o.url.split("/").slice(-2),list={profiles:D.profiles,bullets:D.bullets,matches:D.matches,stages:D.stages,observations:D.observations=D.observations||[],
+      sights:(D.pickers=D.pickers||{}).sights=D.pickers.sights||[]}[kind];
     if(!list)continue;const i=list.findIndex(x=>x.id===id);
     if(o.method==="DELETE"){if(i>=0)list.splice(i,1)}
     else{const row=Object.assign({},i>=0?list[i]:{},o.body,{id});
@@ -1422,7 +1427,8 @@ function openProfile(p){
   $("fMvSrc").value=x.mv_source||"manual";$("fTsSrc").value=x.temp_sens_source||"manual";setv("fMvN",x.mv_strings);
   $("fSpin").checked=!!x.spin_drift;setv("fSpinS",x.spin_scale);spinState();
   let g=null;try{g=x.sight?(typeof x.sight==="string"?JSON.parse(x.sight):x.sight):null}catch(e){}
-  $("fSightType").value=g?g.type:"";fillIron(g||{});sightState();$("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
+  $("fSightType").value=g?g.type:"";fillIron(g||{});$("fIrSaved").dataset.t="";$("fIrKeep").checked=false;sightState();
+  if(x.sight_id&&x.inputs&&x.inputs.sight)fillIron(Object.assign({},x.inputs.sight,{check:g&&g.check}));     // the saved sight's current fields$("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
   $("fRet").innerHTML=opt("","– none –")+(D.reticles||[]).filter(r=>!r.archived||r.id===x.reticle_id).map(r=>opt(r.id,`${r.maker?r.maker+" ":""}${r.name} · ${r.focal_plane} ${r.unit==="MOA"?"MOA":"mil"}`,r.id===x.reticle_id)).join("");
   chronoHint(p);
   setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
@@ -1457,8 +1463,25 @@ function fillIron(g){
   setv("fIrMarks",marksText(g.marks));setv("fIrRad",g.radius_mm);setv("fIrPost",g.post_mm);
   const ck=g.check;setv("fIrCkR",ck&&ck.range_m);setv("fIrCkS",ck&&ck.setting);setv("fIrCkC",ck&&Math.abs(ck.cm));$("fIrCkD").value=ck&&ck.cm<0?"-1":"1";
 }
+// Saved sights (pickers.sights): a sight is made once and picked in any profile. Editing a saved sight's fields
+// here and saving the profile updates it for every profile using it; the zero check stays with the profile.
+const savedSights=t=>(D.pickers.sights||[]).filter(x=>x.data.type===t&&(!x.archived||x.id===(editP&&editP.sight_id)));
+function fillSaved(sel){
+  const t=$("fSightType").value,list=savedSights(t);
+  $("fIrSaved").innerHTML=opt("","– this profile only –")+list.map(x=>opt(x.id,`${x.name}${x.profiles?` · ${x.profiles} profile${x.profiles>1?"s":""}`:""}`,x.id===sel)).join("");
+  $("fIrSaved").value=list.some(x=>x.id===sel)?sel:"";savedState();
+}
+function savedState(){
+  const sv=(D.pickers.sights||[]).find(x=>x.id===$("fIrSaved").value);
+  $("fIrKeepL").hidden=!!sv;$("fIrPre").hidden=!!sv;
+  const others=sv?sv.profiles-(editP&&editP.sight_id===sv.id?1:0):0;
+  $("fIrSavedH").hidden=!sv;$("fIrSavedH").textContent=sv?(others?`Changes to the sight's fields update it for ${others} other profile${others>1?"s":""} too.`:"Changes to the sight's fields update the saved sight."):"";
+}
+$("fIrSaved").addEventListener("change",()=>{const sv=(D.pickers.sights||[]).find(x=>x.id===$("fIrSaved").value);
+  if(sv){const ck=readIron();fillIron(Object.assign({},sv.data,{name:sv.data.name||sv.name,check:ck&&ck.check}))}savedState()});
 function sightState(){
   const t=$("fSightType").value;
+  if(t&&$("fIrSaved").dataset.t!==t){$("fIrSaved").dataset.t=t;fillSaved(editP&&editP.sight_id)}
   $("fIron").hidden=!t;$("fScopeRow").hidden=$("fRetL").hidden=!!t;
   $("fIron").querySelectorAll("[data-dio]").forEach(e=>e.hidden=t!=="diopter");$("fIron").querySelectorAll("[data-notch]").forEach(e=>e.hidden=t!=="notch");
   $("fIrPre").innerHTML=(IRON_PRESETS[t]||[]).map(([n],k)=>`<button type="button" class="chip" data-irpre="${k}">${esc(n)}</button>`).join("");
@@ -1489,9 +1512,20 @@ $("pForm").addEventListener("submit",async e=>{
     mv_ms:num($("fMv").value),mv_temp_c:num($("fMvT").value),temp_sens:num($("fTs").value),zero_range_m:num($("fZr").value),
     zero_temp_c:num($("fZt").value),zero_hpa:num($("fZp").value),zero_rh:num($("fZh").value),archived:$("fArch").checked,
     mv_source:$("fMvSrc").value,temp_sens_source:$("fTsSrc").value,mv_strings:num($("fMvN").value),
-    spin_drift:$("fSpin").checked,spin_scale:num($("fSpinS").value),sight:readIron(),aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
+    spin_drift:$("fSpin").checked,spin_scale:num($("fSpinS").value),sight:readIron(),sight_id:null,aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
     latitude:editP?editP.latitude:null,azimuth_deg:editP?editP.azimuth_deg:null,
     ord:editP?editP.ord:D.profiles.length,mv_scale:editP?editP.mv_scale:1,drag_scale:editP?editP.drag_scale:1};
+  if(body.sight){                      // a saved sight: create or update it, link the profile to it
+    let sid=$("fIrSaved").value;
+    if(sid||$("fIrKeep").checked){
+      const data=Object.assign({},body.sight);delete data.check;
+      const nm=data.name||(data.type==="diopter"?"Diopter sight":"Notch sight");
+      sid=sid||newId(nm,"s-");
+      const se=await write("PUT","api/ballistics/sights/"+encodeURIComponent(sid),{name:nm,data});
+      if(se)return msg("pMsg",se);
+      body.sight_id=sid;
+    }
+  }
   const id=editP?editP.id:newId(body.name,"p-");
   const err=await write("PUT","api/ballistics/profiles/"+encodeURIComponent(id),body);
   if(err)return msg("pMsg",err);

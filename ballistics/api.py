@@ -4,6 +4,7 @@ to the diary (gun, load, scope, scope zero, chrono velocities) into the numbers 
 
 Tables in each account's diary database:
   bal_bullets       bullet: diameter, length, weight, drag model, BC (or velocity bands)
+  bal_sights        saved iron sights (a diopter's clicks, a leaf's marks), reused by profiles
   bal_curves        custom Mach → Cd drag curves (phase 3; table only)
   bal_profiles      gun + load + bullet + scope + zero, sight height, twist, zero atmosphere, muzzle velocity
   bal_observations  dope confirmed at the range (where the shots landed), for truing
@@ -55,8 +56,11 @@ CREATE TABLE IF NOT EXISTS bal_stages (
     dial_mode TEXT NOT NULL DEFAULT 'each', dial_target INTEGER, wind TEXT, targets TEXT NOT NULL,
     notes TEXT DEFAULT '', updated TEXT);
 CREATE INDEX IF NOT EXISTS bal_stages_match ON bal_stages(match_id, ord);
+CREATE TABLE IF NOT EXISTS bal_sights (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, data TEXT NOT NULL,
+    archived INTEGER NOT NULL DEFAULT 0, updated TEXT);
 """
-TABLES = ("bal_bullets", "bal_curves", "bal_profiles", "bal_observations", "bal_matches", "bal_stages")
+TABLES = ("bal_bullets", "bal_curves", "bal_sights", "bal_profiles", "bal_observations", "bal_matches", "bal_stages")
 DRAG_MODELS = ("G1", "G7")          # RA4 and custom curves come later (see the design doc's open questions)
 DIAL_MODES = ("each", "first_hold_rest", "one")
 SETTINGS_KEY = "bal_settings"
@@ -68,7 +72,8 @@ PROFILE_COLUMNS = {             # added after phase 1: chrono window and the sma
     "mv_strings": "INTEGER", "spin_drift": "INTEGER NOT NULL DEFAULT 0", "coriolis": "INTEGER NOT NULL DEFAULT 0",
     "aero_jump": "INTEGER NOT NULL DEFAULT 0", "azimuth_deg": "REAL",
     "spin_scale": "REAL",
-    "sight": "TEXT"}            # iron sights (JSON, see _sight); empty = the linked scope       # spin drift × this (Litz's formula reads high for subsonic .22 LR); empty = 1
+    "sight": "TEXT",            # iron sights (JSON, see _sight); empty = the linked scope
+    "sight_id": "TEXT"}         # a saved sight (bal_sights) instead of the sight's own fields; its check stays here       # spin drift × this (Litz's formula reads high for subsonic .22 LR); empty = 1
 
 
 OBS_COLUMNS = {"powder_c": "REAL", "wind_ms": "REAL", "wind_clock": "REAL", "updated": "TEXT"}
@@ -282,6 +287,17 @@ def _sight(v, name):
     return json.dumps({k: x for k, x in out.items() if x is not None})
 
 
+def _sight_data(v, name):
+    """A saved sight's data: a sight without the zero check (that belongs to a rifle and load, i.e. the profile)."""
+    out = _sight(v, name)
+    if out is None:
+        raise ValueError(f"{name}_required")
+    d = json.loads(out)
+    d.pop("check", None)
+    return json.dumps(d)
+
+
+SIGHT = {"name": _text(60, True), "data": _sight_data, "archived": _flag}
 BULLET = {
     "name": _text(80, True), "maker": _text(40), "diameter_mm": _num(2, 20, True), "length_mm": _num(3, 80),
     "weight_gr": _num(10, 1000, True), "drag_model": _choice(DRAG_MODELS, "G7"), "bc": _num(0.05, 1.5),
@@ -296,7 +312,7 @@ PROFILE = {
     "notes": _text(2000), "ord": _int(0, 100000), "archived": _flag,
     "mv_source": _choice(("manual", "chrono"), "manual"), "temp_sens_source": _choice(("manual", "chrono"), "manual"),
     "mv_strings": _int(1, 50), "spin_drift": _flag, "coriolis": _flag, "aero_jump": _flag,
-    "azimuth_deg": _num(0, 360), "reticle_id": _ref, "spin_scale": _num(0, 3), "sight": _sight,
+    "azimuth_deg": _num(0, 360), "reticle_id": _ref, "spin_scale": _num(0, 3), "sight": _sight, "sight_id": _ref,
 }
 MATCH = {"name": _text(80, True), "date": _date, "visit_id": _ref, "notes": _text(2000), "archived": _flag}
 STAGE = {
@@ -350,7 +366,18 @@ def stage_rows(conn):
 
 def pickers(conn):
     """The diary records a profile can link to, in the shape the profile sheet needs."""
-    return {"guns": bridge.guns(conn), "loads": bridge.loads(conn), "scopes": bridge.scopes(conn)}
+    return {"guns": bridge.guns(conn), "loads": bridge.loads(conn), "scopes": bridge.scopes(conn),
+            "sights": sight_rows(conn)}
+
+
+def sight_rows(conn):
+    """Saved iron sights, data parsed, with how many profiles use each."""
+    rows = _rows(conn, "SELECT * FROM bal_sights ORDER BY archived, name")
+    uses = {r[0]: r[1] for r in conn.execute("SELECT sight_id, COUNT(*) FROM bal_profiles WHERE sight_id IS NOT NULL GROUP BY sight_id")}
+    for r in rows:
+        r["data"] = json.loads(r["data"])
+        r["profiles"] = uses.get(r["id"], 0)
+    return rows
 
 
 DEFAULT_STRINGS = 3
@@ -451,6 +478,14 @@ def resolve_inputs(profile, bullets, picks, conn=None):
         "warnings": warn,
     }
     sight = json.loads(profile["sight"]) if profile.get("sight") else None
+    saved = by(picks.get("sights") or [], profile.get("sight_id")) if profile.get("sight_id") else None
+    if saved:                  # a saved sight: its marks / clicks, this profile's zero check
+        check = (sight or {}).get("check")
+        sight = dict(saved["data"], name=saved["data"].get("name") or saved["name"], saved_id=saved["id"])
+        if check and sight["type"] == "notch" and check["setting"] in {m["label"] for m in sight["marks"]}:
+            sight["check"] = check
+    elif profile.get("sight_id"):
+        warn.append("sight_missing")
     if sight:                  # iron sights replace the scope: clicks (diopter) or settings + holds (notch)
         out["sight"] = sight
         out["zero"] = None
@@ -574,6 +609,25 @@ def _bullet_rules(row):
 def _stage_rules(row):
     if row["dial_mode"] == "one" and row["dial_target"] is None:
         row["dial_target"] = 0
+
+
+@bp.put("/api/ballistics/sights/<sid>")
+@login_required
+def api_bal_put_sight(sid):
+    return _put("bal_sights", SIGHT, sid)
+
+
+@bp.delete("/api/ballistics/sights/<sid>")
+@login_required
+def api_bal_delete_sight(sid):
+    _fetch_only()
+    conn = db()
+    n = conn.execute("SELECT COUNT(*) FROM bal_profiles WHERE sight_id=?", (_id(sid),)).fetchone()[0]
+    if n:
+        return jsonify(error="in_use", profiles=n), 409
+    conn.execute("DELETE FROM bal_sights WHERE id=?", (sid,))
+    conn.commit()
+    return jsonify(ok=True)
 
 
 @bp.put("/api/ballistics/bullets/<bid>")
