@@ -258,6 +258,7 @@ header.top{padding-top:6px!important}
 .otbl td small{display:block;font-family:var(--f-body);font-size:.72rem;color:var(--muted)}
 .cklist{display:flex;flex-direction:column;gap:8px}
 .ckrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) 34px;gap:6px;align-items:end}
+.lockrow{display:grid;grid-template-columns:minmax(0,13rem) minmax(0,1fr);gap:10px;align-items:end;margin-top:10px}
 .ironbox{display:flex;flex-direction:column;gap:10px;padding:10px 0 4px;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
 .spinrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5rem;gap:10px;align-items:center;min-height:3.2rem}
 .stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
@@ -365,6 +366,7 @@ details summary{cursor:pointer;list-style:revert}
       <span class="u">metres · slant range</span>
     </div>
     <div class="chips" id="rChips"></div>
+    <div class="lockrow" id="lockRow" hidden><label class="f">Sight set<select id="sLock"></select></label><span class="hint" id="lockHint"></span></div>
     <div class="sol" aria-live="polite">
       <div><small>Elevation</small><b id="oE">–</b><span id="oEs"></span></div>
       <div><small>Windage</small><b id="oW">–</b><span id="oWs"></span></div>
@@ -875,11 +877,30 @@ function notchMarks(p){
   }
   MARKS.set(key,out);return out;
 }
+// The sight can be locked (U.lock[profile]): a notch at one setting, a diopter at a number of clicks from the
+// zero. Then nothing is chosen per range: the rest is a hold, "aim N cm high / low".
+function lockOf(p){
+  const g=ironOf(p),v=p&&U.lock&&U.lock[p.id];if(!g||v==null||v==="")return null;
+  if(g.type==="notch")return g.marks.some(m=>m.label===v)?{notch:v}:null;
+  const n=parseInt(v,10);return isFinite(n)?{clicks:n,mil:n*(+g.elev_click)/(g.unit==="MOA"?B.toUnit(1,"MOA"):1)}:null;
+}
+function fillLock(p){
+  const g=ironOf(p);$("lockRow").hidden=!g;if(!g)return;
+  const cur=(U.lock||{})[p.id]??"";
+  let o=`<option value="">Auto – ${g.type==="notch"?"nearest setting":"dial each range"}</option>`;
+  if(g.type==="notch")o+=g.marks.map(m=>`<option value="${esc(m.label)}">Locked at ${esc(m.label)}</option>`).join("");
+  else for(let n=-10;n<=40;n++)o+=`<option value="${n}">Locked at ${n?Math.abs(n)+" click"+(Math.abs(n)>1?"s":"")+(n>0?" up":" down"):"the zero"}</option>`;
+  $("sLock").innerHTML=o;$("sLock").value=[...$("sLock").options].some(x=>x.value===String(cur))?String(cur):"";
+  const lk=lockOf(p);
+  $("lockHint").textContent=lk?(lk.notch!=null?"Every range: hold from this setting.":`= ${(+lk.mil).toFixed(2)} mil; every range: hold from here.`):"";
+}
+$("sLock").addEventListener("change",()=>{const p=prof();if(!p)return;U.lock=Object.assign({},U.lock,{[p.id]:$("sLock").value});render()});
 /** For a solved row: the nearest notch setting and the hold left over, plus the setting on the other side.
     {label, holdMil, holdCm, alt: {label, holdCm} | null}; null without marks */
 function notchFor(p,r){
   const ms=notchMarks(p);if(!ms.length||!r||!r.reached)return null;
-  const cm=mil=>mil*r.range/10;
+  const cm=mil=>mil*r.range/10,lk=lockOf(p),fix=lk&&ms.find(m=>m.label===lk.notch);
+  if(fix){const h=r.elevMrad-fix.mil;return{label:fix.label,holdMil:h,holdCm:cm(h),alt:null,locked:true}}
   const opts=ms.map(m=>({label:m.label,holdMil:r.elevMrad-m.mil})).sort((a,b)=>Math.abs(a.holdMil)-Math.abs(b.holdMil));
   const best=opts[0],other=opts.find(o=>Math.sign(o.holdMil)!==Math.sign(best.holdMil)&&o!==best);
   return{label:best.label,holdMil:best.holdMil,holdCm:cm(best.holdMil),alt:other&&Math.abs(cm(best.holdMil))>=1?{label:other.label,holdCm:cm(other.holdMil)}:null};
@@ -929,7 +950,7 @@ function renderProfiles(){
 function renderNotchSolution(p,res,r,c){
   const n=notchFor(p,r),pm=postMil(ironOf(p));
   if(!n){$("oWarn").innerHTML="<div>The sight's marks aren't reached with this load – check the marks and the zero.</div>";return}
-  $("oE").innerHTML=`${esc(n.label)}<em>setting</em>`;
+  $("oE").innerHTML=`${esc(n.label)}<em>${n.locked?"locked":"setting"}</em>`;
   $("oEs").textContent=aimCm(n.holdCm)+(Math.abs(n.holdCm)>=1?` (${Math.abs(n.holdMil).toFixed(2)} mil)`:"")+(n.alt?`\nor setting ${n.alt.label}: ${aimCm(n.alt.holdCm)}`:"");
   const wc=r.windMrad*r.range/10;
   $("oW").innerHTML=Math.abs(wc)<1?`0<em>cm</em>`:`${Math.round(Math.abs(wc))}<em>cm ${wc<0?"L":"R"}</em>`;
@@ -952,6 +973,17 @@ function renderSolution(){
   const r=res.rows[0],s=scopeOf(p),z=p.inputs.zero;
   if(!r.reached){$("oWarn").innerHTML="<div>The bullet doesn't reach that range.</div>";return}
   if(isNotch(p)){renderNotchSolution(p,res,r,c);return}
+  const lk=lockOf(p);
+  if(lk){                                // a diopter locked at some clicks: the rest is a hold
+    const h=r.elevMrad-lk.mil,hc=h*R/10,w=fmtHold(r.windMrad,windScope(s),"R","L");
+    $("oE").innerHTML=Math.abs(hc)<1?`0<em>cm</em>`:`${hc>0?"↑":"↓"}${Math.round(Math.abs(hc))}<em>cm</em>`;
+    $("oEs").textContent=`${aimCm(hc)}${Math.abs(hc)>=1?` (${Math.abs(h).toFixed(2)} mil)`:""}\nsight locked at ${lk.clicks?Math.abs(lk.clicks)+" clicks "+(lk.clicks>0?"up":"down"):"the zero"}`;
+    $("oW").innerHTML=w.clicks?`${w.val}<em>${w.unit} ${w.dir}</em>`:`0<em>${w.unit}</em>`;
+    $("oWs").textContent=(w.clicks?`${w.clicks} click${w.clicks===1?"":"s"} ${w.dir==="R"?"right":"left"} · or aim ${sideCm(r.windMrad*R/10)}\n`:"")+`${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)} per 1 m/s`;
+    $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
+      +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span><span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`;
+    $("oWarn").innerHTML="";return;
+  }
   const e=fmtHold(r.elevMrad,s,"UP","DOWN"),w=fmtHold(r.windMrad,windScope(s),"R","L");
   $("oE").innerHTML=`${e.val}<em>${e.unit}</em>`;
   const tu=turret(e.signed,z&&z.elev,s,s.elevTurn);
@@ -1001,6 +1033,16 @@ function renderCard(){
     }).join("");
     return;
   }
+  const lk=lockOf(p);
+  if(lk){
+    $("cTable").innerHTML=`<tr><th>m</th><th>Aim</th><th>Hold mil</th><th>Drop cm</th><th>Wind ${u}</th><th>/1 m/s</th><th>m/s</th><th>TOF</th></tr>`+res.rows.map(r=>{
+      if(!r.reached)return`<tr><td>${r.range}</td><td colspan="7" class="dim">not reached</td></tr>`;
+      const h=r.elevMrad-lk.mil,hc=h*r.range/10,w=fmtHold(r.windMrad,windScope(s),"R","L");
+      const cls=[r.subsonic?"ss":r.transonic?"ts":"",r.range===R?"cur":""].join(" ").trim();
+      return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${Math.abs(hc)<1?"0":(hc>0?"↑":"↓")+Math.round(Math.abs(hc))+" cm"}</td><td>${sgn(h,2)}</td><td>${dropCm(r)}</td><td>${w.clicks?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
+    }).join("");
+    return;
+  }
   const head=`<tr><th>m</th><th>Elev ${u}</th><th>Clicks</th><th>Drop cm</th><th>Wind ${u}</th><th>/1 m/s</th><th>m/s</th><th>TOF</th></tr>`;
   $("cTable").innerHTML=head+res.rows.map(r=>{
     if(!r.reached)return`<tr><td>${r.range}</td><td colspan="7" class="dim">not reached</td></tr>`;
@@ -1027,6 +1069,13 @@ function stageRows(stage,p){
   let dialAt=null;
   if(stage.dial_mode==="first_hold_rest")dialAt=0;
   if(stage.dial_mode==="one")dialAt=Math.min(stage.dial_target||0,rows.length-1);
+  const lk=lockOf(p);
+  if(lk&&!isNotch(p))return rows.map(x=>{       // a locked diopter: nothing dialled per target, everything held
+    if(!x.r||!x.r.reached)return Object.assign(x,{bad:true});
+    const wcm=x.t.w_cm||(TARGET_PRESETS[x.t.shape]||{}).w;
+    return Object.assign(x,{dial:B.toUnit(lk.mil,s.unit),hold:B.toUnit(x.r.elevMrad-lk.mil,s.unit),change:null,wind:B.toUnit(x.r.windMrad,s.unit),
+      wUnit:wcm?B.toUnit(wcm/100/x.t.range_m*1000,s.unit):null,dec:2,unit:s.unit==="MOA"?"MOA":"mil",per1:B.toUnit(x.r.windPer1Mrad,s.unit)});
+  });
   const click=s.click||0.1,dec=decs(click),rnd=v=>Math.round(v/click)*click;
   if(isNotch(p))return rows.map(x=>{
     if(!x.r||!x.r.reached)return Object.assign(x,{bad:true});
@@ -1129,6 +1178,7 @@ let CARD_FOR;          // the profile whose range card values are in the inputs
 function render(){
   renderProfiles();
   if(CARD_FOR!==U.profile){CARD_FOR=U.profile;fillCard()}
+  fillLock(prof());
   renderSolution();renderCard();renderMatch();if(!$("mm").hidden)renderMM();if(U.tab==="ret")renderReticle();if(U.tab==="true")renderTrue();
   saveUI();
 }
@@ -1719,11 +1769,12 @@ function retScene(p,ret){
       }
     }else if(r&&r.reached){
       const e=B.toUnit(r.elevMrad,s.unit),w=B.toUnit(r.windMrad,s.unit),click=s.click||0.1;
-      out.dialled=$("vDial").checked?Math.round(e/click)*click:0;
+      const lk=ret.iron?lockOf(p):null;     // a locked diopter stays where it is: everything else is held
+      out.dialled=lk?B.toUnit(lk.mil,s.unit):$("vDial").checked?Math.round(e/click)*click:0;
       const y=toRet(e-out.dialled,s.unit,ret),x=-toRet(w,s.unit,ret);
       out.holds.push({x,y,main:true,ring:!!ret.iron});  // the range is on the readout; a tag would cover marks
       const tg=targetShape(R,ret);if(tg)out.targets.push(Object.assign(tg.shape,{x,y}));
-      out.info.push(ret.iron?`${out.dialled?(n=>`Dialled ${n} click${n===1?"":"s"} ${out.dialled>0?"up":"down"}; `)(Math.abs(Math.round(out.dialled/click))):""}put the post's tip on the dot: ${Math.abs(y*R/10)<1?"centre":aimCm(y*R/10)}, wind ${sideCm(-x*R/10)} (${(Math.abs(x)/ret.post).toFixed(2)} post widths).`
+      out.info.push(ret.iron?`${out.dialled?(n=>`${lk?"Locked at":"Dialled"} ${n} click${n===1?"":"s"} ${out.dialled>0?"up":"down"}; `)(Math.abs(Math.round(out.dialled/click))):""}put the post's tip on the dot: ${Math.abs(y*R/10)<1?"centre":aimCm(y*R/10)}, wind ${sideCm(-x*R/10)} (${(Math.abs(x)/ret.post).toFixed(2)} post widths).`
         :`Put the target on the dot: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
       if(tg)out.info.push(tg.info);
     }
@@ -2253,8 +2304,10 @@ $("pdfDope").addEventListener("click",()=>withPdf($("pdfDope"),async()=>{
     doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(70);
     const cl=doc.splitTextToSize(PT(condLine(p,c)),colW);doc.text(cl,x0,M+24);doc.setTextColor(0);
     doc.autoTable({startY:M+26+cl.length*8,margin:{left:x0,right:W-x0-colW},tableWidth:colW,theme:"grid",
-      head:isNotch(p)?[["m","Setting","Aim cm","Drop cm","Wind/1m/s cm","TOF"]]:[["m",`Elev ${u}`,"Clicks","Drop cm",`Wind/1m/s`,"TOF"]],
+      head:isNotch(p)?[["m","Setting","Aim cm","Drop cm","Wind/1m/s cm","TOF"]]:lockOf(p)?[["m","Aim cm","Hold mil","Drop cm",`Wind/1m/s`,"TOF"]]:[["m",`Elev ${u}`,"Clicks","Drop cm",`Wind/1m/s`,"TOF"]],
       body:rows.map(r=>{
+        const lk=lockOf(p);
+        if(lk&&!isNotch(p)){const h=r.elevMrad-lk.mil,hc=h*r.range/10;return[r.range,Math.abs(hc)<1?"0":(hc>0?"+":"-")+Math.round(Math.abs(hc)),(h>=0?"+":"-")+Math.abs(h).toFixed(2),dropCm(r).replace("−","-"),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}
         if(isNotch(p)){const n=notchFor(p,r);return[r.range,n?n.label:"-",n?(Math.abs(n.holdCm)<1?"0":(n.holdCm>0?"+":"-")+Math.round(Math.abs(n.holdCm))):"-",dropCm(r).replace("−","-"),(r.windPer1Mrad*r.range/10).toFixed(1),r.tof.toFixed(2)]}
         const e=fmtHold(r.elevMrad,s,"U","D");return[r.range,(e.signed<0?"-":"")+e.val,e.clicks+(e.dir?" "+e.dir:""),dropCm(r).replace("−","-"),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}),
       styles:{font:"helvetica",fontSize:fs,cellPadding:2,halign:"right",lineColor:[170,170,170],lineWidth:.3},headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
