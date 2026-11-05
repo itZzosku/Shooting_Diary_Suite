@@ -1956,7 +1956,37 @@ function pistolTarget(){
     for(const [x,y] of [[-r,0],[r,0],[0,-r],[0,r]])out.push({t:"text",x,y,text:String(n),size:1.9,color:ink(r)})}
   return out;
 }
+// Game birds, cocks sitting on a branch in side view, at life size (cm, x right, y down; drawn here, not an official
+// target): metso (capercaillie) about 90 cm long and 60 cm tall, teeri (black grouse) about 55 × 40 cm with its
+// lyre tail. Aimed at the front of the body, where the neck meets the breast.
+/** Rounds a closed outline (Chaikin corner cutting, 3 passes), keeping the vertices in `sharp` (beak, tail tips) */
+function smooth(pts,sharp){
+  let P=pts.map((q,i)=>({q,s:sharp.includes(i)}));
+  for(let it=0;it<3;it++){
+    const out=[];
+    P.forEach((a,i)=>{const b=P[(i+1)%P.length];
+      if(a.s)out.push(a);
+      const m=(t,u)=>[a.q[0]+(b.q[0]-a.q[0])*t,a.q[1]+(b.q[1]-a.q[1])*t];
+      out.push({q:m(0.25),s:false},{q:m(0.75),s:false});
+    });
+    P=out;
+  }
+  return P.map(x=>x.q);
+}
+function birdTarget(outline,aim,eye,branch,sharp){
+  const sh=pts=>pts.map(([x,y])=>[x-aim[0],y-aim[1]]);
+  outline=smooth(outline,sharp||[]);
+  return[{t:"poly",points:sh(branch),fill:"#6b5233",stroke:"#4a3822",width:1},
+    {t:"poly",points:sh(outline),fill:"#2f3336",stroke:"#111",width:1.5},
+    {t:"circle",cx:eye[0]-aim[0],cy:eye[1]-aim[1],r:eye[2],fill:"#d0301e",stroke:"none",width:0}];
+}
+const METSO=[[42,-40],[37,-44.5],[30,-48],[24,-46.5],[21,-41],[19,-31],[12,-25],[0,-23],[-12,-21],[-22,-17.5],[-34,-14],[-46,-8.5],[-47,-2],
+  [-35,0.5],[-21,6],[-9,13.5],[4,15.5],[15,11],[22,1],[26,-10],[29,-22],[31.5,-31],[34,-36],[38,-38.5]];
+const TEERI=[[27,-26],[24,-28.5],[20,-31],[16,-29.5],[14,-25],[12.5,-19],[5,-15.5],[-5,-14.5],[-13,-11.5],[-19,-10.5],[-25,-13],[-29.5,-17.5],
+  [-28,-12],[-25.5,-7.5],[-30,-3.5],[-28,1],[-24,-2],[-17,0.5],[-10,4],[-2,9],[6,9.5],[11,5.5],[15,-2],[17,-10],[19,-17],[21,-21.5],[25,-24.8]];
 const TARGET_PRESETS={
+  metso:{name:"Metso (capercaillie)",size:"about 90 × 60 cm",w:30,parts:birdTarget(METSO,[17,-6],[29.5,-44,1.8],[[-30,15],[34,13.5],[34,17],[-30,18.5]],[0,11,12])},
+  teeri:{name:"Teeri (black grouse)",size:"about 55 × 40 cm",w:18,parts:birdTarget(TEERI,[10,-4],[18.5,-28,1.2],[[-20,9],[22,8],[22,10.5],[-20,11.5]],[0,11,15])},
   sra2024:{name:"SRA target",size:"45 × 75 cm",w:45,parts:sraTarget()},
   pv03:{name:"PV 03 ring target",size:"rings Ø 5–50 cm",w:50,parts:pv03Target()},
   pistol:{name:"Pistol target",size:"Ø 50 cm, black Ø 20",w:50,parts:pistolTarget()},
