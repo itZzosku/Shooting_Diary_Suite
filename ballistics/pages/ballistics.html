@@ -562,6 +562,10 @@ details summary{cursor:pointer;list-style:revert}
     <p class="hint" style="margin:0" id="fMvHint">Typed-in values are also the fallback when the chrono has no strings for this gun and load.</p>
     <h2 style="font-size:1.05rem">Reticle and corrections</h2>
     <label class="f" id="fRetL">Reticle<select id="fRet"></select></label>
+    <div class="g3"><label class="f">Shoots cm sideways<input type="text" inputmode="decimal" id="fPoiX" placeholder="0"></label>
+      <label class="f">to the<select id="fPoiD"><option value="1">right</option><option value="-1">left</option></select></label>
+      <label class="f">at m<input type="text" inputmode="numeric" id="fPoiR" placeholder="100"></label></div>
+    <p class="hint" style="margin:0">A load that hits to one side at the zero and can't be zeroed out (iron sights, or a scope zeroed for another load): a fixed angle, so the cm grow with range. It is added to the windage everywhere.</p>
     <div class="spinrow"><label class="check"><input type="checkbox" id="fSpin">Spin drift</label>
       <label class="f" id="fSpinSL">Spin drift ×<input type="text" inputmode="decimal" id="fSpinS" placeholder="1"></label></div>
     <p class="hint" style="margin:0">Spin drift needs the twist and the bullet's length.<span id="fSpinH"> The formula is made for supersonic bullets and reads high for .22 LR: × about 0.6 matches Strelok. Empty = 1.</span></p>
@@ -740,7 +744,7 @@ const num=v=>{v=parseFloat(String(v??"").replace(",",".").trim());return isFinit
 const B=window.Ballistics;
 const CACHE="bal-cache",OUTBOX="bal-outbox",RECENT="bal-recent",COND="bal-cond:",UI="bal-ui";
 const ls={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const ERR={bad_sight_check_setting:"The check's setting must be one of the leaf marks.",sight_check_cm_required:"Type how many cm the group was off.",
+const ERR={bad_poi_x_cm:"The sideways offset must be within ±300 cm.",bad_poi_x_range_m:"The offset's range must be 10–2000 m.",bad_sight_check_setting:"The check's setting must be one of the leaf marks.",sight_check_cm_required:"Type how many cm the group was off.",
   sight_check_range_required:"Type the range of the check.",sight_check_setting_required:"Type the setting of the check.",bad_sight_check_cm:"The check must be within ±300 cm.",
   sight_elev_click_required:"Type the elevation click (e.g. 1.4).",sight_wind_click_required:"Type the windage click (e.g. 0.7).",
   sight_mark_label_required:"Each leaf mark needs a setting, e.g. 3=300.",sight_mark_range_required:"Each leaf mark needs a range, e.g. 3=300.",
@@ -835,7 +839,7 @@ function solverInput(p,c,extra){
   return Object.assign({bullet:i.bullet,mv:i.mv,mvTempC:i.mvTempC,tempSens:i.tempSens,mvScale:i.mvScale,dragScale:i.dragScale,
     sightHeightMm:i.sightHeightMm,zeroRangeM:i.zeroRangeM,zeroAtmo:clean(i.zeroAtmo),twistMm:i.twistMm,twistDir:i.twistDir,
     atmo:clean({tempC:c.tempC,hpa:c.hpa,rh:c.rh}),powderC:c.powder,wind:{ms:c.ms,clock:c.clock},angleDeg:c.angle,
-    spinDrift:i.spinDrift,spinScale:i.spinScale,aeroJump:i.aeroJump,coriolis:i.coriolis&&(c.lat??i.latitude)!=null&&(c.az??i.azimuthDeg)!=null,
+    spinDrift:i.spinDrift,spinScale:i.spinScale,poiRightMrad:i.poiRightMrad||0,aeroJump:i.aeroJump,coriolis:i.coriolis&&(c.lat??i.latitude)!=null&&(c.az??i.azimuthDeg)!=null,
     latitude:c.lat??i.latitude,azimuthDeg:c.az??i.azimuthDeg},extra||{});
 }
 const clean=o=>{const r={};for(const k in o||{})if(o[k]!=null)r[k]=o[k];return r};
@@ -937,6 +941,7 @@ function renderProfiles(){
   if(i.mv)parts.push(`<b>${Math.round(i.mv*10)/10}</b> m/s${i.mvTempC!=null?" at "+i.mvTempC+" °C":""}${i.mvSource==="chrono"&&i.chrono?` (chrono, ${i.chrono.strings} string${i.chrono.strings>1?"s":""}, SD ${i.chrono.sd??"–"})`:""}${i.tempSens?" · "+i.tempSens+" m/s/°C"+(i.tempSensSource==="chrono"?" (chrono)":""):""}`);
   const corr=[i.spinDrift&&("spin drift"+(i.spinScale!=null&&+i.spinScale!==1?" ×"+(+i.spinScale):"")),i.aeroJump&&"aero jump",i.coriolis&&"Coriolis"].filter(Boolean);if(corr.length)parts.push(corr.join(", "));
   parts.push(`zero <b>${i.zeroRangeM} m</b>`);
+  if(p.poi_x_cm)parts.push(`shoots ${Math.abs(p.poi_x_cm)} cm ${p.poi_x_cm>0?"right":"left"} at ${p.poi_x_range_m} m`);
   if((i.mvScale||1)!==1||(i.dragScale||1)!==1)parts.push(`trued: velocity ×${(i.mvScale||1).toFixed(3)}, drag ×${(i.dragScale||1).toFixed(3)}`);
   const g=i.sight;
   if(g&&g.type==="diopter")parts.push(`${esc(s.name)} · diopter ${+g.elev_click}/${+g.wind_click} ${g.unit==="MOA"?"MOA":"mil"} clicks`);
@@ -954,7 +959,7 @@ function renderNotchSolution(p,res,r,c){
   $("oEs").textContent=aimCm(n.holdCm)+(Math.abs(n.holdCm)>=1?` (${Math.abs(n.holdMil).toFixed(2)} mil)`:"")+(n.alt?`\nor setting ${n.alt.label}: ${aimCm(n.alt.holdCm)}`:"");
   const wc=r.windMrad*r.range/10;
   $("oW").innerHTML=Math.abs(wc)<1?`0<em>cm</em>`:`${Math.round(Math.abs(wc))}<em>cm ${wc<0?"L":"R"}</em>`;
-  const why=[c.ms&&"wind",p.inputs.spinDrift&&"spin drift",solverInput(p,c).coriolis&&"Coriolis"].filter(Boolean).join(" + ");
+  const why=[c.ms&&"wind",p.inputs.spinDrift&&"spin drift",solverInput(p,c).coriolis&&"Coriolis",p.inputs.poiRightMrad&&"load offset"].filter(Boolean).join(" + ");
   $("oWs").textContent=(Math.abs(wc)>=1?`aim ${wc<0?"left":"right"} · ${(Math.abs(r.windMrad)/pm).toFixed(2)} post widths${why?" · "+why:""}\n`:"")+`${(r.windPer1Mrad*r.range/10).toFixed(1)} cm per 1 m/s`;
   $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
     +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span><span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`;
@@ -993,7 +998,7 @@ function renderSolution(){
   $("oEs").textContent=es;
   $("oW").innerHTML=w.clicks?`${w.val}<em>${w.unit} ${w.dir}</em>`:`0<em>${w.unit}</em>`;   // wind, spin drift, Coriolis
   const per=B.toUnit(r.windPer1Mrad,s.unit).toFixed(e.dec+1);
-  const why=[c.ms&&"wind",p.inputs.spinDrift&&"spin drift",solverInput(p,c).coriolis&&"Coriolis"].filter(Boolean).join(" + ");
+  const why=[c.ms&&"wind",p.inputs.spinDrift&&"spin drift",solverInput(p,c).coriolis&&"Coriolis",p.inputs.poiRightMrad&&"load offset"].filter(Boolean).join(" + ");
   $("oWs").textContent=(w.clicks?`${w.clicks} click${w.clicks===1?"":"s"} ${w.dir==="R"?"right":"left"}${why?" · "+why:""}\n`:"")+`${per} per 1 m/s`;
   $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
     +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span>`+(r.dropM!=null?`<span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`:"");
@@ -1485,6 +1490,7 @@ function openProfile(p){
   setv("fMv",x.mv_ms);setv("fMvT",x.mv_temp_c);setv("fTs",x.temp_sens);setv("fZr",x.zero_range_m);
   $("fMvSrc").value=x.mv_source||"manual";$("fTsSrc").value=x.temp_sens_source||"manual";setv("fMvN",x.mv_strings);
   $("fSpin").checked=!!x.spin_drift;setv("fSpinS",x.spin_scale);spinState();
+  setv("fPoiX",x.poi_x_cm!=null&&x.poi_x_cm!==0?Math.abs(x.poi_x_cm):"");$("fPoiD").value=x.poi_x_cm<0?"-1":"1";setv("fPoiR",x.poi_x_range_m??(x.poi_x_cm?100:""));
   let g=null;try{g=x.sight?(typeof x.sight==="string"?JSON.parse(x.sight):x.sight):null}catch(e){}
   $("fSightType").value=g?g.type:"";fillIron(g||{});$("fIrSaved").dataset.t="";$("fIrKeep").checked=false;sightState();
   // a saved sight: its current fields, this profile's checks
@@ -1584,7 +1590,8 @@ $("pForm").addEventListener("submit",async e=>{
     mv_ms:num($("fMv").value),mv_temp_c:num($("fMvT").value),temp_sens:num($("fTs").value),zero_range_m:num($("fZr").value),
     zero_temp_c:num($("fZt").value),zero_hpa:num($("fZp").value),zero_rh:num($("fZh").value),archived:$("fArch").checked,
     mv_source:$("fMvSrc").value,temp_sens_source:$("fTsSrc").value,mv_strings:num($("fMvN").value),
-    spin_drift:$("fSpin").checked,spin_scale:num($("fSpinS").value),sight:readIron(),sight_id:null,aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
+    spin_drift:$("fSpin").checked,spin_scale:num($("fSpinS").value),sight:readIron(),sight_id:null,
+    poi_x_cm:num($("fPoiX").value)?num($("fPoiX").value)*+$("fPoiD").value:null,poi_x_range_m:num($("fPoiX").value)?(num($("fPoiR").value)||100):null,aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
     latitude:editP?editP.latitude:null,azimuth_deg:editP?editP.azimuth_deg:null,
     ord:editP?editP.ord:D.profiles.length,mv_scale:editP?editP.mv_scale:1,drag_scale:editP?editP.drag_scale:1};
   if(body.sight){                      // a saved sight: create or update it, link the profile to it

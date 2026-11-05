@@ -73,7 +73,8 @@ PROFILE_COLUMNS = {             # added after phase 1: chrono window and the sma
     "aero_jump": "INTEGER NOT NULL DEFAULT 0", "azimuth_deg": "REAL",
     "spin_scale": "REAL",
     "sight": "TEXT",            # iron sights (JSON, see _sight); empty = the linked scope
-    "sight_id": "TEXT"}         # a saved sight (bal_sights) instead of the sight's own fields; its check stays here       # spin drift × this (Litz's formula reads high for subsonic .22 LR); empty = 1
+    "sight_id": "TEXT",
+    "poi_x_cm": "REAL", "poi_x_range_m": "REAL"}   # "shoots N cm right (+) / left (−) at M m" – a horizontal offset         # a saved sight (bal_sights) instead of the sight's own fields; its check stays here       # spin drift × this (Litz's formula reads high for subsonic .22 LR); empty = 1
 
 
 OBS_COLUMNS = {"powder_c": "REAL", "wind_ms": "REAL", "wind_clock": "REAL", "updated": "TEXT"}
@@ -323,6 +324,7 @@ PROFILE = {
     "mv_source": _choice(("manual", "chrono"), "manual"), "temp_sens_source": _choice(("manual", "chrono"), "manual"),
     "mv_strings": _int(1, 50), "spin_drift": _flag, "coriolis": _flag, "aero_jump": _flag,
     "azimuth_deg": _num(0, 360), "reticle_id": _ref, "spin_scale": _num(0, 3), "sight": _sight, "sight_id": _ref,
+    "poi_x_cm": _num(-300, 300), "poi_x_range_m": _num(10, 2000),
 }
 MATCH = {"name": _text(80, True), "date": _date, "visit_id": _ref, "notes": _text(2000), "archived": _flag}
 STAGE = {
@@ -472,6 +474,8 @@ def resolve_inputs(profile, bullets, picks, conn=None):
         "mvScale": profile["mv_scale"], "dragScale": profile["drag_scale"],
         "spinDrift": bool(profile.get("spin_drift")),
         "spinScale": profile.get("spin_scale") if profile.get("spin_scale") is not None else 1,
+        "poiRightMrad": (profile["poi_x_cm"] / (profile["poi_x_range_m"] / 10))
+        if profile.get("poi_x_cm") and profile.get("poi_x_range_m") else 0,
         "coriolis": bool(profile.get("coriolis")),
         "aeroJump": bool(profile.get("aero_jump")), "azimuthDeg": profile.get("azimuth_deg"),
         "reticleId": profile.get("reticle_id"),

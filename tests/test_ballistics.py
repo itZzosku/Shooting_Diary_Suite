@@ -357,3 +357,12 @@ def test_saved_sights(client):
     assert d["pickers"]["sights"][0]["profiles"] == 2
     assert client.delete("/diary/api/ballistics/sights/s-m39", headers=H).status_code == 409, "in use"
     assert client.put("/diary/api/ballistics/sights/s-bad", json={"name": "x", "data": {"type": "notch", "marks": []}}).status_code == 400
+
+
+def test_horizontal_offset(client):
+    base = {"name": "Off", "sight_height_mm": 50, "zero_range_m": 100, "poi_x_cm": -4, "poi_x_range_m": 100}
+    assert client.put("/diary/api/ballistics/profiles/p-off", json=base).status_code == 200
+    i = next(p for p in _all(client)["profiles"] if p["id"] == "p-off")["inputs"]
+    assert i["poiRightMrad"] == -0.4, "4 cm left at 100 m"
+    assert client.put("/diary/api/ballistics/profiles/p-off", json=dict(base, poi_x_cm=None)).status_code == 200
+    assert next(p for p in _all(client)["profiles"] if p["id"] == "p-off")["inputs"]["poiRightMrad"] == 0

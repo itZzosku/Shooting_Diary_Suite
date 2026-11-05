@@ -135,3 +135,10 @@ test("spin drift scale: × 0.5 halves the drift, × 0 removes it", () => {
   near(half, full / 2, 1e-3, "half");
   near(at(Object.assign({}, sd, {spinScale: 0}), 800).windMrad, 0, 1e-9, "none");
 });
+
+test("a load's horizontal offset is a fixed angle: cm grow with range", () => {
+  const off = Object.assign({}, BASE, {poiRightMrad: 0.4});     // 4 cm right at 100 m
+  near(at(off, 100).windMrad, -0.4, 1e-6, "held 0.4 mil left at 100 m");
+  near(at(off, 600).windMrad, -0.4, 1e-6, "the same angle at 600 m");
+  near(at(off, 300).driftM, 0.12, 1e-3, "12 cm right at 300 m");
+});
