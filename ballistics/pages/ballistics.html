@@ -888,7 +888,7 @@ function fillLock(p){
   const g=ironOf(p);$("lockRow").hidden=!g;if(!g)return;
   const cur=(U.lock||{})[p.id]??"";
   let o=`<option value="">Auto – ${g.type==="notch"?"nearest setting":"dial each range"}</option>`;
-  if(g.type==="notch")o+=g.marks.map(m=>`<option value="${esc(m.label)}">Locked at ${esc(m.label)}</option>`).join("");
+  if(g.type==="notch")o+=g.marks.map(m=>`<option value="${esc(m.label)}">Locked at ${esc(m.label)} (${m.range_m} m)</option>`).join("");
   else for(let n=-10;n<=40;n++)o+=`<option value="${n}">Locked at ${n?Math.abs(n)+" click"+(Math.abs(n)>1?"s":"")+(n>0?" up":" down"):"the zero"}</option>`;
   $("sLock").innerHTML=o;$("sLock").value=[...$("sLock").options].some(x=>x.value===String(cur))?String(cur):"";
   const lk=lockOf(p);
@@ -1984,7 +1984,37 @@ const METSO=[[42,-40],[37,-44.5],[30,-48],[24,-46.5],[21,-41],[19,-31],[12,-25],
   [-35,0.5],[-21,6],[-9,13.5],[4,15.5],[15,11],[22,1],[26,-10],[29,-22],[31.5,-31],[34,-36],[38,-38.5]];
 const TEERI=[[27,-26],[24,-28.5],[20,-31],[16,-29.5],[14,-25],[12.5,-19],[5,-15.5],[-5,-14.5],[-13,-11.5],[-19,-10.5],[-25,-13],[-29.5,-17.5],
   [-28,-12],[-25.5,-7.5],[-30,-3.5],[-28,1],[-24,-2],[-17,0.5],[-10,4],[-2,9],[6,9.5],[11,5.5],[15,-2],[17,-10],[19,-17],[21,-21.5],[25,-24.8]];
+// Shooting test targets (MMM decree 517/2017 on the hunting shooting test, annexes 1 and 2): a life-size animal
+// from the side, head right, with a round hit area – hirvi (bull moose) 250 cm long, hit area Ø 23 cm centred
+// 124 cm above the ground and 55 cm behind the front of the chest; karhu (bear) 150 cm long, Ø 17 cm at 72 cm
+// and 36 cm. The annexes give those figures without saying what they are measured from: read here as height
+// above the ground and distance behind the chest. The outlines are drawn here, not copied from the annex.
+// Coordinates: cm, x from the tail end to the nose (right), y up from the ground; aimed at the hit area's centre.
+function testTarget(outline,extra,hit,fill){
+  const [cx,cy,d]=hit,tr=([x,y])=>[x-cx,cy-y];
+  // sharp corners: the hooves / paws (y = 0) and the nose (the first point)
+  const sharpOf=pts=>pts.map((q,i)=>i===0||q[1]===0?i:-1).filter(i=>i>=0);
+  const poly=(pts,f,w)=>({t:"poly",points:smooth(pts,sharpOf(pts)).map(tr),fill:f,stroke:"#1d1712",width:w});
+  const parts=extra.filter(e=>e.under).map(e=>poly(e.pts,e.fill,1));          // the far legs, behind the body
+  parts.push(poly(outline,fill,1.5));
+  for(const e of extra.filter(e=>!e.under))parts.push(poly(e.pts,e.fill||fill,1.2));
+  parts.push({t:"circle",r:d/2,fill:"none",stroke:"#f4f4f4",width:2.6},{t:"circle",r:d/2,fill:"none",stroke:"#111",width:1.1});
+  return parts;
+}
+const MOOSE=[[250,150],[247,158],[233,170],[220,180],[216,184],[212,198],[207,184],[196,180],[175,193],[155,204],[120,193],[80,189],[45,191],
+  [22,184],[14,172],[12,150],[24,110],[21,62],[24,10],[22,0],[36,0],[34,12],[36,64],[52,106],[62,116],[100,112],[132,108],[136,70],[136,48],
+  [137,10],[135,0],[149,0],[148,12],[149,50],[152,80],[162,104],[174,124],[186,136],[200,140],[215,138],[238,139],[248,144]];
+const MOOSE_FAR=[[[44,110],[48,62],[46,10],[44,0],[57,0],[56,12],[59,64],[62,108]],[[150,104],[156,50],[157,10],[155,0],[168,0],[167,12],[168,50],[170,100]]];
+const MOOSE_BELL=[[198,141],[195,121],[203,126],[207,140]];
+const MOOSE_ANTLER=[[214,186],[204,198],[190,214],[201,211],[206,224],[212,213],[219,226],[222,212],[230,219],[226,198],[220,187]];
+const BEAR=[[150,74],[147,80],[136,88],[130,93],[127,100],[122,95],[112,98],[95,108],[65,101],[30,102],[12,92],[6,70],[10,30],[8,8],[4,0],
+  [26,0],[26,20],[34,48],[42,53],[75,50],[86,50],[88,25],[86,0],[108,0],[104,30],[108,50],[112,60],[122,64],[134,66],[144,68],[149,71]];
+const BEAR_FAR=[[[36,50],[40,20],[38,0],[56,0],[54,24],[50,52]],[[94,48],[98,24],[96,0],[116,0],[112,30],[110,52]]];
 const TARGET_PRESETS={
+  hirvi:{name:"Hirvi – shooting test",size:"life size, hit area Ø 23 cm",w:23,
+         parts:testTarget(MOOSE,[...MOOSE_FAR.map(pts=>({pts,under:true,fill:"#3f3125"})),{pts:MOOSE_BELL},{pts:MOOSE_ANTLER,fill:"#8a7356"}],[174-55,124,23],"#5b4635")},
+  karhu:{name:"Karhu – shooting test",size:"life size, hit area Ø 17 cm",w:17,
+         parts:testTarget(BEAR,BEAR_FAR.map(pts=>({pts,under:true,fill:"#33281f"})),[112-36,72,17],"#4a3a2d")},
   metso:{name:"Metso (capercaillie)",size:"about 90 × 60 cm",w:30,parts:birdTarget(METSO,[17,-6],[29.5,-44,1.8],[[-30,15],[34,13.5],[34,17],[-30,18.5]],[0,11,12])},
   teeri:{name:"Teeri (black grouse)",size:"about 55 × 40 cm",w:18,parts:birdTarget(TEERI,[10,-4],[18.5,-28,1.2],[[-20,9],[22,8],[22,10.5],[-20,11.5]],[0,11,15])},
   sra2024:{name:"SRA target",size:"45 × 75 cm",w:45,parts:sraTarget()},
