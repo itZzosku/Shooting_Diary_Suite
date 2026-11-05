@@ -1965,7 +1965,7 @@ function pistolTarget(){
 }
 // Game birds, cocks sitting on a branch in side view, at life size (cm, x right, y down; drawn here, not an official
 // target): metso (capercaillie) about 90 cm long and 60 cm tall, teeri (black grouse) about 55 × 40 cm with its
-// lyre tail. Aimed at the front of the body, where the neck meets the breast.
+// lyre tail. Aimed at the front half of the body, over the vitals.
 /** Rounds a closed outline (Chaikin corner cutting, 3 passes), keeping the vertices in `sharp` (beak, tail tips) */
 function smooth(pts,sharp){
   let P=pts.map((q,i)=>({q,s:sharp.includes(i)}));
@@ -2005,8 +2005,8 @@ function testTarget(outline,d,fill){
 const TARGET_PRESETS={
   hirvi:{name:"Hirvi – shooting test",size:"life size, hit area Ø 23 cm",w:23,parts:testTarget(HIRVI_OUTLINE,23,"#5b4635")},
   karhu:{name:"Karhu – shooting test",size:"life size, hit area Ø 17 cm",w:17,parts:testTarget(KARHU_OUTLINE,17,"#4a3a2d")},
-  metso:{name:"Metso (capercaillie)",size:"about 90 × 60 cm",w:30,parts:birdTarget(METSO,[17,-6],[29.5,-44,1.8],[[-30,15],[34,13.5],[34,17],[-30,18.5]],[0,11,12])},
-  teeri:{name:"Teeri (black grouse)",size:"about 55 × 40 cm",w:18,parts:birdTarget(TEERI,[10,-4],[18.5,-28,1.2],[[-20,9],[22,8],[22,10.5],[-20,11.5]],[0,11,15])},
+  metso:{name:"Metso (capercaillie)",size:"about 90 × 60 cm",w:30,parts:birdTarget(METSO,[8,-4],[29.5,-44,1.8],[[-30,15],[34,13.5],[34,17],[-30,18.5]],[0,11,12])},
+  teeri:{name:"Teeri (black grouse)",size:"about 55 × 40 cm",w:18,parts:birdTarget(TEERI,[4,-2],[18.5,-28,1.2],[[-20,9],[22,8],[22,10.5],[-20,11.5]],[0,11,15])},
   sra2024:{name:"SRA target",size:"45 × 75 cm",w:45,parts:sraTarget()},
   pv03:{name:"PV 03 ring target",size:"rings Ø 5–50 cm",w:50,parts:pv03Target()},
   pistol:{name:"Pistol target",size:"Ø 50 cm, black Ø 20",w:50,parts:pistolTarget()},
