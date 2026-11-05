@@ -380,6 +380,7 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f">Profile<select id="pSel"></select></label>
       <button class="ghost" type="button" id="pEdit">Edit</button>
       <button class="ghost" type="button" id="pNew">New</button>
+      <button class="ghost" type="button" id="pImport">Import</button><input type="file" id="pImportF" accept=".json,application/json" hidden>
     </div>
     <div class="src" id="pInfo"></div>
   </section>
@@ -579,7 +580,7 @@ details summary{cursor:pointer;list-style:revert}
     <p class="hint" style="margin:0">The zero is computed in the zero-day conditions; leave them empty for standard air (15 °C, 1013 hPa).</p>
     <label class="check"><input type="checkbox" id="fArch">Hide from the profile list</label>
     <div class="msg" id="pMsg" hidden></div>
-    <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="pDel" hidden>Delete</button></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="ghost" type="button" id="pExport" hidden>Export for a friend</button><button class="danger" type="button" id="pDel" hidden>Delete</button></div>
   </form>
 </div>
 
@@ -766,7 +767,7 @@ for(const id of ["wClock","sWclock","obWclock"])$(id).innerHTML=CLOCK.map(([v,t]
 let D=ls.get(CACHE)||{profiles:[],bullets:[],matches:[],stages:[],settings:{card_start:100,card_step:50,card_end:1000},pickers:{guns:[],loads:[],scopes:[]}};
 const U=Object.assign({profile:null,match:null,tab:"card"},ls.get(UI)||{});
 const saveUI=()=>ls.set(UI,U);
-function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2800)}
+function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,Math.max(2800,String(t).length*55))}
 const newId=(text,prefix)=>(prefix+String(text||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")).slice(0,50).replace(/-$/,"")+"-"+Math.random().toString(16).slice(2,6);
 
 // ------------------------------------------------------------ server, cache and outbox
@@ -1369,6 +1370,82 @@ $("obDel").addEventListener("click",async()=>{
   if(err)return msg("oMsg",err);TFIT=null;closeSheet($("oSheet"));render();
 });
 
+
+// ------------------------------------------------------------ share a profile: JSON export / import
+// The file carries everything the calculator needs without the sender's diary: the profile's settings, the bullet,
+// a saved sight, the reticle (spec, so an admin can add it to their library) and the velocity as a number (a chrono
+// velocity is the sender's figure for their rifle). Gun, load and scope stay behind (described, not linked).
+const PROFILE_FILE="shooting-diary-ballistic-profile";
+const PORTABLE=["sight_height_mm","twist_mm","twist_dir","zero_range_m","zero_temp_c","zero_hpa","zero_rh","mv_scale","drag_scale",
+  "spin_drift","spin_scale","aero_jump","coriolis","latitude","azimuth_deg","poi_x_cm","poi_x_range_m","notes"];
+const BULLET_FIELDS=["name","maker","diameter_mm","length_mm","weight_gr","drag_model","bc","bc_bands","notes"];
+function saveJson(obj,name){
+  const blob=new Blob([JSON.stringify(obj,null,1)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name.replace(/[^A-Za-z0-9._-]+/g,"-")+".json";a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+function exportProfile(p){
+  const i=p.inputs||{},pr={name:p.name};
+  for(const k of PORTABLE)if(p[k]!=null&&p[k]!=="")pr[k]=p[k];
+  if(i.mv!=null)pr.mv_ms=Math.round(i.mv*10)/10;else if(p.mv_ms!=null)pr.mv_ms=p.mv_ms;
+  if(i.mvTempC!=null)pr.mv_temp_c=i.mvTempC;
+  if(i.tempSens!=null)pr.temp_sens=i.tempSens;
+  const out={format:PROFILE_FILE,v:1,exported:localDate(),profile:pr,
+    from:{gun:i.gun||null,load:i.load||null,mv:i.mvSource==="chrono"&&i.chrono?`chrono, ${i.chrono.strings} strings`:"typed"}};
+  if(i.sight){const g=Object.assign({},i.sight);delete g.saved_id;pr.sight=g}
+  const sv=p.sight_id&&((D.pickers||{}).sights||[]).find(x=>x.id===p.sight_id);
+  if(sv)out.sight={name:sv.name,data:sv.data};
+  const b=D.bullets.find(x=>x.id===p.bullet_id);
+  if(b){out.bullet={};for(const k of BULLET_FIELDS)if(b[k]!=null&&b[k]!=="")out.bullet[k]=b[k]}
+  const r=!i.sight&&p.reticle_id&&(D.reticles||[]).find(x=>x.id===p.reticle_id);
+  if(r)out.reticle={name:r.name,maker:r.maker||"",unit:r.unit,focal_plane:r.focal_plane,design_mag:r.design_mag,min_mag:r.min_mag,max_mag:r.max_mag,spec:r.spec,notes:r.notes||""};
+  if(i.scope&&!i.sight)out.scope={name:i.scope.name,unit:i.scope.unit,click:i.scope.click};
+  saveJson(out,`${p.name}-profile`);
+}
+async function importProfile(j){
+  if(!j||j.format!==PROFILE_FILE||!j.profile||!j.profile.name)throw new Error("That file isn't a shared ballistic profile.");
+  const notes=[];
+  const put=async(url,body)=>{const e=await write("PUT",url,body);if(e)throw new Error(ERR[e]||e)};
+  let bullet_id=null;
+  if(j.bullet){                          // an identical bullet already here is reused
+    const jb=j.bullet,same=D.bullets.find(b=>b.name===jb.name&&+b.weight_gr===+jb.weight_gr&&b.drag_model===jb.drag_model&&+(b.bc||0)===+(jb.bc||0)
+      &&JSON.stringify(b.bc_bands||null)===JSON.stringify(jb.bc_bands||null));
+    if(same)bullet_id=same.id;else{bullet_id=newId(jb.name,"b-");await put("api/ballistics/bullets/"+encodeURIComponent(bullet_id),jb)}
+  }
+  let sight_id=null;
+  if(j.sight){
+    const same=((D.pickers||{}).sights||[]).find(x=>x.name===j.sight.name&&JSON.stringify(x.data)===JSON.stringify(j.sight.data));
+    if(same)sight_id=same.id;else{sight_id=newId(j.sight.name,"s-");await put("api/ballistics/sights/"+encodeURIComponent(sight_id),j.sight)}
+  }
+  let reticle_id=null;
+  if(j.reticle){                         // by name and maker in this server's library; an admin can add it
+    const jr=j.reticle,same=(D.reticles||[]).find(r=>r.name===jr.name&&(r.maker||"")===(jr.maker||""));
+    if(same)reticle_id=same.id;
+    else if(D.is_admin){
+      const res=RT.compile(jr.spec||{});reticle_id=newId(jr.name,"ret-");
+      try{await put("api/ballistics/reticles/"+encodeURIComponent(reticle_id),Object.assign({},jr,{elements:res.elements}));notes.push(`reticle “${jr.name}” added to the library`)}
+      catch(e){reticle_id=null;notes.push(`reticle “${jr.name}” couldn't be added (${e.message})`)}
+    }else notes.push(`reticle “${(jr.maker?jr.maker+" ":"")+jr.name}” isn't in this server's library – ask an admin to import it`);
+  }
+  if(j.scope)notes.push(`shared with a ${j.scope.name} (${+j.scope.click} ${j.scope.unit==="MOA"?"MOA":"mil"} clicks) – pick your own scope under Edit`);
+  const names=new Set(D.profiles.map(x=>x.name));let name=j.profile.name;
+  if(names.has(name)){name+=" (imported)";let k=2;while(names.has(name))name=`${j.profile.name} (imported ${k++})`}
+  const from=[j.from&&j.from.gun,j.from&&j.from.load].filter(Boolean).join(", ");
+  const body=Object.assign({},j.profile,{name,bullet_id,sight_id,reticle_id,gun_id:null,load_id:null,scope_id:null,zero_id:null,
+    mv_source:"manual",temp_sens_source:"manual",ord:D.profiles.length,archived:false,
+    notes:[j.profile.notes,`Imported ${localDate()}${from?" – shared from "+from:""}${j.exported?", exported "+j.exported:""}.`].filter(Boolean).join("\n")});
+  const id=newId(name,"p-");await put("api/ballistics/profiles/"+encodeURIComponent(id),body);
+  U.profile=id;CARD_FOR=null;render();
+  return{name,notes};
+}
+$("pImport").addEventListener("click",()=>$("pImportF").click());
+$("pImportF").addEventListener("change",async()=>{
+  const f=$("pImportF").files[0];$("pImportF").value="";if(!f)return;
+  let j;try{j=JSON.parse(await f.text())}catch(e){return toast("That file isn't JSON.")}
+  try{const r=await importProfile(j);toast(`Imported “${r.name}”.${r.notes.length?" Note: "+r.notes.join("; ")+".":""} Check the velocity and the zero for your rifle.`)}
+  catch(e){toast(e.message)}
+});
+$("pExport").addEventListener("click",()=>{if(editP)exportProfile(D.profiles.find(x=>x.id===editP.id)||editP)});
 // ------------------------------------------------------------ weather panel (closed by default, summary on the button)
 function wxSummary(){
   const c=cond(),parts=[];
@@ -1480,7 +1557,7 @@ function fillScopeZero(scopeId,zeroId){
 }
 function fillBullets(sel){$("fBullet").innerHTML=opt("","– none –")+D.bullets.filter(b=>!b.archived||b.id===sel).map(b=>opt(b.id,`${b.name} · ${b.drag_model} ${b.bc??"bands"}`,b.id===sel)).join("")}
 function openProfile(p){
-  editP=p;$("pTitle").textContent=p?"Edit profile":"New profile";$("pDel").hidden=!p;
+  editP=p;$("pTitle").textContent=p?"Edit profile":"New profile";$("pDel").hidden=!p;$("pExport").hidden=!p;
   const P=D.pickers,x=p||{sight_height_mm:50,zero_range_m:100,twist_dir:"R"};
   $("fGun").innerHTML=opt("","– none –")+P.guns.filter(g=>!g.archived||g.id===x.gun_id).map(g=>opt(g.id,g.name+(g.cal?" · "+g.cal:""),g.id===x.gun_id)).join("");
   $("fLoad").innerHTML=opt("","– none –")+P.loads.filter(l=>!l.archived||l.id===x.load_id).map(l=>opt(l.id,l.name,l.id===x.load_id)).join("");
