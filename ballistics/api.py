@@ -67,7 +67,8 @@ DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000, "by_pr
 PROFILE_COLUMNS = {             # added after phase 1: chrono window and the small corrections
     "mv_strings": "INTEGER", "spin_drift": "INTEGER NOT NULL DEFAULT 0", "coriolis": "INTEGER NOT NULL DEFAULT 0",
     "aero_jump": "INTEGER NOT NULL DEFAULT 0", "azimuth_deg": "REAL",
-    "spin_scale": "REAL"}       # spin drift × this (Litz's formula reads high for subsonic .22 LR); empty = 1
+    "spin_scale": "REAL",
+    "sight": "TEXT"}            # iron sights (JSON, see _sight); empty = the linked scope       # spin drift × this (Litz's formula reads high for subsonic .22 LR); empty = 1
 
 
 OBS_COLUMNS = {"powder_c": "REAL", "wind_ms": "REAL", "wind_clock": "REAL", "updated": "TEXT"}
@@ -230,6 +231,46 @@ def _json_wind(v, name):
     return json.dumps(w) if w else None
 
 
+def _sight(v, name):
+    """Iron sights instead of a scope (JSON):
+      {"type": "diopter", "name", "unit": MOA|MRAD, "elev_click", "wind_click", "radius_mm", "post_mm", "aperture_mm"}
+        – an aperture rear sight with click adjustments (AR-15 A2 style): clicks up/down and left/right.
+      {"type": "notch", "name", "marks": [{"label", "range_m"}], "radius_mm", "post_mm", "notch_mm"}
+        – a range-marked notch rear sight (M39 tangent leaf style): the nearest setting and a hold in cm.
+        Each mark is "true at" its range for this load (by default the range on the leaf); moving a mark's range
+        is how the leaf is calibrated to dope.
+    radius_mm (sight radius) and post_mm (front post width) size the sight picture and the post-width holds."""
+    if v in (None, "", {}):
+        return None
+    if isinstance(v, str):
+        try:
+            v = json.loads(v)
+        except ValueError:
+            raise ValueError(f"bad_{name}")
+    if not isinstance(v, dict) or v.get("type") not in ("diopter", "notch"):
+        raise ValueError(f"bad_{name}")
+    num = lambda k, lo, hi, req=False: _num(lo, hi, req)(v.get(k), f"{name}_{k}")  # noqa: E731
+    out = {"type": v["type"], "name": _text(60)(v.get("name"), f"{name}_name") or None,
+           "radius_mm": num("radius_mm", 50, 1500), "post_mm": num("post_mm", 0.2, 8)}
+    if v["type"] == "diopter":
+        out.update(unit=_choice(("MOA", "MRAD"), "MOA")(v.get("unit"), f"{name}_unit"),
+                   elev_click=num("elev_click", 0.01, 10, True), wind_click=num("wind_click", 0.01, 10, True),
+                   aperture_mm=num("aperture_mm", 0.3, 10))
+    else:
+        marks = v.get("marks")
+        if not isinstance(marks, list) or not 1 <= len(marks) <= 40:
+            raise ValueError(f"bad_{name}_marks")
+        clean_marks = []
+        for m in marks:
+            if not isinstance(m, dict):
+                raise ValueError(f"bad_{name}_marks")
+            label = _text(8, True)(m.get("label"), f"{name}_mark_label")
+            clean_marks.append({"label": label, "range_m": _num(10, 3000, True)(m.get("range_m"), f"{name}_mark_range")})
+        clean_marks.sort(key=lambda m: m["range_m"])
+        out.update(marks=clean_marks, notch_mm=num("notch_mm", 0.3, 10))
+    return json.dumps({k: x for k, x in out.items() if x is not None})
+
+
 BULLET = {
     "name": _text(80, True), "maker": _text(40), "diameter_mm": _num(2, 20, True), "length_mm": _num(3, 80),
     "weight_gr": _num(10, 1000, True), "drag_model": _choice(DRAG_MODELS, "G7"), "bc": _num(0.05, 1.5),
@@ -244,7 +285,7 @@ PROFILE = {
     "notes": _text(2000), "ord": _int(0, 100000), "archived": _flag,
     "mv_source": _choice(("manual", "chrono"), "manual"), "temp_sens_source": _choice(("manual", "chrono"), "manual"),
     "mv_strings": _int(1, 50), "spin_drift": _flag, "coriolis": _flag, "aero_jump": _flag,
-    "azimuth_deg": _num(0, 360), "reticle_id": _ref, "spin_scale": _num(0, 3),
+    "azimuth_deg": _num(0, 360), "reticle_id": _ref, "spin_scale": _num(0, 3), "sight": _sight,
 }
 MATCH = {"name": _text(80, True), "date": _date, "visit_id": _ref, "notes": _text(2000), "archived": _flag}
 STAGE = {
@@ -375,7 +416,7 @@ def resolve_inputs(profile, bullets, picks, conn=None):
         warn.append("no_velocity")
     elif mv is not None and "no_velocity" in warn:
         warn.remove("no_velocity")
-    return {
+    out = {
         "bullet": b and {"model": b["drag_model"], "bc": b["bc"], "bands": b["bc_bands"],
                          "diameterMm": b["diameter_mm"], "lengthMm": b["length_mm"], "weightGr": b["weight_gr"],
                          "name": b["name"]},
@@ -394,9 +435,18 @@ def resolve_inputs(profile, bullets, picks, conn=None):
                             "windTurn": scope["wind_turn"]},
         "zero": zero and {"name": zero["name"], "distanceM": zero["distance_m"], "elev": zero["elev"] or 0,
                           "wind": zero["wind"] or 0},
+        "sight": None,
         "gun": gun and gun["name"], "load": load and load["short"],
         "warnings": warn,
     }
+    sight = json.loads(profile["sight"]) if profile.get("sight") else None
+    if sight:                  # iron sights replace the scope: clicks (diopter) or settings + holds (notch)
+        out["sight"] = sight
+        out["zero"] = None
+        out["scope"] = {"name": sight.get("name") or ("Diopter sight" if sight["type"] == "diopter" else "Notch sight"),
+                        "unit": sight.get("unit", "MRAD"), "click": sight.get("elev_click", 0.01),
+                        "windClick": sight.get("wind_click"), "iron": sight["type"]}
+    return out
 
 
 def settings(conn):

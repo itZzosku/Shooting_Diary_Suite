@@ -299,3 +299,23 @@ def test_stage_target_shapes(client):
     assert got == [None, "circle", "sra2024"]
     bad = dict(st, targets=[{"range_m": 300, "shape": "<svg>"}])
     assert client.put("/diary/api/ballistics/stages/st-s", json=bad).status_code == 400
+
+
+def test_iron_sights(client):
+    base = {"name": "AR irons", "sight_height_mm": 65, "zero_range_m": 50}
+    dio = {"type": "diopter", "name": "A2 rear", "unit": "MOA", "elev_click": 1.4, "wind_click": 0.7,
+           "radius_mm": 368, "post_mm": 1.8}
+    assert client.put("/diary/api/ballistics/profiles/p-ir", json=dict(base, sight=dio)).status_code == 200
+    i = next(p for p in _all(client)["profiles"] if p["id"] == "p-ir")["inputs"]
+    assert i["sight"]["type"] == "diopter" and i["scope"] == {"name": "A2 rear", "unit": "MOA", "click": 1.4,
+                                                              "windClick": 0.7, "iron": "diopter"}
+    notch = {"type": "notch", "name": "M39 leaf", "radius_mm": 600, "post_mm": 2,
+             "marks": [{"label": "2", "range_m": 200}, {"label": "1", "range_m": 100}]}
+    assert client.put("/diary/api/ballistics/profiles/p-ir", json=dict(base, sight=notch)).status_code == 200
+    i = next(p for p in _all(client)["profiles"] if p["id"] == "p-ir")["inputs"]
+    assert [m["label"] for m in i["sight"]["marks"]] == ["1", "2"] and i["scope"]["iron"] == "notch"
+    for bad in ({"type": "laser"}, {"type": "diopter", "elev_click": 1}, {"type": "notch", "marks": []},
+                {"type": "notch", "marks": [{"label": "1", "range_m": 5}]}, "not json"):
+        assert client.put("/diary/api/ballistics/profiles/p-ir", json=dict(base, sight=bad)).status_code == 400, bad
+    assert client.put("/diary/api/ballistics/profiles/p-ir", json=dict(base, sight=None)).status_code == 200
+    assert next(p for p in _all(client)["profiles"] if p["id"] == "p-ir")["inputs"]["sight"] is None

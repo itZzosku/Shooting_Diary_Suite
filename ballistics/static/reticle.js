@@ -174,7 +174,7 @@
   /** SVG markup. opts: {half (view half-width in true reticle units), cx, cy (view centre, default 0,0),
       px (one screen pixel in true units; default half/160), k (SFP factor), ink, accent, bg,
       scope: {r, fill, outside} (round field of view: fill inside, outside colour around it),
-      holds: [{x, y, label, main}] in true reticle units (x right, y down),
+      holds: [{x, y, label, main, ring}] in true reticle units (x right, y down; ring: an open circle),
       targets: [{x, y, parts} | {x, y, w, h}] (see below; drawn under the reticle),
       texts: [{x, y, text, color, size (screen px), anchor, weight, halo (outline colour)}], lines: [{x1, y1, x2, y2, color, width (screen px)}],
       image: {href, transform, opacity}, extra (raw svg)} */
@@ -229,7 +229,8 @@
     for (const p of o.holds || []) {
       const lim = h * 0.94, off = Math.abs(p.x - cx) > h || Math.abs(p.y - cy) > h;
       const x = Math.max(cx - lim, Math.min(cx + lim, p.x)), y = Math.max(cy - lim, Math.min(cy + lim, p.y));
-      parts.push(`<circle cx="${x}" cy="${y}" r="${px * (p.main ? 5 : 4)}" fill="${o.accent}" stroke="${o.bg === "none" ? "#fff" : o.bg}" stroke-width="${px * 1.2}"/>`);
+      if (p.ring) parts.push(`<circle cx="${x}" cy="${y}" r="${px * 6}" fill="none" stroke="${o.accent}" stroke-width="${px * 1.6}"/>`);   // shows what is under it
+      else parts.push(`<circle cx="${x}" cy="${y}" r="${px * (p.main ? 5 : 4)}" fill="${o.accent}" stroke="${o.bg === "none" ? "#fff" : o.bg}" stroke-width="${px * 1.2}"/>`);
       if (p.label) parts.push(`<text x="${x + px * 8}" y="${y - px * 6}" font-size="${px * 13}" fill="${o.accent}" font-weight="700" font-family="IBM Plex Sans, sans-serif">${esc(p.label)}${off ? " ⇢" : ""}</text>`);
     }
     if (o.extra) parts.push(o.extra);

@@ -256,6 +256,7 @@ header.top{padding-top:6px!important}
 .tbl input[type=checkbox]{width:20px;height:20px;margin:0}
 .otbl tr[data-oedit]{cursor:pointer}
 .otbl td small{display:block;font-family:var(--f-body);font-size:.72rem;color:var(--muted)}
+.ironbox{display:flex;flex-direction:column;gap:10px;padding:10px 0 4px;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
 .spinrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5rem;gap:10px;align-items:center;min-height:3.2rem}
 .stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
 .stage-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
@@ -525,7 +526,17 @@ details summary{cursor:pointer;list-style:revert}
     <div class="sheet-bar"><h2 id="pTitle">Profile</h2><button class="ghost" type="button" data-close>Close</button></div>
     <label class="f">Name<input type="text" id="fName" required placeholder="e.g. T3x 6.5 CM match"></label>
     <div class="grid2"><label class="f">Gun<select id="fGun"></select></label><label class="f">Load<select id="fLoad"></select></label></div>
-    <div class="grid2"><label class="f">Scope<select id="fScope"></select></label><label class="f">Scope zero<select id="fZero"></select></label></div>
+    <label class="f">Sight<select id="fSightType"><option value="">Scope</option><option value="diopter">Iron sights – diopter with clicks (AR-15 style)</option><option value="notch">Iron sights – notch with a range leaf (M39 style)</option></select></label>
+    <div class="grid2" id="fScopeRow"><label class="f">Scope<select id="fScope"></select></label><label class="f">Scope zero<select id="fZero"></select></label></div>
+    <div class="ironbox" id="fIron" hidden>
+      <div class="chips" id="fIrPre"></div>
+      <div class="grid2"><label class="f">Sight name<input type="text" id="fIrName" placeholder="e.g. A2 rear"></label>
+        <label class="f" data-dio>Click unit<select id="fIrUnit"><option value="MOA">MOA</option><option value="MRAD">mil</option></select></label></div>
+      <div class="grid2" data-dio><label class="f">Elevation click<input type="text" inputmode="decimal" id="fIrE"></label><label class="f">Windage click<input type="text" inputmode="decimal" id="fIrW"></label></div>
+      <label class="f" data-notch>Leaf marks (setting = range m)<input type="text" id="fIrMarks" placeholder="1=100, 2=200, 3=300"></label>
+      <div class="grid2"><label class="f">Sight radius mm<input type="text" inputmode="decimal" id="fIrRad"></label><label class="f">Front post width mm<input type="text" inputmode="decimal" id="fIrPost"></label></div>
+      <p class="hint" style="margin:0" id="fIrHint"></p>
+    </div>
     <div class="prow"><label class="f">Bullet<select id="fBullet"></select></label><button class="ghost" type="button" id="fBulEdit">Edit</button><button class="ghost" type="button" id="fBulNew">New</button></div>
     <div class="g3"><label class="f">Sight height mm<input type="text" inputmode="decimal" id="fSight" required placeholder="50"></label>
       <label class="f">Twist mm / turn<input type="text" inputmode="decimal" id="fTwist" placeholder="203"></label>
@@ -540,7 +551,7 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f">m/s per °C<input type="text" inputmode="decimal" id="fTs" placeholder="none"></label></div>
     <p class="hint" style="margin:0" id="fMvHint">Typed-in values are also the fallback when the chrono has no strings for this gun and load.</p>
     <h2 style="font-size:1.05rem">Reticle and corrections</h2>
-    <label class="f">Reticle<select id="fRet"></select></label>
+    <label class="f" id="fRetL">Reticle<select id="fRet"></select></label>
     <div class="spinrow"><label class="check"><input type="checkbox" id="fSpin">Spin drift</label>
       <label class="f" id="fSpinSL">Spin drift ×<input type="text" inputmode="decimal" id="fSpinS" placeholder="1"></label></div>
     <p class="hint" style="margin:0">Spin drift needs the twist and the bullet's length.<span id="fSpinH"> The formula is made for supersonic bullets and reads high for .22 LR: × about 0.6 matches Strelok. Empty = 1.</span></p>
@@ -719,7 +730,11 @@ const num=v=>{v=parseFloat(String(v??"").replace(",",".").trim());return isFinit
 const B=window.Ballistics;
 const CACHE="bal-cache",OUTBOX="bal-outbox",RECENT="bal-recent",COND="bal-cond:",UI="bal-ui";
 const ls={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const ERR={bad_spin_scale:"Spin drift × must be 0–3.",date_required:"Pick the date.",range_m_required:"Type the range.",bad_range_m:"Range must be 10–3000 m.",
+const ERR={sight_elev_click_required:"Type the elevation click (e.g. 1.4).",sight_wind_click_required:"Type the windage click (e.g. 0.7).",
+  sight_mark_label_required:"Each leaf mark needs a setting, e.g. 3=300.",sight_mark_range_required:"Each leaf mark needs a range, e.g. 3=300.",
+  bad_sight:"Check the sight.",bad_sight_elev_click:"Type the elevation click (e.g. 1.4).",bad_sight_wind_click:"Type the windage click (e.g. 0.7).",
+  bad_sight_marks:"Type the leaf marks as setting=range, e.g. 1=100, 2=200.",bad_sight_mark_label:"Each leaf mark needs a setting, e.g. 3=300.",
+  bad_sight_mark_range:"Each leaf mark needs a range of 10–3000 m, e.g. 3=300.",bad_sight_radius_mm:"Sight radius must be 50–1500 mm.",bad_sight_post_mm:"Front post width must be 0.2–8 mm.",bad_spin_scale:"Spin drift × must be 0–3.",date_required:"Pick the date.",range_m_required:"Type the range.",bad_range_m:"Range must be 10–3000 m.",
   elev_required:"Type the elevation that hit.",bad_elev:"Elevation must be a number (−30 … 200).",bad_profile_id:"Save the profile first.",
   bad_temp_c:"Temperature must be −40 … 60 °C.",bad_hpa:"Pressure must be 500–1100 hPa.",bad_powder_c:"Powder temperature must be −40 … 70 °C.",
   bad_angle_deg:"Angle must be −60 … 60°.",name_required:"Give it a name.",bad_sight_height_mm:"Sight height must be 10–150 mm.",sight_height_mm_required:"Sight height is needed.",
@@ -812,6 +827,40 @@ function solverInput(p,c,extra){
 }
 const clean=o=>{const r={};for(const k in o||{})if(o[k]!=null)r[k]=o[k];return r};
 function ready(p){return p&&p.inputs&&p.inputs.bullet&&p.inputs.mv}
+// ------------------------------------------------------------ iron sights
+// A profile's sight (inputs.sight) replaces the scope: a diopter clicks like a scope (its own elevation and
+// windage clicks); a notch sight has range-marked settings, each "true at" its range for this load in the zero
+// conditions, and the rest is a hold in cm on the target.
+const ironOf=p=>p&&p.inputs&&p.inputs.sight||null;
+const isNotch=p=>{const g=ironOf(p);return!!(g&&g.type==="notch")};
+/** Front post width in mil (post width / sight radius) – the unit irons hold wind in */
+function postMil(g){return((g&&g.post_mm)||(g&&g.type==="diopter"?1.8:2))/((g&&g.radius_mm)||(g&&g.type==="diopter"?368:600))*1000}
+const MARKS=new Map();
+/** The notch sight's marks with the angle each gives (mil from the zero): this load's elevation at the mark's
+    range in the zero conditions, no wind. Cached per profile state. */
+function notchMarks(p){
+  const g=ironOf(p),i=p.inputs,key=JSON.stringify([p.id,g.marks,i.mv,i.mvScale,i.dragScale,i.zeroRangeM,i.sightHeightMm,i.bullet,i.zeroAtmo]);
+  if(MARKS.has(key))return MARKS.get(key);
+  const za=clean(i.zeroAtmo||{});let rows=[];
+  try{rows=B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
+    {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),g.marks.map(m=>m.range_m)).rows}catch(e){}
+  const out=g.marks.map((m,k)=>({label:m.label,range:m.range_m,mil:rows[k]&&rows[k].reached?rows[k].elevMrad:null})).filter(m=>m.mil!=null);
+  MARKS.set(key,out);return out;
+}
+/** For a solved row: the nearest notch setting and the hold left over, plus the setting on the other side.
+    {label, holdMil, holdCm, alt: {label, holdCm} | null}; null without marks */
+function notchFor(p,r){
+  const ms=notchMarks(p);if(!ms.length||!r||!r.reached)return null;
+  const cm=mil=>mil*r.range/10;
+  const opts=ms.map(m=>({label:m.label,holdMil:r.elevMrad-m.mil})).sort((a,b)=>Math.abs(a.holdMil)-Math.abs(b.holdMil));
+  const best=opts[0],other=opts.find(o=>Math.sign(o.holdMil)!==Math.sign(best.holdMil)&&o!==best);
+  return{label:best.label,holdMil:best.holdMil,holdCm:cm(best.holdMil),alt:other&&Math.abs(cm(best.holdMil))>=1?{label:other.label,holdCm:cm(other.holdMil)}:null};
+}
+const aimCm=cm=>Math.abs(cm)<1?"centre":`aim ${Math.round(Math.abs(cm))} cm ${cm>0?"high":"low"}`;
+const sideCm=cm=>Math.abs(cm)<1?"0":`${Math.round(Math.abs(cm))} cm ${cm<0?"L":"R"}`;
+/** The scope for windage: a diopter's own windage click */
+const windScope=s=>s&&s.windClick?Object.assign({},s,{click:s.windClick}):s;
+
 /** One hold, in the scope's unit, rounded to clicks: {val, clicks, txt} */
 function fmtHold(mrad,scope,pos,neg){
   const u=scope.unit||"MRAD",h=B.toUnit(mrad,u),d=B.dial(h,{click:scope.click||0.1}),dec=decs(scope.click||0.1);
@@ -840,9 +889,26 @@ function renderProfiles(){
   const corr=[i.spinDrift&&("spin drift"+(i.spinScale!=null&&+i.spinScale!==1?" ×"+(+i.spinScale):"")),i.aeroJump&&"aero jump",i.coriolis&&"Coriolis"].filter(Boolean);if(corr.length)parts.push(corr.join(", "));
   parts.push(`zero <b>${i.zeroRangeM} m</b>`);
   if((i.mvScale||1)!==1||(i.dragScale||1)!==1)parts.push(`trued: velocity ×${(i.mvScale||1).toFixed(3)}, drag ×${(i.dragScale||1).toFixed(3)}`);
-  if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
+  const g=i.sight;
+  if(g&&g.type==="diopter")parts.push(`${esc(s.name)} · diopter ${+g.elev_click}/${+g.wind_click} ${g.unit==="MOA"?"MOA":"mil"} clicks`);
+  else if(g)parts.push(`${esc(s.name)} · notch ${esc(g.marks.length>4?`${g.marks[0].label}–${g.marks[g.marks.length-1].label} (${g.marks[0].range_m}–${g.marks[g.marks.length-1].range_m} m)`:g.marks.map(m=>m.label+"="+m.range_m).join(" "))}`);
+  else if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
   else parts.push("no scope linked: 0.1 mil clicks");
   $("pInfo").innerHTML=parts.join(" · ");
+}
+/** The readout for a notch sight: the setting and the hold in cm; wind as a hold in cm and post widths */
+function renderNotchSolution(p,res,r,c){
+  const n=notchFor(p,r),pm=postMil(ironOf(p));
+  if(!n){$("oWarn").innerHTML="<div>The sight's marks aren't reached with this load – check the marks and the zero.</div>";return}
+  $("oE").innerHTML=`${esc(n.label)}<em>setting</em>`;
+  $("oEs").textContent=aimCm(n.holdCm)+(Math.abs(n.holdCm)>=1?` (${Math.abs(n.holdMil).toFixed(2)} mil)`:"")+(n.alt?`\nor setting ${n.alt.label}: ${aimCm(n.alt.holdCm)}`:"");
+  const wc=r.windMrad*r.range/10;
+  $("oW").innerHTML=Math.abs(wc)<1?`0<em>cm</em>`:`${Math.round(Math.abs(wc))}<em>cm ${wc<0?"L":"R"}</em>`;
+  const why=[c.ms&&"wind",p.inputs.spinDrift&&"spin drift",solverInput(p,c).coriolis&&"Coriolis"].filter(Boolean).join(" + ");
+  $("oWs").textContent=(Math.abs(wc)>=1?`aim ${wc<0?"left":"right"} · ${(Math.abs(r.windMrad)/pm).toFixed(2)} post widths${why?" · "+why:""}\n`:"")+`${(r.windPer1Mrad*r.range/10).toFixed(1)} cm per 1 m/s`;
+  $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
+    +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span><span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`;
+  $("oWarn").innerHTML="";
 }
 function renderSolution(){
   const p=prof(),c=cond();const R=num($("rIn").value);
@@ -856,7 +922,8 @@ function renderSolution(){
   try{res=B.solve(solverInput(p,c),[R])}catch(e){$("oWarn").innerHTML=`<div>Can't compute: ${esc(e.message==="zero_not_found"?"no zero found – check sight height, zero range and velocity":e.message)}</div>`;return}
   const r=res.rows[0],s=scopeOf(p),z=p.inputs.zero;
   if(!r.reached){$("oWarn").innerHTML="<div>The bullet doesn't reach that range.</div>";return}
-  const e=fmtHold(r.elevMrad,s,"UP","DOWN"),w=fmtHold(r.windMrad,s,"R","L");
+  if(isNotch(p)){renderNotchSolution(p,res,r,c);return}
+  const e=fmtHold(r.elevMrad,s,"UP","DOWN"),w=fmtHold(r.windMrad,windScope(s),"R","L");
   $("oE").innerHTML=`${e.val}<em>${e.unit}</em>`;
   const tu=turret(e.signed,z&&z.elev,s,s.elevTurn);
   let es=`${e.clicks} click${e.clicks===1?"":"s"} ${e.dir||""}`.trim();
@@ -897,10 +964,18 @@ function renderCard(){
   const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<300;x+=step)ranges.push(Math.round(x*10)/10);
   let res;try{res=B.solve(solverInput(p,c),ranges.filter(x=>x>0))}catch(e){$("cTable").innerHTML="";return}
   const s=scopeOf(p),R=num($("rIn").value),u=s.unit==="MOA"?"MOA":"mil";
+  if(isNotch(p)){
+    $("cTable").innerHTML=`<tr><th>m</th><th>Setting</th><th>Aim</th><th>Drop cm</th><th>Wind/1 m/s</th><th>m/s</th><th>TOF</th></tr>`+res.rows.map(r=>{
+      if(!r.reached)return`<tr><td>${r.range}</td><td colspan="6" class="dim">not reached</td></tr>`;
+      const n=notchFor(p,r),cls=[r.subsonic?"ss":r.transonic?"ts":"",r.range===R?"cur":""].join(" ").trim();
+      return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${n?esc(n.label):"–"}</td><td>${n?(Math.abs(n.holdCm)<1?"0":(n.holdCm>0?"↑":"↓")+Math.round(Math.abs(n.holdCm))+" cm"):"–"}</td><td>${dropCm(r)}</td><td>${(r.windPer1Mrad*r.range/10).toFixed(1)} cm</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
+    }).join("");
+    return;
+  }
   const head=`<tr><th>m</th><th>Elev ${u}</th><th>Clicks</th><th>Drop cm</th><th>Wind ${u}</th><th>/1 m/s</th><th>m/s</th><th>TOF</th></tr>`;
   $("cTable").innerHTML=head+res.rows.map(r=>{
     if(!r.reached)return`<tr><td>${r.range}</td><td colspan="7" class="dim">not reached</td></tr>`;
-    const e=fmtHold(r.elevMrad,s,"U","D"),w=fmtHold(r.windMrad,s,"R","L");
+    const e=fmtHold(r.elevMrad,s,"U","D"),w=fmtHold(r.windMrad,windScope(s),"R","L");
     const cls=[r.subsonic?"ss":r.transonic?"ts":"",r.range===R?"cur":""].join(" ").trim();
     return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${e.signed<0?"−":""}${e.val}</td><td>${e.clicks}${e.dir?" "+e.dir[0]:""}</td><td>${dropCm(r)}</td><td>${w.clicks?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
   }).join("");
@@ -924,6 +999,13 @@ function stageRows(stage,p){
   if(stage.dial_mode==="first_hold_rest")dialAt=0;
   if(stage.dial_mode==="one")dialAt=Math.min(stage.dial_target||0,rows.length-1);
   const click=s.click||0.1,dec=decs(click),rnd=v=>Math.round(v/click)*click;
+  if(isNotch(p))return rows.map(x=>{
+    if(!x.r||!x.r.reached)return Object.assign(x,{bad:true});
+    const n=notchFor(p,x.r);if(!n)return Object.assign(x,{bad:true});
+    const wcm=x.t.w_cm||(TARGET_PRESETS[x.t.shape]||{}).w;
+    return Object.assign(x,{notch:n,dial:0,hold:n.holdMil,change:null,wind:x.r.windMrad,dec:2,unit:"mil",
+      windCm:x.r.windMrad*x.t.range_m/10,wUnit:wcm?wcm/100/x.t.range_m*1000:null,per1:x.r.windPer1Mrad,per1Cm:x.r.windPer1Mrad*x.t.range_m/10});
+  });
   return rows.map((x,i)=>{
     if(elev[i]==null)return Object.assign(x,{bad:true});
     const dial=rnd(dialAt==null?elev[i]:(elev[dialAt]??0));
@@ -956,9 +1038,10 @@ function renderMatch(){
     const mode={each:"dial each",first_hold_rest:"dial first, hold rest",one:"dial one, hold rest"}[st.dial_mode]||"";
     let body=`<div class="hint">Set up a profile with a bullet and velocity to see the dope.</div>`;
     if(rows){
-      const u=rows.find(x=>!x.bad);const unit=u?u.unit:"mil";
-      body=`<div class="scroll"><table class="tbl"><tr><th>Target</th><th>m</th><th>Dial ${unit}</th><th>Hold</th><th>Wind</th><th>±1 m/s</th></tr>`+rows.map(x=>x.bad
+      const u=rows.find(x=>!x.bad);const unit=isNotch(p)?"":u?u.unit:"mil";
+      body=`<div class="scroll"><table class="tbl"><tr><th>Target</th><th>m</th><th>${isNotch(p)?"Sight":"Dial "+unit}</th><th>Hold</th><th>Wind</th><th>±1 m/s</th></tr>`+rows.map(x=>x.bad
         ?`<tr><td>${esc(x.t.label)}</td><td>${x.t.range_m}</td><td colspan="4" class="dim">–</td></tr>`
+        :x.notch?`<tr><td>${esc(x.t.label)}${tgtLabel(x.t)?`<span class="dim"> ${esc(tgtLabel(x.t))}</span>`:""}</td><td>${x.t.range_m}</td><td>set ${esc(x.notch.label)}</td><td>${Math.abs(x.notch.holdCm)<1?"–":(x.notch.holdCm>0?"↑":"↓")+Math.round(Math.abs(x.notch.holdCm))+" cm"}</td><td>${sideCm(x.windCm)}</td><td class="dim">${x.per1Cm.toFixed(1)} cm</td></tr>`
         :`<tr><td>${esc(x.t.label)}${tgtLabel(x.t)?`<span class="dim"> ${esc(tgtLabel(x.t))}</span>`:""}</td><td>${x.t.range_m}</td><td>${x.dial.toFixed(x.dec)}${x.change!=null?`<span class="dim"> ${sgn(x.change,x.dec)}</span>`:""}</td><td>${x.hold?ud(x.hold,x.dec):"–"}</td><td>${lr(x.wind,x.dec)}</td><td class="dim">${x.per1.toFixed(2)}</td></tr>`).join("")+`</table></div>`;
     }
     return`<div class="stage"><div class="stage-top"><b>${esc(st.name)}</b><span>${esc(mode)} · wind ${esc(w)}</span><button class="ghost" type="button" data-stage="${esc(st.id)}">Edit</button></div>${body}</div>`;
@@ -974,6 +1057,11 @@ function renderMM(){
   const w=st.wind||{ms:c.ms,clock:c.clock};
   $("mmSub").textContent=`${mmIdx+1}/${sts.length} · ${p?p.name:"no profile"} · wind ${w.ms} m/s from ${w.clock} · ${c.tempC??15} °C`;
   $("mmRows").innerHTML=rows.map(x=>x.bad?`<div class="mm-t"><span class="lab">${esc(x.t.label)}</span><span class="big">–</span><span class="sm">${x.t.range_m} m</span></div>`
+    :x.notch?`<div class="mm-t"><span class="lab">${esc(x.t.label)}</span>
+      <span class="big acc">${esc(x.notch.label)}<em>setting</em></span>
+      <span class="big">${sideCm(x.windCm)}<em>wind</em></span>
+      <span class="sm">${x.t.range_m} m · ${aimCm(x.notch.holdCm)}</span>
+      <span class="sm">±1 m/s ${x.per1Cm.toFixed(1)} cm${widths(x)}</span></div>`
     :`<div class="mm-t"><span class="lab">${esc(x.t.label)}</span>
       <span class="big ${x.hold?"":"acc"}">${x.hold?ud(x.hold,x.dec):x.dial.toFixed(x.dec)}<em>${x.hold?"hold":"dial"}</em></span>
       <span class="big">${lr(x.wind,x.dec)}<em>wind</em></span>
@@ -1317,7 +1405,9 @@ function openProfile(p){
   setv("fName",x.name);setv("fSight",x.sight_height_mm);setv("fTwist",x.twist_mm);$("fTwistDir").value=x.twist_dir||"R";
   setv("fMv",x.mv_ms);setv("fMvT",x.mv_temp_c);setv("fTs",x.temp_sens);setv("fZr",x.zero_range_m);
   $("fMvSrc").value=x.mv_source||"manual";$("fTsSrc").value=x.temp_sens_source||"manual";setv("fMvN",x.mv_strings);
-  $("fSpin").checked=!!x.spin_drift;setv("fSpinS",x.spin_scale);spinState();$("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
+  $("fSpin").checked=!!x.spin_drift;setv("fSpinS",x.spin_scale);spinState();
+  let g=null;try{g=x.sight?(typeof x.sight==="string"?JSON.parse(x.sight):x.sight):null}catch(e){}
+  $("fSightType").value=g?g.type:"";fillIron(g||{});sightState();$("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
   $("fRet").innerHTML=opt("","– none –")+(D.reticles||[]).filter(r=>!r.archived||r.id===x.reticle_id).map(r=>opt(r.id,`${r.maker?r.maker+" ":""}${r.name} · ${r.focal_plane} ${r.unit==="MOA"?"MOA":"mil"}`,r.id===x.reticle_id)).join("");
   chronoHint(p);
   setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
@@ -1339,6 +1429,35 @@ $("fZero").addEventListener("change",()=>{       // a scope zero knows its rifle
   const sc=D.pickers.scopes.find(s=>s.id===$("fScope").value),z=sc&&sc.zeros.find(z=>z.id===$("fZero").value);
   if(!z)return;if(z.distance_m)$("fZr").value=z.distance_m;if(z.gun_id&&!$("fGun").value)$("fGun").value=z.gun_id;if(z.load_id&&!$("fLoad").value)$("fLoad").value=z.load_id;
 });
+// Iron sight presets: typical values to start from – measure your own sight radius and post.
+const IRON_PRESETS={
+  diopter:[["AR-15 A2, carbine (14.5\" radius)",{name:"A2 rear",unit:"MOA",elev_click:1.4,wind_click:0.7,radius_mm:368,post_mm:1.8}],
+           ["AR-15 A2, rifle (19.75\" radius)",{name:"A2 rear",unit:"MOA",elev_click:1,wind_click:0.5,radius_mm:502,post_mm:1.8}]],
+  notch:[["M39 leaf 1–20",{name:"M39 leaf",marks:Array.from({length:20},(_,k)=>({label:String(k+1),range_m:(k+1)*100})),radius_mm:620,post_mm:2}]],
+};
+const marksText=ms=>(ms||[]).map(m=>`${m.label}=${m.range_m}`).join(", ");
+function parseMarks(t){return String(t||"").split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean).map(x=>{const [a,b]=x.split(/\s*[=:]\s*/);return{label:(a||"").trim(),range_m:num(b)}})}
+function fillIron(g){
+  setv("fIrName",g.name);$("fIrUnit").value=g.unit||"MOA";setv("fIrE",g.elev_click);setv("fIrW",g.wind_click);
+  setv("fIrMarks",marksText(g.marks));setv("fIrRad",g.radius_mm);setv("fIrPost",g.post_mm);
+}
+function sightState(){
+  const t=$("fSightType").value;
+  $("fIron").hidden=!t;$("fScopeRow").hidden=$("fRetL").hidden=!!t;
+  $("fIron").querySelectorAll("[data-dio]").forEach(e=>e.hidden=t!=="diopter");$("fIron").querySelectorAll("[data-notch]").forEach(e=>e.hidden=t!=="notch");
+  $("fIrPre").innerHTML=(IRON_PRESETS[t]||[]).map(([n],k)=>`<button type="button" class="chip" data-irpre="${k}">${esc(n)}</button>`).join("");
+  $("fIrHint").textContent=t==="diopter"?"Clicks up/down and left/right from the zero, like a scope. Set the sight height to the sight line over the bore (about 65 mm on an AR-15)."
+    :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. If a setting shoots high or low, change its range here (e.g. 3=320). Wind is a hold in cm and post widths.":"";
+}
+$("fSightType").addEventListener("change",sightState);
+$("fIrPre").addEventListener("click",e=>{const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(pr)fillIron(pr[1])});
+function readIron(){
+  const t=$("fSightType").value;if(!t)return null;
+  const g={type:t,name:$("fIrName").value.trim()||null,radius_mm:num($("fIrRad").value),post_mm:num($("fIrPost").value)};
+  if(t==="diopter")Object.assign(g,{unit:$("fIrUnit").value,elev_click:num($("fIrE").value),wind_click:num($("fIrW").value)});
+  else g.marks=parseMarks($("fIrMarks").value);
+  return g;
+}
 function spinState(){const on=$("fSpin").checked;$("fSpinSL").hidden=$("fSpinH").hidden=!on}
 $("fSpin").addEventListener("change",spinState);
 $("pEdit").addEventListener("click",()=>openProfile(prof()));
@@ -1350,7 +1469,7 @@ $("pForm").addEventListener("submit",async e=>{
     mv_ms:num($("fMv").value),mv_temp_c:num($("fMvT").value),temp_sens:num($("fTs").value),zero_range_m:num($("fZr").value),
     zero_temp_c:num($("fZt").value),zero_hpa:num($("fZp").value),zero_rh:num($("fZh").value),archived:$("fArch").checked,
     mv_source:$("fMvSrc").value,temp_sens_source:$("fTsSrc").value,mv_strings:num($("fMvN").value),
-    spin_drift:$("fSpin").checked,spin_scale:num($("fSpinS").value),aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
+    spin_drift:$("fSpin").checked,spin_scale:num($("fSpinS").value),sight:readIron(),aero_jump:$("fAj").checked,coriolis:$("fCor").checked,reticle_id:$("fRet").value||null,
     latitude:editP?editP.latitude:null,azimuth_deg:editP?editP.azimuth_deg:null,
     ord:editP?editP.ord:D.profiles.length,mv_scale:editP?editP.mv_scale:1,drag_scale:editP?editP.drag_scale:1};
   const id=editP?editP.id:newId(body.name,"p-");
@@ -1470,7 +1589,34 @@ document.addEventListener("visibilitychange",async()=>{if(document.visibilitySta
 
 // ------------------------------------------------------------ reticle view (tab + full screen, pinch to zoom)
 const RT=window.Reticle;
-const retOf=p=>p&&p.inputs&&p.inputs.reticleId?(D.reticles||[]).find(r=>r.id===p.inputs.reticleId)||null:null;
+const retOf=p=>ironOf(p)?ironRet(p):p&&p.inputs&&p.inputs.reticleId?(D.reticles||[]).find(r=>r.id===p.inputs.reticleId)||null:null;
+/** The sight picture of an iron sight as a reticle, in mil, the front post's tip at the centre (where the
+    aim goes): drawn to scale from the post width and the sight radius. Diopter: the rear aperture is the view's
+    round field (black outside), the A2-style post with its protective ears below. Notch: the rear leaf's bar
+    with its U notch level with the post's tip, the post in it. */
+function ironRet(p){
+  const g=ironOf(p),P=postMil(g),els=[],rect=(x,y,w,h)=>els.push({t:"rect",x,y,width:w,height:h}),
+    poly=pts=>els.push({t:"poly",closed:true,points:pts});
+  let field;
+  if(g.type==="diopter"){
+    field=6*P;                                  // the aperture: a few post widths across, as it looks at the eye
+    rect(-P/2,0,P,field*2);                     // the post
+    for(const sg of[-1,1]){                     // the ears either side
+      poly([[sg*2.6*P,-0.4*P],[sg*3.4*P,-0.4*P],[sg*3.6*P,field*2],[sg*2.6*P,field*2]]);
+    }
+    poly([[-2.6*P,3.5*P],[2.6*P,3.5*P],[2.6*P,field*2],[-2.6*P,field*2]]);   // the sight base between the ears
+    els.push({t:"circle",x:0,y:0,r:field*0.985,w:field*0.06});               // the aperture's soft edge
+  }else{
+    field=9*P;
+    const N=((g.notch_mm&&g.post_mm)?g.notch_mm/g.post_mm:2.2)*P,D=1.6*P;   // notch width and depth
+    rect(-P/2,0,P,field*2);                     // the front post, tip level with the notch's shoulders
+    for(const sg of[-1,1])rect(sg>0?2.8*P:-3.4*P,-0.6*P,0.6*P,field*2);       // the front sight's ears
+    const arc=[];for(let k=0;k<=12;k++){const a=Math.PI*k/12;arc.push([-N/2*Math.cos(a),D-N/2+N/2*Math.sin(a)])}
+    poly([[-field*2,0],[-N/2,0],...arc.map(([x,y])=>[x,Math.max(0,y)]),[N/2,0],[field*2,0],[field*2,field*2],[-field*2,field*2]]);
+  }
+  return{id:"iron-"+p.id,rev:JSON.stringify(g).length+":"+P.toFixed(3),name:g.name||(g.type==="diopter"?"Diopter sight":"Notch sight"),maker:"",
+    unit:"MRAD",focal_plane:"FFP",spec:{field},elements:els,iron:g.type,post:P};
+}
 const toRet=(v,fromUnit,ret)=>RT.convert(v,fromUnit==="MOA"?"MOA":"MRAD",ret.unit);
 const fieldOf=ret=>(ret&&ret.spec&&ret.spec.field)||(ret&&ret.unit==="MOA"?30:10);
 const VZ={user:false,cx:0,cy:0,half:10};              // the tab's view
@@ -1486,13 +1632,23 @@ function retScene(p,ret){
     const R=num($("rIn").value);let r=null;
     try{r=R>0?B.solve(solverInput(p,c),[R]).rows[0]:null}catch(e){}
     out.R=R;out.wind={ms:c.ms,clock:c.clock};out.angle=c.angle;
-    if(r&&r.reached){
+    if(r&&r.reached&&ret.iron==="notch"){
+      const n=notchFor(p,r);
+      if(n){
+        const y=n.holdMil,x=-r.windMrad;
+        out.holds.push({x,y,main:true,ring:true});
+        const tg=targetShape(R,ret);if(tg)out.targets.push(Object.assign(tg.shape,{x,y}));
+        out.info.push(`Setting ${n.label}: put the post's tip on the dot – ${aimCm(n.holdCm)}, wind ${sideCm(r.windMrad*R/10)} (${(Math.abs(r.windMrad)/ret.post).toFixed(2)} post widths).`);
+        if(tg)out.info.push(tg.info);
+      }
+    }else if(r&&r.reached){
       const e=B.toUnit(r.elevMrad,s.unit),w=B.toUnit(r.windMrad,s.unit),click=s.click||0.1;
       out.dialled=$("vDial").checked?Math.round(e/click)*click:0;
       const y=toRet(e-out.dialled,s.unit,ret),x=-toRet(w,s.unit,ret);
-      out.holds.push({x,y,main:true});                 // the range is on the readout; a tag would cover marks
+      out.holds.push({x,y,main:true,ring:!!ret.iron});  // the range is on the readout; a tag would cover marks
       const tg=targetShape(R,ret);if(tg)out.targets.push(Object.assign(tg.shape,{x,y}));
-      out.info.push(`Put the target on the dot: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
+      out.info.push(ret.iron?`${out.dialled?(n=>`Dialled ${n} click${n===1?"":"s"} ${out.dialled>0?"up":"down"}; `)(Math.abs(Math.round(out.dialled/click))):""}put the post's tip on the dot: ${Math.abs(y*R/10)<1?"centre":aimCm(y*R/10)}, wind ${sideCm(-x*R/10)} (${(Math.abs(x)/ret.post).toFixed(2)} post widths).`
+        :`Put the target on the dot: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
       if(tg)out.info.push(tg.info);
     }
   }else{
@@ -1501,7 +1657,7 @@ function retScene(p,ret){
     for(const x of rows){
       if(x.bad)continue;
       const y=toRet(x.hold,s.unit,ret),xx=-toRet(x.wind,s.unit,ret);
-      out.holds.push({x:xx,y,label:x.t.label});
+      out.holds.push({x:xx,y,label:x.t.label,ring:!!ret.iron});
       const tg=targetShape(x.t.range_m,ret,{kind:x.t.shape||"rect",d:x.t.w_cm,w:x.t.w_cm,h:x.t.h_cm||x.t.w_cm});
       if(tg)out.targets.push(Object.assign(tg.shape,{x:xx,y,range:x.t.range_m}));
     }
@@ -1574,8 +1730,8 @@ function viewSvg(box,Z,full){
   const sc=retScene(p,ret),k=RT.sfpFactor(ret,num($("vMag").value)),field=fieldOf(ret);
   const W=box.clientWidth||320,pxPer=W/(2*Z.half);
   const night=full&&RV.night;
-  const marks=ready(p)?rangeMarks(p,ret,sc.dialled,k,pxPer,night?"#0b0d0b":"#fff"):[];
-  const size=full&&sc.mode==="shot"?sizeMarker(ret,sc.R,k):{lines:[],texts:[]};
+  const marks=ready(p)&&!ret.iron?rangeMarks(p,ret,sc.dialled,k,pxPer,night?"#0b0d0b":"#fff"):[];
+  const size=full&&sc.mode==="shot"&&!ret.iron?sizeMarker(ret,sc.R,k):{lines:[],texts:[]};
   const svg=RT.svg(retElements(ret),{half:Z.half,cx:Z.cx,cy:Z.cy,px:1/pxPer,k,holds:sc.holds,targets:sc.targets,
     texts:marks.concat(size.texts),lines:size.lines,accent:"#e2590f",ink:night?"#ff4a3a":"#111",
     scope:{r:field*1.04,fill:night?"#0b0d0b":"#fff",outside:"#000"}});
@@ -1615,10 +1771,15 @@ function renderReticle(){
   const info=v.sc.info.slice(),s=scopeOf(p),k=v.k;
   if(!ready(p))info.push("Add a bullet and velocity to the profile to see holds.");
   if(sfp&&Math.abs(k-1)>1e-6)info.push(`Second focal plane at ${num($("vMag").value)}×: the marks are drawn at their true size (×${k.toFixed(2)}); holds read off the marks only match at ${ret.design_mag}×.`);
-  if(ret.unit!==(s.unit==="MOA"?"MOA":"MRAD"))info.push(`The reticle is in ${ret.unit==="MOA"?"MOA":"mil"}, the turret in ${s.unit==="MOA"?"MOA":"mil"}: holds are converted.`);
+  if(!ret.iron&&ret.unit!==(s.unit==="MOA"?"MOA":"MRAD"))info.push(`The reticle is in ${ret.unit==="MOA"?"MOA":"mil"}, the turret in ${s.unit==="MOA"?"MOA":"mil"}: holds are converted.`);
   if(ret.archived)info.push("This reticle is archived in the library.");
+  if(ret.iron){
+    info.push(`Drawn to scale: the front post is ${ret.post.toFixed(1)} mil wide (${ironOf(p).post_mm||"?"} mm on a ${ironOf(p).radius_mm||"?"} mm sight radius). Pinch or scroll to zoom; double-tap resets.`);
+    $("vInfo").innerHTML=esc(`${ret.name} · ${ret.iron==="diopter"?"diopter":"notch"} sight`)+"<br>"+info.map(esc).join("<br>");
+  }else{
   info.push("Red numbers: the distance each mark is good for. Pinch or scroll to zoom; double-tap resets.");
   $("vInfo").innerHTML=esc(`${ret.maker?ret.maker+" ":""}${ret.name} · ${ret.focal_plane} · rev ${ret.rev}`)+"<br>"+info.map(esc).join("<br>");
+  }
   if(!$("rv").hidden)renderRV();
 }
 ["vMode","vDial","vMag","vZoom"].forEach(id=>$(id).addEventListener(id==="vMag"?"input":"change",()=>{if(id==="vZoom"||id==="vMode")VZ.user=false;renderReticle()}));
@@ -2016,8 +2177,10 @@ $("pdfDope").addEventListener("click",()=>withPdf($("pdfDope"),async()=>{
     doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(70);
     const cl=doc.splitTextToSize(PT(condLine(p,c)),colW);doc.text(cl,x0,M+24);doc.setTextColor(0);
     doc.autoTable({startY:M+26+cl.length*8,margin:{left:x0,right:W-x0-colW},tableWidth:colW,theme:"grid",
-      head:[["m",`Elev ${u}`,"Clicks","Drop cm",`Wind/1m/s`,"TOF"]],
-      body:rows.map(r=>{const e=fmtHold(r.elevMrad,s,"U","D");return[r.range,(e.signed<0?"-":"")+e.val,e.clicks+(e.dir?" "+e.dir:""),dropCm(r).replace("−","-"),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}),
+      head:isNotch(p)?[["m","Setting","Aim cm","Drop cm","Wind/1m/s cm","TOF"]]:[["m",`Elev ${u}`,"Clicks","Drop cm",`Wind/1m/s`,"TOF"]],
+      body:rows.map(r=>{
+        if(isNotch(p)){const n=notchFor(p,r);return[r.range,n?n.label:"-",n?(Math.abs(n.holdCm)<1?"0":(n.holdCm>0?"+":"-")+Math.round(Math.abs(n.holdCm))):"-",dropCm(r).replace("−","-"),(r.windPer1Mrad*r.range/10).toFixed(1),r.tof.toFixed(2)]}
+        const e=fmtHold(r.elevMrad,s,"U","D");return[r.range,(e.signed<0?"-":"")+e.val,e.clicks+(e.dir?" "+e.dir:""),dropCm(r).replace("−","-"),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}),
       styles:{font:"helvetica",fontSize:fs,cellPadding:2,halign:"right",lineColor:[170,170,170],lineWidth:.3},headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
       columnStyles:{0:{halign:"left",fontStyle:"bold"},1:{fontStyle:"bold"}},
       didParseCell:d=>{if(d.section==="body"){const r=rows[d.row.index];if(r.subsonic)d.cell.styles.textColor=120;else if(r.transonic)d.cell.styles.fillColor=[251,227,212]}}});
