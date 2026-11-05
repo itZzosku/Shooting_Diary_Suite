@@ -327,29 +327,33 @@ def test_notch_zero_check(client):
     ok = {"type": "notch", "marks": marks, "check": {"setting": "1", "range_m": 100, "cm": 15}}
     assert client.put("/diary/api/ballistics/profiles/p-ck", json=dict(base, sight=ok)).status_code == 200
     g = next(p for p in _all(client)["profiles"] if p["id"] == "p-ck")["inputs"]["sight"]
-    assert g["check"] == {"setting": "1", "range_m": 100, "cm": 15}
+    assert g["checks"] == [{"setting": "1", "range_m": 100, "cm": 15}], "the old single check becomes a list"
     bad = dict(ok, check={"setting": "7", "range_m": 100, "cm": 15})
     assert client.put("/diary/api/ballistics/profiles/p-ck", json=dict(base, sight=bad)).get_json()["error"] == "bad_sight_check_setting"
+    two = dict(ok, check=None, checks=[{"setting": "2", "range_m": 300, "cm": -5}, {"setting": "1", "range_m": 100, "cm": 15}])
+    assert client.put("/diary/api/ballistics/profiles/p-ck", json=dict(base, sight=two)).status_code == 200
+    g = next(p for p in _all(client)["profiles"] if p["id"] == "p-ck")["inputs"]["sight"]
+    assert [c["range_m"] for c in g["checks"]] == [100, 300]
 
 
 def test_saved_sights(client):
     leaf = {"type": "notch", "name": "M39 leaf", "radius_mm": 620, "post_mm": 2,
             "marks": [{"label": "1", "range_m": 100}, {"label": "2", "range_m": 200}],
-            "check": {"setting": "1", "range_m": 100, "cm": 5}}
+            "checks": [{"setting": "1", "range_m": 100, "cm": 5}]}
     assert client.put("/diary/api/ballistics/sights/s-m39", json={"name": "M39 leaf", "data": leaf}).status_code == 200
     sv = _all(client)["pickers"]["sights"]
-    assert sv[0]["id"] == "s-m39" and "check" not in sv[0]["data"], "the check belongs to a profile"
-    mine = dict(leaf, check={"setting": "1", "range_m": 100, "cm": 15})
+    assert sv[0]["id"] == "s-m39" and "checks" not in sv[0]["data"], "the checks belong to a profile"
+    mine = dict(leaf, checks=[{"setting": "1", "range_m": 100, "cm": 15}])
     for pid in ("p-a", "p-b"):
         assert client.put(f"/diary/api/ballistics/profiles/{pid}", json={"name": pid, "sight_height_mm": 35, "zero_range_m": 100,
-                                                                        "sight_id": "s-m39", "sight": mine if pid == "p-a" else dict(leaf, check=None)}).status_code == 200
+                                                                        "sight_id": "s-m39", "sight": mine if pid == "p-a" else dict(leaf, checks=None)}).status_code == 200
     # the saved sight changes: both profiles follow it, each keeps its own check
     new = dict(leaf, marks=leaf["marks"] + [{"label": "3", "range_m": 300}])
     assert client.put("/diary/api/ballistics/sights/s-m39", json={"name": "M39 leaf", "data": new}).status_code == 200
     d = _all(client)
     a, b = (next(p for p in d["profiles"] if p["id"] == x)["inputs"]["sight"] for x in ("p-a", "p-b"))
     assert [m["label"] for m in a["marks"]] == ["1", "2", "3"] == [m["label"] for m in b["marks"]]
-    assert a["check"]["cm"] == 15 and "check" not in b and a["saved_id"] == "s-m39"
+    assert a["checks"][0]["cm"] == 15 and "checks" not in b and a["saved_id"] == "s-m39"
     assert d["pickers"]["sights"][0]["profiles"] == 2
     assert client.delete("/diary/api/ballistics/sights/s-m39", headers=H).status_code == 409, "in use"
     assert client.put("/diary/api/ballistics/sights/s-bad", json={"name": "x", "data": {"type": "notch", "marks": []}}).status_code == 400

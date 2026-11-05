@@ -256,6 +256,8 @@ header.top{padding-top:6px!important}
 .tbl input[type=checkbox]{width:20px;height:20px;margin:0}
 .otbl tr[data-oedit]{cursor:pointer}
 .otbl td small{display:block;font-family:var(--f-body);font-size:.72rem;color:var(--muted)}
+.cklist{display:flex;flex-direction:column;gap:8px}
+.ckrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) 34px;gap:6px;align-items:end}
 .ironbox{display:flex;flex-direction:column;gap:10px;padding:10px 0 4px;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
 .spinrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5rem;gap:10px;align-items:center;min-height:3.2rem}
 .stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
@@ -538,11 +540,9 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f" data-notch>Leaf marks (setting = range m)<input type="text" id="fIrMarks" placeholder="1=100, 2=200, 3=300"></label>
       <div class="grid2"><label class="f">Sight radius mm<input type="text" inputmode="decimal" id="fIrRad"></label><label class="f">Front post width mm<input type="text" inputmode="decimal" id="fIrPost"></label></div>
       <label class="check" id="fIrKeepL"><input type="checkbox" id="fIrKeep">Save this sight for other profiles</label>
-      <div class="lbl" data-notch>This rifle and load</div>
-      <div class="g4" data-notch><label class="f">Check: at m<input type="text" inputmode="numeric" id="fIrCkR" placeholder="100"></label>
-        <label class="f">on setting<input type="text" id="fIrCkS" placeholder="1"></label>
-        <label class="f">group cm<input type="text" inputmode="decimal" id="fIrCkC" placeholder="0"></label>
-        <label class="f">high / low<select id="fIrCkD"><option value="1">high</option><option value="-1">low</option></select></label></div>
+      <div class="lbl" data-notch>This rifle and load: where groups landed</div>
+      <div data-notch id="fIrChecks" class="cklist"></div>
+      <div class="actions" data-notch style="margin:0"><button class="ghost" type="button" id="fIrCkAdd">+ Check</button></div>
       <p class="hint" style="margin:0" id="fIrHint"></p>
     </div>
     <div class="prow"><label class="f">Bullet<select id="fBullet"></select></label><button class="ghost" type="button" id="fBulEdit">Edit</button><button class="ghost" type="button" id="fBulNew">New</button></div>
@@ -850,19 +850,28 @@ const MARKS=new Map();
 /** The notch sight's marks with the angle each gives (mil from the zero): this load's elevation at the mark's
     range in the zero conditions, no wind. Cached per profile state. */
 function notchMarks(p){
-  const g=ironOf(p),i=p.inputs,key=JSON.stringify([p.id,g.marks,g.check,i.mv,i.mvScale,i.dragScale,i.zeroRangeM,i.sightHeightMm,i.bullet,i.zeroAtmo]);
+  const g=ironOf(p),i=p.inputs,key=JSON.stringify([p.id,g.marks,g.checks,i.mv,i.mvScale,i.dragScale,i.zeroRangeM,i.sightHeightMm,i.bullet,i.zeroAtmo]);
   if(MARKS.has(key))return MARKS.get(key);
   const za=clean(i.zeroAtmo||{});let rows=[];
   try{rows=B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
     {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),g.marks.map(m=>m.range_m)).rows}catch(e){}
   let out=g.marks.map((m,k)=>({label:m.label,range:m.range_m,mil:rows[k]&&rows[k].reached?rows[k].elevMrad:null})).filter(m=>m.mil!=null);
-  // the zero check: on setting S at range R the group landed C cm above the aim → every setting gives
-  // (C / R·10) − (setting's angle − what R needs) more than the leaf says
-  const ck=g.check,ms=ck&&out.find(m=>m.label===ck.setting);
-  if(ms){
-    let need=null;try{const r=B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
-      {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),[ck.range_m]).rows[0];if(r.reached)need=r.elevMrad}catch(e){}
-    if(need!=null){const off=ck.cm/(ck.range_m/10)-(ms.mil-need);out=out.map(m=>Object.assign({},m,{mil:m.mil+off}));out.offset=off}
+  // The checks: on setting S at range R a group landed C cm above the aim → that setting gives
+  // (C / R·10) − (setting's angle − what R needs) more than the leaf says. Several checks on one setting are
+  // averaged; settings between checked ones are interpolated (by the marks' ranges), the rest keep the nearest.
+  const cks=(g.checks||[]).filter(ck=>out.some(m=>m.label===ck.setting));
+  if(cks.length){
+    let need=[];try{need=B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
+      {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),cks.map(ck=>ck.range_m)).rows}catch(e){}
+    const per=new Map();
+    cks.forEach((ck,k)=>{const r=need[k],m=out.find(x=>x.label===ck.setting);if(!r||!r.reached)return;
+      const off=ck.cm/(ck.range_m/10)-(m.mil-r.elevMrad);per.set(m.label,(per.get(m.label)||[]).concat(off))});
+    const pts=out.filter(m=>per.has(m.label)).map(m=>({range:m.range,off:per.get(m.label).reduce((a,b)=>a+b,0)/per.get(m.label).length}));
+    if(pts.length){
+      const offAt=x=>{if(x<=pts[0].range)return pts[0].off;const L=pts[pts.length-1];if(x>=L.range)return L.off;
+        const k=pts.findIndex(q=>q.range>=x),a=pts[k-1],b=pts[k];return a.off+(b.off-a.off)*(x-a.range)/(b.range-a.range)};
+      out=out.map(m=>Object.assign({},m,{mil:m.mil+offAt(m.range),off:offAt(m.range)}));
+    }
   }
   MARKS.set(key,out);return out;
 }
@@ -910,7 +919,7 @@ function renderProfiles(){
   if((i.mvScale||1)!==1||(i.dragScale||1)!==1)parts.push(`trued: velocity ×${(i.mvScale||1).toFixed(3)}, drag ×${(i.dragScale||1).toFixed(3)}`);
   const g=i.sight;
   if(g&&g.type==="diopter")parts.push(`${esc(s.name)} · diopter ${+g.elev_click}/${+g.wind_click} ${g.unit==="MOA"?"MOA":"mil"} clicks`);
-  else if(g&&g.check)parts.push(`${esc(s.name)} · notch ${esc(g.marks.length>4?`${g.marks[0].label}–${g.marks[g.marks.length-1].label}`:g.marks.map(m=>m.label).join(" "))} · shoots ${Math.round(Math.abs(g.check.cm))} cm ${g.check.cm>=0?"high":"low"} at ${g.check.range_m} m on ${esc(g.check.setting)}`);
+  else if(g&&g.checks&&g.checks.length)parts.push(`${esc(s.name)} · notch ${esc(g.marks.length>4?`${g.marks[0].label}–${g.marks[g.marks.length-1].label}`:g.marks.map(m=>m.label).join(" "))} · checked: ${g.checks.map(c=>`${Math.round(Math.abs(c.cm))} cm ${c.cm>=0?"high":"low"} at ${c.range_m} m on ${esc(c.setting)}`).join(", ")}`);
   else if(g)parts.push(`${esc(s.name)} · notch ${esc(g.marks.length>4?`${g.marks[0].label}–${g.marks[g.marks.length-1].label} (${g.marks[0].range_m}–${g.marks[g.marks.length-1].range_m} m)`:g.marks.map(m=>m.label+"="+m.range_m).join(" "))}`);
   else if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
   else parts.push("no scope linked: 0.1 mil clicks");
@@ -1428,7 +1437,9 @@ function openProfile(p){
   $("fSpin").checked=!!x.spin_drift;setv("fSpinS",x.spin_scale);spinState();
   let g=null;try{g=x.sight?(typeof x.sight==="string"?JSON.parse(x.sight):x.sight):null}catch(e){}
   $("fSightType").value=g?g.type:"";fillIron(g||{});$("fIrSaved").dataset.t="";$("fIrKeep").checked=false;sightState();
-  if(x.sight_id&&x.inputs&&x.inputs.sight)fillIron(Object.assign({},x.inputs.sight,{check:g&&g.check}));     // the saved sight's current fields$("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
+  // a saved sight: its current fields, this profile's checks
+  if(x.sight_id&&x.inputs&&x.inputs.sight)fillIron(Object.assign({},x.inputs.sight,{checks:g&&(g.checks||(g.check?[g.check]:[]))}));
+  $("fAj").checked=!!x.aero_jump;$("fCor").checked=!!x.coriolis;
   $("fRet").innerHTML=opt("","– none –")+(D.reticles||[]).filter(r=>!r.archived||r.id===x.reticle_id).map(r=>opt(r.id,`${r.maker?r.maker+" ":""}${r.name} · ${r.focal_plane} ${r.unit==="MOA"?"MOA":"mil"}`,r.id===x.reticle_id)).join("");
   chronoHint(p);
   setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
@@ -1458,10 +1469,22 @@ const IRON_PRESETS={
 };
 const marksText=ms=>(ms||[]).map(m=>`${m.label}=${m.range_m}`).join(", ");
 function parseMarks(t){return String(t||"").split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean).map(x=>{const [a,b]=x.split(/\s*[=:]\s*/);return{label:(a||"").trim(),range_m:num(b)}})}
+function checkRow(ck){
+  return`<div class="ckrow" data-ck><label class="f">At m<input type="text" inputmode="numeric" data-k="range_m" value="${esc(ck.range_m??"")}" placeholder="100"></label>
+    <label class="f">Setting<input type="text" data-k="setting" value="${esc(ck.setting??"")}" placeholder="1"></label>
+    <label class="f">Group cm<input type="text" inputmode="decimal" data-k="cm" value="${esc(ck.cm!=null?Math.abs(ck.cm):"")}" placeholder="0"></label>
+    <label class="f">High / low<select data-k="dir"><option value="1">high</option><option value="-1"${ck.cm<0?" selected":""}>low</option></select></label>
+    <button type="button" class="rm" data-ckrm aria-label="Remove check">✕</button></div>`;
+}
+function drawChecks(list){$("fIrChecks").innerHTML=(list.length?list:[{}]).map(checkRow).join("")}
+function readChecks(){return[...$("fIrChecks").querySelectorAll("[data-ck]")].map(r=>{const v=k=>r.querySelector(`[data-k="${k}"]`).value.trim();
+  return{range_m:num(v("range_m")),setting:v("setting"),cm:num(v("cm"))==null?null:num(v("cm"))*+v("dir")}}).filter(c=>c.range_m&&c.setting&&c.cm!=null)}
+$("fIrCkAdd").addEventListener("click",()=>{const cur=[...$("fIrChecks").querySelectorAll("[data-ck]")];$("fIrChecks").insertAdjacentHTML("beforeend",checkRow({}))});
+$("fIrChecks").addEventListener("click",e=>{const b=e.target.closest("[data-ckrm]");if(!b)return;b.closest("[data-ck]").remove();if(!$("fIrChecks").children.length)drawChecks([])});
 function fillIron(g){
   setv("fIrName",g.name);$("fIrUnit").value=g.unit||"MOA";setv("fIrE",g.elev_click);setv("fIrW",g.wind_click);
   setv("fIrMarks",marksText(g.marks));setv("fIrRad",g.radius_mm);setv("fIrPost",g.post_mm);
-  const ck=g.check;setv("fIrCkR",ck&&ck.range_m);setv("fIrCkS",ck&&ck.setting);setv("fIrCkC",ck&&Math.abs(ck.cm));$("fIrCkD").value=ck&&ck.cm<0?"-1":"1";
+  drawChecks(g.checks||(g.check?[g.check]:[]));
 }
 // Saved sights (pickers.sights): a sight is made once and picked in any profile. Editing a saved sight's fields
 // here and saving the profile updates it for every profile using it; the zero check stays with the profile.
@@ -1478,7 +1501,7 @@ function savedState(){
   $("fIrSavedH").hidden=!sv;$("fIrSavedH").textContent=sv?(others?`Changes to the sight's fields update it for ${others} other profile${others>1?"s":""} too.`:"Changes to the sight's fields update the saved sight."):"";
 }
 $("fIrSaved").addEventListener("change",()=>{const sv=(D.pickers.sights||[]).find(x=>x.id===$("fIrSaved").value);
-  if(sv){const ck=readIron();fillIron(Object.assign({},sv.data,{name:sv.data.name||sv.name,check:ck&&ck.check}))}savedState()});
+  if(sv){const ck=readChecks();fillIron(Object.assign({},sv.data,{name:sv.data.name||sv.name,checks:ck}))}savedState()});
 function sightState(){
   const t=$("fSightType").value;
   if(t&&$("fIrSaved").dataset.t!==t){$("fIrSaved").dataset.t=t;fillSaved(editP&&editP.sight_id)}
@@ -1486,7 +1509,7 @@ function sightState(){
   $("fIron").querySelectorAll("[data-dio]").forEach(e=>e.hidden=t!=="diopter");$("fIron").querySelectorAll("[data-notch]").forEach(e=>e.hidden=t!=="notch");
   $("fIrPre").innerHTML=(IRON_PRESETS[t]||[]).map(([n],k)=>`<button type="button" class="chip" data-irpre="${k}">${esc(n)}</button>`).join("");
   $("fIrHint").textContent=t==="diopter"?"Clicks up/down and left/right from the zero, like a scope. Set the sight height to the sight line over the bore (about 65 mm on an AR-15)."
-    :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. If it shoots high or low on a setting (an M39 on its lowest setting often does), fill in the check: every setting is shifted by that angle. One setting off on its own: change its range here (e.g. 3=320). Wind is a hold in cm and post widths.":"";
+    :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. If it shoots high or low on a setting (an M39 on its lowest setting often does), add a check: one check shifts every setting by that angle; checks on several settings correct each setting, in between interpolated. Check the same setting at two ranges and they are averaged. Wind is a hold in cm and post widths.":"";
 }
 $("fSightType").addEventListener("change",sightState);
 $("fIrPre").addEventListener("click",e=>{const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(pr)fillIron(pr[1])});
@@ -1496,8 +1519,7 @@ function readIron(){
   if(t==="diopter")Object.assign(g,{unit:$("fIrUnit").value,elev_click:num($("fIrE").value),wind_click:num($("fIrW").value)});
   else{
     g.marks=parseMarks($("fIrMarks").value);
-    const R=num($("fIrCkR").value),S=$("fIrCkS").value.trim(),C=num($("fIrCkC").value);
-    if(R&&S&&C!=null)g.check={range_m:R,setting:S,cm:C*+$("fIrCkD").value};
+    const cks=readChecks();if(cks.length)g.checks=cks;
   }
   return g;
 }
@@ -1518,7 +1540,7 @@ $("pForm").addEventListener("submit",async e=>{
   if(body.sight){                      // a saved sight: create or update it, link the profile to it
     let sid=$("fIrSaved").value;
     if(sid||$("fIrKeep").checked){
-      const data=Object.assign({},body.sight);delete data.check;
+      const data=Object.assign({},body.sight);delete data.checks;
       const nm=data.name||(data.type==="diopter"?"Diopter sight":"Notch sight");
       sid=sid||newId(nm,"s-");
       const se=await write("PUT","api/ballistics/sights/"+encodeURIComponent(sid),{name:nm,data});

@@ -243,9 +243,10 @@ def _sight(v, name):
       {"type": "notch", "name", "marks": [{"label", "range_m"}], "radius_mm", "post_mm", "notch_mm"}
         – a range-marked notch rear sight (M39 tangent leaf style): the nearest setting and a hold in cm.
         Each mark is "true at" its range for this load (by default the range on the leaf); moving a mark's range
-        is how the leaf is calibrated to dope. "check": {"setting", "range_m", "cm"} – where a group landed on a
-        setting at a range (cm above the aim, − below): every setting is shifted by that angle (the front post
-        shooting high or low, as M39s often do on their lowest setting).
+        is how the leaf is calibrated to dope. "checks": [{"setting", "range_m", "cm"}] – where groups landed on a
+        setting at a range (cm above the aim, − below). One check shifts every setting by its angle (the front post
+        shooting high or low, as M39s often do on their lowest setting); with checks on several settings each
+        setting's shift is interpolated between the checked ones.
     radius_mm (sight radius) and post_mm (front post width) size the sight picture and the post-width holds."""
     if v in (None, "", {}):
         return None
@@ -275,15 +276,24 @@ def _sight(v, name):
             clean_marks.append({"label": label, "range_m": _num(10, 3000, True)(m.get("range_m"), f"{name}_mark_range")})
         clean_marks.sort(key=lambda m: m["range_m"])
         out.update(marks=clean_marks, notch_mm=num("notch_mm", 0.3, 10))
-        chk = v.get("check")
-        if chk:                # where a group actually landed: "at 100 m on setting 1, 15 cm high" (cm: + high)
-            if not isinstance(chk, dict):
+        checks = v.get("checks")
+        if checks is None and v.get("check"):
+            checks = [v["check"]]                    # the single check of earlier versions
+        if checks:             # where groups actually landed: "at 100 m on setting 1, 15 cm high" (cm: + high)
+            if not isinstance(checks, list) or len(checks) > 20:
                 raise ValueError(f"bad_{name}_check")
-            label = _text(8, True)(chk.get("setting"), f"{name}_check_setting")
-            if label not in {m["label"] for m in clean_marks}:
-                raise ValueError(f"bad_{name}_check_setting")
-            out["check"] = {"setting": label, "range_m": _num(10, 3000, True)(chk.get("range_m"), f"{name}_check_range"),
-                            "cm": _num(-300, 300, True)(chk.get("cm"), f"{name}_check_cm")}
+            labels = {m["label"] for m in clean_marks}
+            out["checks"] = []
+            for chk in checks:
+                if not isinstance(chk, dict):
+                    raise ValueError(f"bad_{name}_check")
+                label = _text(8, True)(chk.get("setting"), f"{name}_check_setting")
+                if label not in labels:
+                    raise ValueError(f"bad_{name}_check_setting")
+                out["checks"].append({"setting": label,
+                                      "range_m": _num(10, 3000, True)(chk.get("range_m"), f"{name}_check_range"),
+                                      "cm": _num(-300, 300, True)(chk.get("cm"), f"{name}_check_cm")})
+            out["checks"].sort(key=lambda c: c["range_m"])
     return json.dumps({k: x for k, x in out.items() if x is not None})
 
 
@@ -293,7 +303,7 @@ def _sight_data(v, name):
     if out is None:
         raise ValueError(f"{name}_required")
     d = json.loads(out)
-    d.pop("check", None)
+    d.pop("checks", None)
     return json.dumps(d)
 
 
@@ -480,10 +490,15 @@ def resolve_inputs(profile, bullets, picks, conn=None):
     sight = json.loads(profile["sight"]) if profile.get("sight") else None
     saved = by(picks.get("sights") or [], profile.get("sight_id")) if profile.get("sight_id") else None
     if saved:                  # a saved sight: its marks / clicks, this profile's zero check
-        check = (sight or {}).get("check")
+        checks = (sight or {}).get("checks") or ([sight["check"]] if sight and sight.get("check") else [])
         sight = dict(saved["data"], name=saved["data"].get("name") or saved["name"], saved_id=saved["id"])
-        if check and sight["type"] == "notch" and check["setting"] in {m["label"] for m in sight["marks"]}:
-            sight["check"] = check
+        if sight["type"] == "notch":
+            labels = {m["label"] for m in sight["marks"]}
+            ok = [c for c in checks if c["setting"] in labels]
+            if ok:
+                sight["checks"] = ok
+    elif sight and sight.get("check") and not sight.get("checks"):
+        sight["checks"] = [sight.pop("check")]
     elif profile.get("sight_id"):
         warn.append("sight_missing")
     if sight:                  # iron sights replace the scope: clicks (diopter) or settings + holds (notch)
