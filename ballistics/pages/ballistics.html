@@ -217,6 +217,7 @@ header.top{padding-top:6px!important}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end}
 .g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
+.pact{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .prow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end}
 .src{font-size:.84rem;color:var(--muted);line-height:1.45}
 .src b{color:var(--fg);font-family:var(--f-mono);font-weight:600}
@@ -376,8 +377,8 @@ details summary{cursor:pointer;list-style:revert}
   </section>
 
   <section class="card hl" aria-label="Profile">
-    <div class="prow">
-      <label class="f">Profile<select id="pSel"></select></label>
+    <div class="grid2"><label class="f">Gun<select id="pGun"></select></label><label class="f">Profile<select id="pSel"></select></label></div>
+    <div class="pact">
       <button class="ghost" type="button" id="pEdit">Edit</button>
       <button class="ghost" type="button" id="pNew">New</button>
       <button class="ghost" type="button" id="pImport">Import</button><input type="file" id="pImportF" accept=".json,application/json" hidden>
@@ -929,10 +930,21 @@ function turret(signedHold,offset,scope,turn){
 }
 
 // ------------------------------------------------------------ render
+// Profiles are picked gun first: the Gun list holds the guns that have profiles ("No gun" for the rest, e.g.
+// imported ones), the Profile list that gun's profiles. Switching gun opens the profile last used with it.
+const gunKey=p=>p.gun_id||"";
+function gunName(id){const g=((D.pickers||{}).guns||[]).find(x=>x.id===id);return g?g.name:id?"Gun not in the diary":"No gun"}
 function renderProfiles(){
   const list=D.profiles.filter(p=>!p.archived||p.id===U.profile);
-  $("pSel").innerHTML=list.length?list.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join(""):`<option value="">No profiles yet – tap New</option>`;
-  const p=prof();if(p){U.profile=p.id;$("pSel").value=p.id}
+  const p=prof();if(p)U.profile=p.id;
+  const order=((D.pickers||{}).guns||[]).map(g=>g.id);
+  const keys=[...new Set(list.map(gunKey))].sort((a,b)=>(a===""?1e9:order.indexOf(a)<0?1e8:order.indexOf(a))-(b===""?1e9:order.indexOf(b)<0?1e8:order.indexOf(b)));
+  const cur=p?gunKey(p):"";
+  $("pGun").innerHTML=list.length?keys.map(k=>{const n=list.filter(x=>gunKey(x)===k).length;return`<option value="${esc(k)}">${esc(gunName(k))}${n>1?` (${n})`:""}</option>`}).join(""):`<option value="">–</option>`;
+  $("pGun").value=cur;
+  const sub=list.filter(x=>gunKey(x)===cur);
+  $("pSel").innerHTML=sub.length?sub.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join(""):`<option value="">No profiles yet – tap New</option>`;
+  if(p){$("pSel").value=p.id;U.gunLast=Object.assign({},U.gunLast,{[cur||"_"]:p.id})}
   $("pEdit").disabled=!p;
   if(!p){$("pInfo").innerHTML="A profile is a gun + load + bullet + scope. Start with <b>New</b>.";return}
   const i=p.inputs,b=i.bullet,s=i.scope;
@@ -1219,6 +1231,10 @@ $("rMinus").addEventListener("click",()=>stepR(-10));$("rPlus").addEventListener
 $("rChips").addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b){$("rIn").value=b.dataset.r;changed()}});
 $("aStd").addEventListener("click",()=>{$("aT").value=15;$("aP").value=1013;$("aRH").value=0;$("aPow").value="";WX_STAMP=null;$("aSrc").innerHTML="";changed()});
 $("pSel").addEventListener("change",()=>{U.profile=$("pSel").value;loadCond();render()});
+$("pGun").addEventListener("change",()=>{
+  const g=$("pGun").value,sub=D.profiles.filter(p=>gunKey(p)===g&&(!p.archived||p.id===U.profile));
+  const last=(U.gunLast||{})[g||"_"];U.profile=(sub.find(p=>p.id===last)||sub[0]||{}).id||U.profile;loadCond();render();
+});
 $("mSel").addEventListener("change",()=>{U.match=$("mSel").value;render()});
 for(const id of ["cStart","cStep","cEnd"])$(id).addEventListener("change",async()=>{
   renderCard();const s={card_start:num($("cStart").value),card_step:num($("cStep").value),card_end:num($("cEnd").value)},p=prof();
