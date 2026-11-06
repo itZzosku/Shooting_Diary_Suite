@@ -368,6 +368,7 @@ details summary{cursor:pointer;list-style:revert}
   </header>
   <div class="banner" id="offNote" hidden>Offline – using the profiles last fetched. Holds are still computed here.</div>
   <div class="banner" id="pendNote" hidden></div>
+  <div class="banner" id="staleNote" hidden><b>The server needs a restart.</b> Its code on disk is newer than what it is running (updated without a restart), so saving may fail or lose new fields. Restart the app's service, then reload this page.</div>
 
   <section class="card" aria-label="Range and solution">
     <div class="rangebox">
@@ -1308,6 +1309,7 @@ function closeMM(fromBack){if(fromBack!==true)dropLayer($("mm"));$("mm").hidden=
 
 let CARD_FOR;          // the profile whose range card values are in the inputs
 function render(){
+  $("staleNote").hidden=!D.stale_code;
   renderProfiles();
   if(CARD_FOR!==U.profile){CARD_FOR=U.profile;fillCard()}
   fillLock(prof());
@@ -1676,7 +1678,8 @@ $("aCmp").addEventListener("click",async()=>{
 function openSheet(id){$(id).hidden=false;pushLayer($(id),fromBack=>closeSheet($(id),fromBack));document.body.style.overflow="hidden";const m=$(id).querySelector(".msg");if(m)m.hidden=true}
 function closeSheet(el,fromBack){if(fromBack!==true)dropLayer(el);el.hidden=true;if([...document.querySelectorAll(".sheet")].every(s=>s.hidden)&&$("mm").hidden)document.body.style.overflow=""}
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>closeSheet(b.closest(".sheet"))));
-const msg=(id,code)=>{$(id).textContent=ERR[code]||("Couldn't save: "+code);$(id).hidden=false};
+// an error shows by its form's Save button and as a toast, scrolled into view: a long form hides it otherwise
+const msg=(id,code)=>{const t=ERR[code]||("Couldn't save: "+code);$(id).textContent=t;$(id).hidden=false;toast(t);try{$(id).scrollIntoView({block:"center",behavior:"smooth"})}catch(e){}};
 const opt=(v,t,sel)=>`<option value="${esc(v)}"${sel?" selected":""}>${esc(t)}</option>`;
 const setv=(id,v)=>{$(id).value=v==null?"":v};
 

@@ -13,6 +13,7 @@ Tables in each account's diary database:
 Design: "Ballistic Calculator — Design Document".
 """
 import json
+import os
 import re
 import secrets
 import time
@@ -68,6 +69,29 @@ RANGES_KEY = "bal_ranges"            # saved shooting ranges: [{id, name, lat, l
 DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000, "by_profile": {},
                     "by_gun": {}}       # gun id → {sight_height_mm, twist_mm, twist_dir}: a new profile's start
 GUN_FIELDS = ("sight_height_mm", "twist_mm", "twist_dir")
+
+
+# The server's Python code is loaded once; pages are read from disk on every request. After a git pull without a
+# restart the page is new and the server old: the page says so (a newer .py on disk than when we started).
+_CODE_DIRS = [os.path.dirname(os.path.abspath(__file__)),
+              os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "diary")]
+
+
+def _code_mtime():
+    t = 0.0
+    for d in _CODE_DIRS:
+        try:
+            t = max([t] + [os.path.getmtime(os.path.join(d, f)) for f in os.listdir(d) if f.endswith(".py")])
+        except OSError:
+            pass
+    return t
+
+
+_STARTED_CODE = _code_mtime()
+
+
+def code_stale():
+    return _code_mtime() > _STARTED_CODE + 1
 
 
 PROFILE_COLUMNS = {             # added after phase 1: chrono window and the small corrections
@@ -571,7 +595,8 @@ def everything(conn):
             "matches": _rows(conn, "SELECT * FROM bal_matches ORDER BY archived, date DESC, name"),
             "stages": stage_rows(conn),
             "observations": _rows(conn, "SELECT * FROM bal_observations ORDER BY date, range_m, rowid"),
-            "settings": settings(conn), "ranges": saved_ranges(conn), "pickers": picks}
+            "settings": settings(conn), "ranges": saved_ranges(conn), "pickers": picks,
+            "stale_code": code_stale()}
 
 
 def summary(conn):

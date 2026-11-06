@@ -393,3 +393,10 @@ def test_horizontal_offset(client):
     assert i["poiRightMrad"] == -0.4, "4 cm left at 100 m"
     assert client.put("/diary/api/ballistics/profiles/p-off", json=dict(base, poi_x_cm=None)).status_code == 200
     assert next(p for p in _all(client)["profiles"] if p["id"] == "p-off")["inputs"]["poiRightMrad"] == 0
+
+
+def test_stale_server_code_is_reported(client, monkeypatch):
+    from ballistics import api
+    assert _all(client)["stale_code"] is False
+    monkeypatch.setattr(api, "_STARTED_CODE", api._code_mtime() - 60)     # as if a .py changed after start
+    assert _all(client)["stale_code"] is True
