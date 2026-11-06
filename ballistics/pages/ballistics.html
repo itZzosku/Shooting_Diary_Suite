@@ -548,6 +548,8 @@ details summary{cursor:pointer;list-style:revert}
       <div class="grid2" data-dio><label class="f">Elevation click<input type="text" inputmode="decimal" id="fIrE"></label><label class="f">Windage click<input type="text" inputmode="decimal" id="fIrW"></label></div>
       <label class="f" data-notch>Leaf marks (setting = range m)<input type="text" id="fIrMarks" placeholder="1=100, 2=200, 3=300"></label>
       <div class="grid2"><label class="f">Sight radius mm<input type="text" inputmode="decimal" id="fIrRad"></label><label class="f">Front post width mm<input type="text" inputmode="decimal" id="fIrPost"></label></div>
+      <div class="grid2"><label class="f"><span data-notch>Rear notch width mm</span><span data-dio>Aperture mm</span><input type="text" inputmode="decimal" id="fIrRear" placeholder="e.g. 2.5"></label>
+        <label class="f">Eye to rear sight mm<input type="text" inputmode="decimal" id="fIrEye" placeholder="cheek on the stock"></label></div>
       <div class="calrow"><button class="ghost" type="button" id="fIrCal">Calibrate</button><span class="hint" id="fIrCalS"></span></div>
       <label class="check" id="fIrKeepL"><input type="checkbox" id="fIrKeep">Save this sight for other profiles</label>
       <div class="lbl" data-notch>This rifle and load: where groups landed</div>
@@ -875,7 +877,13 @@ function ready(p){return p&&p.inputs&&p.inputs.bullet&&p.inputs.mv}
 const ironOf=p=>p&&p.inputs&&p.inputs.sight||null;
 const isNotch=p=>{const g=ironOf(p);return!!(g&&g.type==="notch")};
 /** Front post width in mil (post width / sight radius) – the unit irons hold wind in */
-function postMil(g){return((g&&g.post_mm)||(g&&g.type==="diopter"?1.8:2))/((g&&g.radius_mm)||(g&&g.type==="diopter"?368:600))*1000}
+// The front post's width as an angle: from the eye when the eye distance is known (what a post-width hold looks
+// like), else from the rear sight as before. Typical eye distances fill in for the picture only.
+const EYE_DEF={diopter:80,notch:400};
+const postMm=g=>(g&&g.post_mm)||(g&&g.type==="diopter"?1.8:2),radMm=g=>(g&&g.radius_mm)||(g&&g.type==="diopter"?368:600);
+function postMil(g){return postMm(g)/(radMm(g)+((g&&g.eye_mm)||0))*1000}
+/** The rear notch / aperture width in mil as seen from the eye. */
+function rearMil(g){const w=g.type==="diopter"?g.aperture_mm:g.notch_mm;if(!w)return null;return w/(g.eye_mm||EYE_DEF[g.type])*1000}
 const MARKS=new Map();
 /** The notch sight's marks with the angle each gives (mil from the zero): this load's elevation at the mark's
     range in the zero conditions, no wind. Cached per profile state. */
@@ -1661,8 +1669,8 @@ $("fZero").addEventListener("change",()=>{       // a scope zero knows its rifle
 });
 // Iron sight presets: typical values to start from – measure your own sight radius and post.
 const IRON_PRESETS={
-  diopter:[["AR-15 A2, carbine (14.5\" radius)",{name:"A2 rear",unit:"MOA",elev_click:1.4,wind_click:0.7,radius_mm:368,post_mm:1.8}],
-           ["AR-15 A2, rifle (19.75\" radius)",{name:"A2 rear",unit:"MOA",elev_click:1,wind_click:0.5,radius_mm:502,post_mm:1.8}]],
+  diopter:[["AR-15 A2, carbine (14.5\" radius)",{name:"A2 rear",unit:"MOA",elev_click:1.4,wind_click:0.7,radius_mm:368,post_mm:1.8,aperture_mm:1.8}],
+           ["AR-15 A2, rifle (19.75\" radius)",{name:"A2 rear",unit:"MOA",elev_click:1,wind_click:0.5,radius_mm:502,post_mm:1.8,aperture_mm:1.8}]],
   notch:[["M39 leaf 1–20",{name:"M39 leaf",marks:Array.from({length:20},(_,k)=>({label:String(k+1),range_m:(k+1)*100})),radius_mm:620,post_mm:2}]],
 };
 const marksText=ms=>(ms||[]).map(m=>`${m.label}=${m.range_m}`).join(", ");
@@ -1682,6 +1690,7 @@ $("fIrChecks").addEventListener("click",e=>{const b=e.target.closest("[data-ckrm
 function fillIron(g){
   setv("fIrName",g.name);$("fIrUnit").value=g.unit||"MOA";setv("fIrE",g.elev_click);setv("fIrW",g.wind_click);
   setv("fIrMarks",marksText(g.marks));setv("fIrRad",g.radius_mm);setv("fIrPost",g.post_mm);
+  setv("fIrRear",(g.type||$("fSightType").value)==="diopter"?g.aperture_mm:g.notch_mm);setv("fIrEye",g.eye_mm);
   drawChecks(g.checks||(g.check?[g.check]:[]));
   IRCAL={dist_m:g.cal_dist_m??null,fit:g.cal_fit!==false,rise:{},poi:{},ladder:(g.ladder||[]).map(x=>Object.assign({},x))};
   (g.marks||[]).forEach(m=>{if(m.rise_mm!=null)IRCAL.rise[m.label]=m.rise_mm;if(m.poi_cm!=null)IRCAL.poi[m.label]=m.poi_cm});
@@ -1807,12 +1816,14 @@ function sightState(){
   $("fIrPre").innerHTML=(IRON_PRESETS[t]||[]).map(([n],k)=>`<button type="button" class="chip" data-irpre="${k}">${esc(n)}</button>`).join("");
   $("fIrHint").textContent=t==="diopter"?"Clicks up/down and left/right from the zero, like a scope. Set the sight height to the sight line over the bore (about 65 mm on an AR-15)."
     :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. If it shoots high or low on a setting (an M39 on its lowest setting often does), add a check: one check shifts every setting by that angle; checks on several settings correct each setting, in between interpolated. Check the same setting at two ranges and they are averaged. Calibrate leaf measures what each setting really does (caliper or a 100 m ladder); the checks then work on top of that. Wind is a hold in cm and post widths.":"";
+  if(t)$("fIrHint").textContent+=" Eye to rear sight: from your eye in your shooting position to the rear "+(t==="diopter"?"aperture":"notch")+"; with the "+(t==="diopter"?"aperture":"notch width")+" it sizes the sight picture, and post-width holds then count the post as your eye sees it.";
 }
 $("fSightType").addEventListener("change",()=>{sightState();calSummary()});
 $("fIrPre").addEventListener("click",e=>{const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(pr)fillIron(pr[1])});
 function readIron(){
   const t=$("fSightType").value;if(!t)return null;
-  const g={type:t,name:$("fIrName").value.trim()||null,radius_mm:num($("fIrRad").value),post_mm:num($("fIrPost").value)};
+  const g={type:t,name:$("fIrName").value.trim()||null,radius_mm:num($("fIrRad").value),post_mm:num($("fIrPost").value),eye_mm:num($("fIrEye").value)};
+  g[t==="diopter"?"aperture_mm":"notch_mm"]=num($("fIrRear").value);
   if(t==="diopter")Object.assign(g,{unit:$("fIrUnit").value,elev_click:num($("fIrE").value),wind_click:num($("fIrW").value)});
   else{
     g.marks=calMarks();
@@ -1971,20 +1982,21 @@ const retOf=p=>ironOf(p)?ironRet(p):p&&p.inputs&&p.inputs.reticleId?(D.reticles|
     round field (black outside), the A2-style post with its protective ears below. Notch: the rear leaf's bar
     with its U notch level with the post's tip, the post in it. */
 function ironRet(p){
-  const g=ironOf(p),P=postMil(g),els=[],rect=(x,y,w,h)=>els.push({t:"rect",x,y,width:w,height:h}),
+  const g=ironOf(p),P=postMm(g)/(radMm(g)+(g.eye_mm||EYE_DEF[g.type]))*1000,rear=rearMil(g),els=[],rect=(x,y,w,h)=>els.push({t:"rect",x,y,width:w,height:h}),
     poly=pts=>els.push({t:"poly",closed:true,points:pts});
   let field;
   if(g.type==="diopter"){
-    field=6*P;                                  // the aperture: a few post widths across, as it looks at the eye
+    field=rear?Math.max(2.2*P,rear/2):6*P;      // the aperture's radius as it looks at the eye (a few post widths without its size)
     rect(-P/2,0,P,field*2);                     // the post
+    const E=Math.max(2.6*P,field*0.45);
     for(const sg of[-1,1]){                     // the ears either side
-      poly([[sg*2.6*P,-0.4*P],[sg*3.4*P,-0.4*P],[sg*3.6*P,field*2],[sg*2.6*P,field*2]]);
+      poly([[sg*E,-0.4*P],[sg*(E+0.8*P),-0.4*P],[sg*(E+P),field*2],[sg*E,field*2]]);
     }
-    poly([[-2.6*P,3.5*P],[2.6*P,3.5*P],[2.6*P,field*2],[-2.6*P,field*2]]);   // the sight base between the ears
+    poly([[-E,Math.max(3.5*P,field*0.6)],[E,Math.max(3.5*P,field*0.6)],[E,field*2],[-E,field*2]]);   // the sight base between the ears
     els.push({t:"circle",x:0,y:0,r:field*0.985,w:field*0.06});               // the aperture's soft edge
   }else{
-    field=9*P;
-    const N=((g.notch_mm&&g.post_mm)?g.notch_mm/g.post_mm:2.2)*P,D=1.6*P;   // notch width and depth
+    const N=rear||2.2*P,D=Math.max(1.6*P,N*0.75);    // notch width (as the eye sees it) and depth
+    field=Math.max(9*P,N*1.4);
     rect(-P/2,0,P,field*2);                     // the front post, tip level with the notch's shoulders
     for(const sg of[-1,1])rect(sg>0?2.8*P:-3.4*P,-0.6*P,0.6*P,field*2);       // the front sight's ears
     const arc=[];for(let k=0;k<=12;k++){const a=Math.PI*k/12;arc.push([-N/2*Math.cos(a),D-N/2+N/2*Math.sin(a)])}

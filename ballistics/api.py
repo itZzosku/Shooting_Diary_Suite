@@ -248,7 +248,9 @@ def _sight(v, name):
         setting at a range (cm above the aim, − below). One check shifts every setting by its angle (the front post
         shooting high or low, as M39s often do on their lowest setting); with checks on several settings each
         setting's shift is interpolated between the checked ones.
-    radius_mm (sight radius) and post_mm (front post width) size the sight picture and the post-width holds.
+    radius_mm (sight radius) and post_mm (front post width) size the sight picture and the post-width holds;
+    eye_mm (eye to the rear sight) with notch_mm / aperture_mm (rear notch width / aperture) size the rear sight as
+    the eye sees it, and makes the post as seen from the eye (post ÷ (radius + eye)) the post-width hold.
     Calibration (with the sight, not the load): a mark may carry "rise_mm" (rear notch height measured from a fixed
     point) and "poi_cm" (group height above the aim, all settings shot at "cal_dist_m" from the same aim mark);
     "cal_fit": false keeps the caliper values unscaled. A diopter may carry "ladder": [{"clicks", "poi_cm"}] at
@@ -264,7 +266,8 @@ def _sight(v, name):
         raise ValueError(f"bad_{name}")
     num = lambda k, lo, hi, req=False: _num(lo, hi, req)(v.get(k), f"{name}_{k}")  # noqa: E731
     out = {"type": v["type"], "name": _text(60)(v.get("name"), f"{name}_name") or None,
-           "radius_mm": num("radius_mm", 50, 1500), "post_mm": num("post_mm", 0.2, 8)}
+           "radius_mm": num("radius_mm", 50, 1500), "post_mm": num("post_mm", 0.2, 8),
+           "eye_mm": num("eye_mm", 20, 900)}
     if v["type"] == "diopter":
         out.update(unit=_choice(("MOA", "MRAD"), "MOA")(v.get("unit"), f"{name}_unit"),
                    elev_click=num("elev_click", 0.01, 10, True), wind_click=num("wind_click", 0.01, 10, True),
