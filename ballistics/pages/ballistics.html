@@ -583,12 +583,12 @@ details summary{cursor:pointer;list-style:revert}
       <div class="calrow" data-notch><button class="ghost" type="button" id="fIrGrp">Groups</button><span class="hint" id="fIrGrpS"></span></div>
       <p class="hint" style="margin:0" id="fIrHint"></p>
     </div>
-    <div class="lbl">Zero</div>
-    <div class="g4"><label class="f">Range m<input type="text" inputmode="decimal" id="fZr" required placeholder="100"></label>
+    <div class="lbl" id="fZeroL">Zero</div>
+    <div class="g4" id="fZeroG"><label class="f" id="fZrL">Range m<input type="text" inputmode="decimal" id="fZr" required placeholder="100"></label>
       <label class="f">Temp °C<input type="text" inputmode="decimal" id="fZt" placeholder="15"></label>
       <label class="f">Station hPa<input type="text" inputmode="decimal" id="fZp" placeholder="1013"></label>
       <label class="f">Humidity %<input type="text" inputmode="decimal" id="fZh" placeholder="0"></label></div>
-    <p class="hint" style="margin:0">The zero is computed in the zero-day conditions; leave them empty for standard air (15 °C, 1013 hPa).</p>
+    <p class="hint" style="margin:0" id="fZeroH"></p>
     <h2 class="fsec">Corrections</h2>
     <div class="g3"><label class="f">Shoots cm sideways<input type="text" inputmode="decimal" id="fPoiX" placeholder="0"></label>
       <label class="f">to the<select id="fPoiD"><option value="1">right</option><option value="-1">left</option></select></label>
@@ -2079,6 +2079,12 @@ function sightState(){
   const t=$("fSightType").value;
   if(t&&$("fIrSaved").dataset.t!==t){$("fIrSaved").dataset.t=t;fillSaved(editP&&editP.sight_id)}
   $("fIron").hidden=!t;$("fScopeRow").hidden=$("fRetL").hidden=!!t;
+  // a leaf has no zero range of its own (the holds don't depend on it): only the conditions the groups were shot in
+  const nt=t==="notch";$("fZrL").hidden=nt;$("fZr").required=!nt;if(nt&&!num($("fZr").value))$("fZr").value=100;
+  $("fZeroG").className=nt?"g3":"g4";
+  $("fZeroL").textContent=nt?"Conditions when the groups were shot":"Zero";
+  $("fZeroH").textContent=nt?"The weather on the day you shot your groups; the leaf's stamped ranges are also taken as true in it. Empty: standard air (15 °C, 1013 hPa)."
+    :"The zero is computed in the zero-day conditions; leave them empty for standard air (15 °C, 1013 hPa).";
   $("fIron").querySelectorAll("[data-dio]").forEach(e=>e.hidden=t!=="diopter");$("fIron").querySelectorAll("[data-notch]").forEach(e=>e.hidden=t!=="notch");
   $("fIrPre").innerHTML=(IRON_PRESETS[t]||[]).map(([n],k)=>`<button type="button" class="chip" data-irpre="${k}">${esc(n)}</button>`).join("");
   $("fIrHint").textContent=t==="diopter"?"Clicks up/down and left/right from the zero, like a scope. Set the sight height to the sight line over the bore (about 65 mm on an AR-15)."
