@@ -260,7 +260,9 @@ header.top{padding-top:6px!important}
 .cklist{display:flex;flex-direction:column;gap:8px}
 .fsec{font-size:1.05rem;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
-.calchart{margin:0}.calchart svg{display:block;width:100%;height:auto}.calchart figcaption{font-size:.75rem;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
+.calchart{margin:0;position:relative}.calchart svg{display:block;width:100%;height:auto;touch-action:pan-y}
+.calchart .tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:.78rem;line-height:1.35;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25);transform:translate(-50%,calc(-100% - 10px))}
+.calchart .tip b{font-variant-numeric:tabular-nums}.calchart .tip[hidden]{display:none}.calchart figcaption{font-size:.75rem;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
 .calchart .k{display:inline-block;width:18px;height:0;border-top:2px solid var(--accent);vertical-align:middle;margin-right:5px}.calchart .k.need{border-top:2px dashed var(--muted)}.calchart .k.dot{width:8px;height:8px;border:2px solid var(--fg);border-radius:50%}
 .calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.62rem}
@@ -2016,6 +2018,7 @@ function readCal(){                       // the sheet's fields → IRCAL
     needs at the stamped ranges – with the markings along the bottom. */
 function drawCalChart(ms,cal,bare){
   const meas=ms.map((m,k)=>cal.mech[k]!=null?[k+1,cal.mech[k]*cal.k]:null).filter(Boolean);
+  const r0=ms.length&&ms[0].rise_mm!=null?+ms[0].rise_mm:null;
   const shot=ms.map((m,k)=>cal.shot[k]!=null&&k>0?[k+1,cal.shot[k]]:null).filter(Boolean);
   const b0=bare[0],need=b0?ms.map((m,k)=>{const b=bare.find(x=>x.label===m.label);return b?[k+1,b.mil-b0.mil]:null}).filter(Boolean):[];
   const el=$("cChart");
@@ -2036,8 +2039,29 @@ function drawCalChart(ms,cal,bare){
   if(need.length>1)g+=`<path d="${line(need)}" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="5 4"/>`;
   if(meas.length>1)g+=`<path d="${line(meas)}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`+meas.map(p=>`<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="1.8" fill="var(--accent)"/>`).join("");
   g+=shot.map(p=>`<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="4" fill="none" stroke="var(--fg)" stroke-width="1.8"/>`).join("");
-  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Angle above setting 1 for each slot of the leaf">${g}</svg>`
-    +`<figcaption>${meas.length>1?`<span><i class="k"></i>leaf, measured</span>`:""}${need.length>1?`<span><i class="k need"></i>this load needs at the stamped ranges</span>`:""}${shot.length?`<span><i class="k dot"></i>groups</span>`:""}</figcaption>`;
+  g+=`<circle data-hl r="5" fill="none" stroke="var(--fg)" stroke-width="2" visibility="hidden"/>`;
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Angle above setting 1 for each slot of the leaf">${g}</svg><div class="tip" hidden></div>`
+    +`<figcaption>${meas.length>1?`<span><i class="k"></i>leaf, measured – touch a point for its values</span>`:""}${need.length>1?`<span><i class="k need"></i>this load needs at the stamped ranges</span>`:""}${shot.length?`<span><i class="k dot"></i>groups</span>`:""}</figcaption>`;
+  // the measured point nearest the pointer (mouse or finger): its height above setting 1 and the angles
+  const svg=el.querySelector("svg"),tip=el.querySelector(".tip"),hl=el.querySelector("[data-hl]");
+  const pts=meas.map((q,i)=>{const k=q[0]-1,m=ms[k],prev=meas[i-1];
+    return{x:X(q[0]),y:Y(q[1]),set:q[0],name:slotName({marks:ms},m.label),mm:r0!=null&&m.rise_mm!=null?+m.rise_mm-r0:null,mil:q[1],
+      step:prev?q[1]-prev[1]:null,prevSet:prev?prev[0]:null,need:(need.find(n=>n[0]===q[0])||[])[1]}});
+  const show=e=>{
+    if(!pts.length)return;const b=svg.getBoundingClientRect(),vx=(e.clientX-b.left)/b.width*W;
+    let q=pts[0];for(const t of pts)if(Math.abs(t.x-vx)<Math.abs(q.x-vx))q=t;
+    hl.setAttribute("cx",q.x);hl.setAttribute("cy",q.y);hl.setAttribute("visibility","visible");
+    const f=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(2);
+    tip.innerHTML=`Set <b>${q.set}</b>${q.name?" · "+esc(q.name):""}<br>`
+      +(q.mm!=null?`<b>${f(q.mm)} mm</b> above set 1 = <b>${q.mil.toFixed(2)} mil</b>`:`<b>${q.mil.toFixed(2)} mil</b> above set 1`)
+      +(q.step!=null?`<br><b>${f(q.step)} mil</b> from set ${q.prevSet}`:"")
+      +(q.need!=null?`<br>load needs ${q.need.toFixed(2)} mil (${f(q.mil-q.need)})`:"");
+    tip.hidden=false;
+    const px=q.x/W*b.width,py=q.y/H*b.height,tw=tip.offsetWidth;
+    tip.style.left=Math.min(b.width-tw/2-2,Math.max(tw/2+2,px))+"px";tip.style.top=py+"px";
+  };
+  const hide=()=>{tip.hidden=true;hl.setAttribute("visibility","hidden")};
+  svg.addEventListener("pointermove",show);svg.addEventListener("pointerdown",show);svg.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse")hide()});
 }
 const CAL_WARN={rise_needs_lowest:"Measure the lowest setting's rise too: the others are measured from it.",rise_needs_radius:"Enter the sight radius for the caliper values.",
   poi_needs_lowest:"",fit_far:"Caliper and groups differ by more than 15 %: check the sight radius and the measurements."};
