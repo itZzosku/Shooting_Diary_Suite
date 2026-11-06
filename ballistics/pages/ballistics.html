@@ -260,6 +260,8 @@ header.top{padding-top:6px!important}
 .cklist{display:flex;flex-direction:column;gap:8px}
 .fsec{font-size:1.05rem;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.calchart{margin:0}.calchart svg{display:block;width:100%;height:auto}.calchart figcaption{font-size:.75rem;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
+.calchart .k{display:inline-block;width:18px;height:0;border-top:2px solid var(--accent);vertical-align:middle;margin-right:5px}.calchart .k.need{border-top:2px dashed var(--muted)}.calchart .k.dot{width:8px;height:8px;border:2px solid var(--fg);border-radius:50%}
 .calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.62rem}
 .calt input.cl{width:2.6em;text-align:center}.calt tr.btw input.cl{border-style:dashed;color:var(--muted)}.calt input.bad{border-color:var(--danger);color:var(--danger)}.calt input[readonly]{border-style:dashed;color:var(--muted);background:transparent}
@@ -690,6 +692,7 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f">Slots between<input type="text" inputmode="numeric" id="cBetw" placeholder="0"></label></div>
     <div class="actions" data-cn style="margin:0"><button class="ghost" type="button" id="cFill">Fill</button></div>
     <label class="f" data-cn>Sight radius mm<input type="text" inputmode="decimal" id="cRad"></label>
+    <figure data-cn id="cChart" class="calchart" hidden></figure>
     <div data-cn style="overflow-x:auto"><table class="tbl calt" id="cTbl"></table></div>
     <div class="msg" data-cn id="cRgWarn" hidden></div>
     <div class="actions" data-cn style="margin:0"><button class="ghost" type="button" id="cAdd">+ Setting</button></div>
@@ -1998,6 +2001,33 @@ function readCal(){                       // the sheet's fields → IRCAL
   }else{IRCAL.dist_m=num($("cDist").value);
     IRCAL.ladder=[...$("cLadder").querySelectorAll("[data-lad]")].map(r=>({clicks:num(r.querySelector('[data-k="clicks"]').value),poi_cm:num(r.querySelector('[data-k="poi_cm"]').value)})).filter(x=>x.clicks!=null&&x.poi_cm!=null)}
 }
+/** The leaf's slope: angle above setting 1 per slot – measured (caliper, scaled), the groups, and what this load
+    needs at the stamped ranges – with the markings along the bottom. */
+function drawCalChart(ms,cal,bare){
+  const meas=ms.map((m,k)=>cal.mech[k]!=null?[k+1,cal.mech[k]*cal.k]:null).filter(Boolean);
+  const shot=ms.map((m,k)=>cal.shot[k]!=null&&k>0?[k+1,cal.shot[k]]:null).filter(Boolean);
+  const b0=bare[0],need=b0?ms.map((m,k)=>{const b=bare.find(x=>x.label===m.label);return b?[k+1,b.mil-b0.mil]:null}).filter(Boolean):[];
+  const el=$("cChart");
+  if(meas.length<2&&shot.length<1){el.hidden=true;return}
+  el.hidden=false;
+  const W=340,H=200,L=34,R=8,T=8,Bm=30,n=ms.length,all=[...meas,...shot,...need].map(p=>p[1]);
+  const ymax=Math.max(0.5,...all),ymin=Math.min(0,...all);
+  const step=[0.5,1,2,5,10,20].find(s=>(ymax-ymin)/s<=6)||50;
+  const X=i=>L+(W-L-R)*(n>1?(i-1)/(n-1):0.5),Y=v=>T+(H-T-Bm)*(1-(v-ymin)/((ymax-ymin)||1));
+  const line=pts=>pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" ");
+  let g="";
+  for(let v=Math.ceil(ymin/step)*step;v<=ymax+1e-9;v+=step)
+    g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)"/><text x="${L-4}" y="${(Y(v)+3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${+v.toFixed(1)}</text>`;
+  ms.forEach((m,k)=>{if(!m.mark)return;const x=X(k+1).toFixed(1);
+    g+=`<line x1="${x}" x2="${x}" y1="${T}" y2="${H-Bm}" stroke="var(--line)" stroke-dasharray="2 3"/><text x="${x}" y="${H-Bm+13}" text-anchor="middle" font-size="10" fill="var(--fg)">${esc(m.mark)}</text>`});
+  g+=`<text x="${(L+W-R)/2}" y="${H-3}" text-anchor="middle" font-size="9.5" fill="var(--muted)">marking on the leaf (slots between)</text>`;
+  g+=`<text x="2" y="${T+6}" font-size="9.5" fill="var(--muted)">mil</text>`;
+  if(need.length>1)g+=`<path d="${line(need)}" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+  if(meas.length>1)g+=`<path d="${line(meas)}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`+meas.map(p=>`<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="1.8" fill="var(--accent)"/>`).join("");
+  g+=shot.map(p=>`<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="4" fill="none" stroke="var(--fg)" stroke-width="1.8"/>`).join("");
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Angle above setting 1 for each slot of the leaf">${g}</svg>`
+    +`<figcaption>${meas.length>1?`<span><i class="k"></i>leaf, measured</span>`:""}${need.length>1?`<span><i class="k need"></i>this load needs at the stamped ranges</span>`:""}${shot.length?`<span><i class="k dot"></i>groups</span>`:""}</figcaption>`;
+}
 const CAL_WARN={rise_needs_lowest:"Measure the lowest setting's rise too: the others are measured from it.",rise_needs_radius:"Enter the sight radius for the caliper values.",
   poi_needs_lowest:"",fit_far:"Caliper and groups differ by more than 15 %: check the sight radius and the measurements."};
 function calCompute(){
@@ -2029,6 +2059,7 @@ function calCompute(){
   if(!p0)out.push("Leaf says and true ranges show once the profile is saved with this load.");
   else out.push("Angle: above setting 1 by caliper; groups on that setting below it. Leaf says: the angle each setting needs for this load if the stamped ranges were right. True m: what each setting is right for with this load, groups included.");
   $("cOut").innerHTML=out.join("<br>");$("cFitL").hidden=cal.kFit==null;
+  drawCalChart(ms,cal,bare);
   calSummary();
 }
 $("fIrCal").addEventListener("click",openCal);
