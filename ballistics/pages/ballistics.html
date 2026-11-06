@@ -1806,12 +1806,14 @@ function leafOf(n,marks){
   const sl=Array.from({length:n},(_,k)=>marks[k+1]?{mark:marks[k+1][0],range_m:marks[k+1][1]}:{}),rs=slotRanges(sl);
   return sl.map((x,k)=>Object.assign({label:String(k+1),range_m:rs[k]},x.mark?{mark:x.mark}:{}));
 }
-/** A slot's name for people: "mark 3", or where an unmarked one sits ("between 3 and 4"); short: "3", "3–4". */
+/** A slot's name for people: "mark 3", or an unmarked one counted from the mark below it ("mark 3 + 2 notches");
+    below the first mark, from it down. short: "3", "3 +2". */
 function slotName(g,label,short){
   const ms=bySlot(((g&&g.marks)||[]).slice()),i=ms.findIndex(m=>m.label===label);if(i<0)return"";
   if(ms[i].mark)return short?ms[i].mark:"mark "+ms[i].mark;
-  let a=null,b=null;for(let k=i-1;k>=0&&a==null;k--)if(ms[k].mark)a=ms[k].mark;for(let k=i+1;k<ms.length&&b==null;k++)if(ms[k].mark)b=ms[k].mark;
-  return a&&b?(short?`${a}–${b}`:`between ${a} and ${b}`):a?(short?a+"+":"above "+a):b?(short?"<"+b:"below "+b):"";
+  for(let k=i-1;k>=0;k--)if(ms[k].mark){const n=i-k;return short?`${ms[k].mark} +${n}`:`mark ${ms[k].mark} + ${n} notch${n>1?"es":""}`}
+  for(let k=i+1;k<ms.length;k++)if(ms[k].mark){const n=k-i;return short?`${ms[k].mark} −${n}`:`mark ${ms[k].mark} − ${n} notch${n>1?"es":""}`}
+  return"";
 }
 /* ---- groups (sheet #gSheet): where groups landed on each setting, with this rifle and load (the profile) ----
    Height decides where the leaf really points (and calibrates it with the caliper), side the setting's own
