@@ -11,7 +11,7 @@ const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg}: ${a}
 const TRUE = [0, 1.0, 2.2, 3.6, 5.2];
 const R = 620;
 const marks = (rise, poi) => TRUE.map((a, k) => Object.assign({label: String(k + 1), range_m: (k + 1) * 100},
-  rise ? {rise_mm: 3 + a * R / 1000 * rise} : {}, poi ? {poi_cm: 15 + a * 10} : {}));
+  rise ? {rise_mm: 3 + a * R / 1000 * rise} : {}, poi ? {angle: 1.5 + a} : {}));
 
 test("caliper alone: rise / radius", () => {
   const c = C.leafCal(marks(1, false), {radius_mm: R});
@@ -19,15 +19,15 @@ test("caliper alone: rise / radius", () => {
   assert.equal(c.kFit, null); assert.ok(c.any);
 });
 
-test("shots alone at 100 m: cm above setting 1 / 10", () => {
-  const c = C.leafCal(marks(false, true), {dist_m: 100});
+test("shots alone: angles above setting 1", () => {
+  const c = C.leafCal(marks(false, true), {});
   TRUE.forEach((a, k) => near(c.rel[k], a, 1e-9, "setting " + (k + 1)));
   assert.equal(c.src[2], "shot");
 });
 
 test("both: the caliper is scaled to the shots and fills the settings not shot", () => {
   // caliper reads 5 % low (e.g. the radius entered too long); only settings 1, 2 and 4 shot
-  const ms = marks(0.95, true).map((m, k) => k === 2 || k === 4 ? Object.assign({}, m, {poi_cm: undefined}) : m);
+  const ms = marks(0.95, true).map((m, k) => k === 2 || k === 4 ? Object.assign({}, m, {angle: undefined}) : m);
   const c = C.leafCal(ms, {radius_mm: R});
   near(c.kFit, 1 / 0.95, 1e-9, "fit");
   near(c.rel[2], TRUE[2], 1e-9, "setting 3 from the scaled caliper");
@@ -39,13 +39,13 @@ test("both: the caliper is scaled to the shots and fills the settings not shot",
 });
 
 test("a setting where shots and caliper disagree is flagged", () => {
-  const ms = marks(1, true); ms[3].poi_cm += 6;                // 0.6 mil off
+  const ms = marks(1, true); ms[3].angle += 0.6;                // 0.6 mil off
   const c = C.leafCal(ms, {radius_mm: R});
   assert.ok(c.flags[3]);
 });
 
 test("needs the lowest setting and the radius", () => {
-  const ms = marks(1, true); delete ms[0].rise_mm; delete ms[0].poi_cm;
+  const ms = marks(1, true); delete ms[0].rise_mm; delete ms[0].angle;
   const c = C.leafCal(ms, {});
   assert.ok(c.warnings.includes("rise_needs_lowest") && c.warnings.includes("rise_needs_radius") && c.warnings.includes("poi_needs_lowest"));
   assert.ok(!c.any);

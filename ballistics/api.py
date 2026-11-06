@@ -252,8 +252,8 @@ def _sight(v, name):
     eye_mm (eye to the rear sight) with notch_mm / aperture_mm (rear notch width / aperture) size the rear sight as
     the eye sees it, and makes the post as seen from the eye (post ÷ (radius + eye)) the post-width hold.
     Calibration (with the sight, not the load): a mark may carry "rise_mm" (rear notch height measured from a fixed
-    point) and "poi_cm" (group height above the aim, all settings shot at "cal_dist_m" from the same aim mark);
-    "cal_fit": false keeps the caliper values unscaled. A diopter may carry "ladder": [{"clicks", "poi_cm"}] at
+    point); "cal_fit": false keeps the caliper values unscaled when groups (the checks, with the load) are fitted.
+    A check may carry "x_cm" (group right of the aim, − left): the setting's own sideways error. A diopter may carry "ladder": [{"clicks", "poi_cm"}] at
     "cal_dist_m" to measure its true click (see static/ironcal.js)."""
     if v in (None, "", {}):
         return None
@@ -288,7 +288,7 @@ def _sight(v, name):
                 raise ValueError(f"bad_{name}_marks")
             label = _text(8, True)(m.get("label"), f"{name}_mark_label")
             cm = {"label": label, "range_m": _num(10, 3000, True)(m.get("range_m"), f"{name}_mark_range")}
-            for k, lo, hi in (("rise_mm", -10, 80), ("poi_cm", -500, 500)):
+            for k, lo, hi in (("rise_mm", -10, 80),):
                 x = _num(lo, hi)(m.get(k), f"{name}_mark_{k}")
                 if x is not None:
                     cm[k] = x
@@ -309,14 +309,17 @@ def _sight(v, name):
                 label = _text(8, True)(chk.get("setting"), f"{name}_check_setting")
                 if label not in labels:
                     raise ValueError(f"bad_{name}_check_setting")
-                out["checks"].append({"setting": label,
-                                      "range_m": _num(10, 3000, True)(chk.get("range_m"), f"{name}_check_range"),
-                                      "cm": _num(-300, 300, True)(chk.get("cm"), f"{name}_check_cm")})
+                c = {"setting": label, "range_m": _num(10, 3000, True)(chk.get("range_m"), f"{name}_check_range"),
+                     "cm": _num(-300, 300, True)(chk.get("cm"), f"{name}_check_cm")}
+                x = _num(-300, 300)(chk.get("x_cm"), f"{name}_check_x")
+                if x is not None:            # 0 is a measurement too: the group was centred
+                    c["x_cm"] = x
+                out["checks"].append(c)
             out["checks"].sort(key=lambda c: c["range_m"])
-    if out.get("ladder") or any("poi_cm" in m or "rise_mm" in m for m in out.get("marks") or []):
+    if out.get("ladder"):
         out["cal_dist_m"] = num("cal_dist_m", 10, 300)
-        if v.get("cal_fit") is False:
-            out["cal_fit"] = False
+    if any("rise_mm" in m for m in out.get("marks") or []) and v.get("cal_fit") is False:
+        out["cal_fit"] = False
     return json.dumps({k: x for k, x in out.items() if x is not None})
 
 

@@ -362,12 +362,11 @@ def test_saved_sights(client):
 def test_sight_calibration_kept_with_the_sight(client):
     leaf = {"type": "notch", "name": "M39 cal", "radius_mm": 620,
             "marks": [{"label": "1", "range_m": 100, "rise_mm": 3.1, "poi_cm": 15},
-                      {"label": "2", "range_m": 200, "rise_mm": 3.72, "poi_cm": ""}],
-            "cal_dist_m": 100, "cal_fit": False}
+                      {"label": "2", "range_m": 200, "rise_mm": 3.72}], "cal_fit": False}
     assert client.put("/diary/api/ballistics/sights/s-cal", json={"name": "M39 cal", "data": leaf}).status_code == 200
     data = next(x for x in _all(client)["pickers"]["sights"] if x["id"] == "s-cal")["data"]
-    assert data["marks"][0] == {"label": "1", "range_m": 100, "rise_mm": 3.1, "poi_cm": 15}
-    assert "poi_cm" not in data["marks"][1] and data["cal_dist_m"] == 100 and data["cal_fit"] is False
+    assert data["marks"][0] == {"label": "1", "range_m": 100, "rise_mm": 3.1}, "groups belong to the profile"
+    assert data["cal_fit"] is False and "cal_dist_m" not in data
     bad = dict(leaf, marks=[{"label": "1", "range_m": 100, "rise_mm": 500}])
     assert client.put("/diary/api/ballistics/sights/s-cal", json={"name": "x", "data": bad}).status_code == 400
     dio = {"type": "diopter", "unit": "MOA", "elev_click": 0.5, "wind_click": 0.5,
@@ -375,9 +374,14 @@ def test_sight_calibration_kept_with_the_sight(client):
     assert client.put("/diary/api/ballistics/sights/s-dio", json={"name": "A2", "data": dio}).status_code == 200
     data = next(x for x in _all(client)["pickers"]["sights"] if x["id"] == "s-dio")["data"]
     assert data["ladder"][1] == {"clicks": 10, "poi_cm": 14.5} and data["cal_dist_m"] == 100
-    plain = {"type": "notch", "marks": [{"label": "1", "range_m": 100}], "cal_dist_m": 100}
-    assert client.put("/diary/api/ballistics/sights/s-pl", json={"name": "P", "data": plain}).status_code == 200
-    assert "cal_dist_m" not in next(x for x in _all(client)["pickers"]["sights"] if x["id"] == "s-pl")["data"]
+    # the groups, with the profile: high/low and right/left per setting
+    prof = {"name": "Groups", "sight_height_mm": 35, "zero_range_m": 100, "sight_id": "s-cal",
+            "sight": dict(leaf, checks=[{"setting": "1", "range_m": 100, "cm": 10, "x_cm": 3},
+                                        {"setting": "2", "range_m": 100, "cm": 21, "x_cm": 0}])}
+    assert client.put("/diary/api/ballistics/profiles/p-grp", json=prof).status_code == 200
+    s = next(p for p in _all(client)["profiles"] if p["id"] == "p-grp")["inputs"]["sight"]
+    assert s["checks"] == [{"setting": "1", "range_m": 100, "cm": 10, "x_cm": 3}, {"setting": "2", "range_m": 100, "cm": 21, "x_cm": 0}]
+    assert s["marks"][1]["rise_mm"] == 3.72, "the saved sight's calibration comes with it"
 
 
 def test_horizontal_offset(client):

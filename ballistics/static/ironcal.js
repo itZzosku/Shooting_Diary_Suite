@@ -3,8 +3,8 @@
 
    Two ways to measure a leaf, both giving each setting's angle above the lowest setting:
    - mechanically: how far the rear notch rises (mm, with a caliper or height gauge) ÷ the sight radius (m) = mil;
-   - shooting: groups on every setting at one short distance from the same aim mark. The bullet's path is the same
-     for all of them, so group height above setting 1's group (cm) ÷ (distance m / 10) = mil.
+   - shooting: the profile's groups (where they landed on each setting, saved with the load), turned by the page
+     into the angle each setting actually points at ("angle", mil); setting 1's angle is the reference.
    With both, the caliper values are fitted to the shots with one scale factor (a slightly wrong sight radius, a
    slider that seats differently under recoil), so settings not shot still get a value from the caliper. */
 (function (root, factory) {
@@ -15,7 +15,7 @@
   const has = x => x != null && x !== "" && isFinite(+x);
   const FLAG_MIL = 0.3;          // shots and caliper disagree by more than a 100 m group's centre is usually off
 
-  /** marks: [{label, range_m, rise_mm?, poi_cm?}] (any order), opts {radius_mm, dist_m (100), fit (true)}
+  /** marks: [{label, range_m, rise_mm?, angle?}] (any order), opts {radius_mm, fit (true)}
       → {rel: [mil|null] in range order (0 for the lowest setting), labels, mech, shot, src: ["shot"|"mech"|null],
          k (scale applied to the caliper), kFit (fitted, or null), rms (shots vs scaled caliper, mil), flags: [bool],
          warnings: [codes], any (some setting measured)} */
@@ -23,16 +23,15 @@
     opts = opts || {};
     const ms = (marks || []).slice().sort((a, b) => a.range_m - b.range_m);
     const R = has(opts.radius_mm) && +opts.radius_mm > 0 ? +opts.radius_mm / 1000 : null;
-    const dist = has(opts.dist_m) && +opts.dist_m > 0 ? +opts.dist_m : 100;
     const warnings = [];
-    const anyRise = ms.some(m => has(m.rise_mm)), anyPoi = ms.some(m => has(m.poi_cm));
+    const anyRise = ms.some(m => has(m.rise_mm)), anyPoi = ms.some(m => has(m.angle));
     let baseRise = ms.length && has(ms[0].rise_mm) ? +ms[0].rise_mm : null;
-    const basePoi = ms.length && has(ms[0].poi_cm) ? +ms[0].poi_cm : null;
+    const basePoi = ms.length && has(ms[0].angle) ? +ms[0].angle : null;
     if (anyRise && baseRise == null) warnings.push("rise_needs_lowest");
     if (anyRise && !R) warnings.push("rise_needs_radius");
     if (anyPoi && basePoi == null) warnings.push("poi_needs_lowest");
     const mech = ms.map(m => R && baseRise != null && has(m.rise_mm) ? (+m.rise_mm - baseRise) / R : null);
-    const shot = ms.map(m => basePoi != null && has(m.poi_cm) ? (+m.poi_cm - basePoi) / (dist / 10) : null);
+    const shot = ms.map(m => basePoi != null && has(m.angle) ? +m.angle - basePoi : null);
 
     // one scale on the caliper values, fitted to the shots (least squares through 0)
     let num = 0, den = 0, n = 0;
