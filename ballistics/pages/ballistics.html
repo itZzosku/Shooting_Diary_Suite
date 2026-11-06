@@ -259,6 +259,7 @@ header.top{padding-top:6px!important}
 .otbl td small{display:block;font-family:var(--f-body);font-size:.72rem;color:var(--muted)}
 .cklist{display:flex;flex-direction:column;gap:8px}
 .fsec{font-size:1.05rem;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
 .calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.62rem}
 .calt input.cl{width:2.6em;text-align:center}.calt tr.btw input.cl{border-style:dashed;color:var(--muted)}.calt input.bad{border-color:var(--danger);color:var(--danger)}.calt input[readonly]{border-style:dashed;color:var(--muted);background:transparent}
@@ -589,6 +590,8 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f">Station hPa<input type="text" inputmode="decimal" id="fZp" placeholder="1013"></label>
       <label class="f">Humidity %<input type="text" inputmode="decimal" id="fZh" placeholder="0"></label></div>
     <p class="hint" style="margin:0" id="fZeroH"></p>
+    <div class="src" id="fZeroInfo" hidden></div>
+    <div class="chips" id="fZeroTry" hidden></div>
     <h2 class="fsec">Corrections</h2>
     <div class="g3"><label class="f">Shoots cm sideways<input type="text" inputmode="decimal" id="fPoiX" placeholder="0"></label>
       <label class="f">to the<select id="fPoiD"><option value="1">right</option><option value="-1">left</option></select></label>
@@ -1747,9 +1750,49 @@ function openProfile(p,gunId,copyOf){
   $("fRet").innerHTML=opt("","– none –")+(D.reticles||[]).filter(r=>!r.archived||r.id===x.reticle_id).map(r=>opt(r.id,`${r.maker?r.maker+" ":""}${r.name} · ${r.focal_plane} ${r.unit==="MOA"?"MOA":"mil"}`,r.id===x.reticle_id)).join("");
   chronoHint(p);
   setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
-  gunHint();openSheet("pSheet");if(!p)$("fName").focus();
+  gunHint();zeroInfo();openSheet("pSheet");if(!p)$("fName").focus();
   if(copyOf){$("fName").focus();$("fName").select()}
 }
+/* ---- zero range: where the bullet crosses the line of sight (near and far zero), how high it rises between,
+   and the span it stays within ±5 cm – for the profile as it stands in the form, in the zero conditions ---- */
+function zeroProfile(Z){
+  if(!editP||!editP.inputs||!editP.inputs.bullet)return null;
+  const i=editP.inputs,mvT=$("fMvSrc").value==="manual"?num($("fMv").value):null;
+  const za=clean({tempC:num($("fZt").value),hpa:num($("fZp").value),rh:num($("fZh").value)});
+  const inp=Object.assign({},i,{sightHeightMm:num($("fSight").value)??i.sightHeightMm,zeroRangeM:Z,zeroAtmo:za},mvT?{mv:mvT}:{});
+  return inp.mv?Object.assign({},editP,{inputs:inp}):null;
+}
+function zeroPath(p,Z){
+  const za=clean(p.inputs.zeroAtmo||{}),rs=[];for(let r=1;r<=Math.max(400,Z*3);r+=1)rs.push(r);
+  let rows=[];try{rows=B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
+    {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),rs).rows.filter(r=>r.reached)}catch(e){return null}
+  if(!rows.length)return null;
+  let near=null,far=null,top=null,inA=null,inB=null;const band=0.05;
+  for(let k=1;k<rows.length;k++){const a=rows[k-1],b=rows[k],at=()=>a.range+(b.range-a.range)*(-a.dropM)/((b.dropM-a.dropM)||1);
+    if(a.dropM<0&&b.dropM>=0&&near==null)near=at();
+    else if(a.dropM>=0&&b.dropM<0&&near!=null&&far==null)far=at();
+    if(near!=null&&far==null&&(!top||b.dropM>top.dropM))top=b;
+    if(inA==null&&b.dropM>=-band)inA=b.range;
+    if(inA!=null&&inB==null&&b.dropM<-band)inB=a.range;}
+  return{near,far,top,inA,inB};
+}
+const ZERO_TRY=[25,36,50,100,200,300];
+function zeroInfo(){
+  const show=$("fSightType").value!=="notch",Z=num($("fZr").value),p=show&&Z>0?zeroProfile(Z):null;
+  $("fZeroInfo").hidden=$("fZeroTry").hidden=!show;
+  if(!show)return;
+  if(!p){$("fZeroInfo").textContent="Near and far zero show once the profile is saved with a bullet and a velocity.";$("fZeroTry").hidden=true;return}
+  const z=zeroPath(p,Z),m=x=>x==null?"–":Math.round(x)+" m";
+  $("fZeroInfo").innerHTML=!z||z.near==null?"–":z.far!=null
+    ?`Near zero <b>${m(z.near)}</b> · far zero <b>${m(z.far)}</b> · highest <b>+${(z.top.dropM*100).toFixed(1)} cm</b> at ${m(z.top.range)} · ${z.top.dropM<=0.05?"within ±5 cm":"no lower than −5 cm"} from ${m(z.inA)} to ${m(z.inB)}`
+    :`Crosses the sight line at ${m(z.near)}; the far zero is beyond ${m(Math.max(400,Z*3))}`;
+  $("fZeroTry").innerHTML=`<span class="hint" style="align-self:center">Try:</span>`+ZERO_TRY.map(t=>{const q=zeroPath(zeroProfile(t),t);
+    return`<button type="button" class="chip" data-zr="${t}"${t===Z?' aria-pressed="true"':""}>${t} m → ${q&&q.far?Math.round(q.near)+" / "+Math.round(q.far)+" m":q&&q.near?Math.round(q.near)+" m":"–"}${q&&q.top?` · +${(q.top.dropM*100).toFixed(0)} cm`:""}</button>`}).join("");
+  $("fZeroTry").hidden=false;
+}
+$("fZeroTry").addEventListener("click",e=>{const b=e.target.closest("[data-zr]");if(!b)return;$("fZr").value=b.dataset.zr;zeroInfo()});
+let ZTIMER=0;
+for(const id of["fZr","fSight","fZt","fZp","fZh","fMv","fMvSrc"])$(id).addEventListener("input",()=>{clearTimeout(ZTIMER);ZTIMER=setTimeout(zeroInfo,200)});
 function chronoHint(p){
   const ch=p&&p.inputs&&p.inputs.chrono,on=$("fMvSrc").value==="chrono"||$("fTsSrc").value==="chrono";
   $("fMvNL").hidden=$("fMvSrc").value!=="chrono";
@@ -2091,7 +2134,7 @@ function sightState(){
     :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. Groups (with this load) put it right: one group shifts every setting by that angle; groups on several settings correct each setting, in between interpolated, and a group's side error is held off on that setting. Calibrate leaf measures the notch rise per setting (with the sight); groups on several settings scale it. Wind is a hold in cm and post widths.":"";
   if(t)$("fIrHint").textContent+=" Eye to rear sight: from your eye in your shooting position to the rear "+(t==="diopter"?"aperture":"notch")+"; with the "+(t==="diopter"?"aperture":"notch width")+" it sizes the sight picture, and post-width holds then count the post as your eye sees it.";
 }
-$("fSightType").addEventListener("change",()=>{sightState();calSummary();sightSuggestions()});
+$("fSightType").addEventListener("change",()=>{sightState();calSummary();sightSuggestions();zeroInfo()});
 $("fIrPre").addEventListener("click",e=>{
   const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(!pr)return;
   // this profile's groups stay, on the slot with the same marking (none there: dropped)
