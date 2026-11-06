@@ -261,6 +261,7 @@ header.top{padding-top:6px!important}
 .fsec{font-size:1.05rem;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.7rem}
+.calt input.cl{width:3em;text-align:center}.calt input.cr{width:4.2em;margin-top:4px}
 .calt input{width:4.4em;font:inherit;text-align:right;padding:6px 5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit}
 .calt td,.calt th{padding:4px 3px}.calt td.warn{color:var(--accent);font-weight:700}
 .calt th{white-space:normal}
@@ -568,7 +569,7 @@ details summary{cursor:pointer;list-style:revert}
       <div class="grid2"><label class="f">Sight name<input type="text" id="fIrName" placeholder="e.g. A2 rear"></label>
         <label class="f" data-dio>Click unit<select id="fIrUnit"><option value="MOA">MOA</option><option value="MRAD">mil</option></select></label></div>
       <div class="grid2" data-dio><label class="f">Elevation click<input type="text" inputmode="decimal" id="fIrE"></label><label class="f">Windage click<input type="text" inputmode="decimal" id="fIrW"></label></div>
-      <label class="f" data-notch>Leaf marks (setting = range m)<input type="text" id="fIrMarks" placeholder="1=100, 2=200, 3=300"></label>
+      <input type="hidden" id="fIrMarks">
       <div class="grid2"><label class="f">Sight radius mm<input type="text" inputmode="decimal" id="fIrRad"></label><label class="f">Front post width mm<input type="text" inputmode="decimal" id="fIrPost"></label></div>
       <div class="grid2"><label class="f"><span data-notch>Rear notch width mm</span><span data-dio>Aperture mm</span><input type="text" inputmode="decimal" id="fIrRear" placeholder="e.g. 2.5"></label>
         <label class="f">Eye to rear sight mm<input type="text" inputmode="decimal" id="fIrEye" placeholder="cheek on the stock"></label></div>
@@ -675,8 +676,14 @@ details summary{cursor:pointer;list-style:revert}
     <div class="sheet-bar"><h2 id="cTitle">Calibrate</h2><button class="ghost" type="button" data-close>Close</button></div>
     <p class="hint" style="margin:0" id="cIntro"></p>
     <label class="f" data-cd>Shot at m<input type="text" inputmode="numeric" id="cDist" placeholder="100"></label>
+    <div data-cn class="ckl" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto">
+      <label class="f">Settings from<input type="text" inputmode="numeric" id="cFrom" placeholder="1"></label>
+      <label class="f">to<input type="text" inputmode="numeric" id="cTo" placeholder="20"></label>
+      <label class="f">m per setting<input type="text" inputmode="numeric" id="cPer" placeholder="100"></label>
+      <button class="ghost" type="button" id="cFill">Fill</button></div>
     <label class="f" data-cn>Sight radius mm<input type="text" inputmode="decimal" id="cRad"></label>
     <div data-cn style="overflow-x:auto"><table class="tbl calt" id="cTbl"></table></div>
+    <div class="actions" data-cn style="margin:0"><button class="ghost" type="button" id="cAdd">+ Setting</button></div>
     <div data-cd id="cLadder" class="cklist"></div>
     <div class="actions" data-cd style="margin:0"><button class="ghost" type="button" id="cLadAdd">+ Group</button></div>
     <label class="check" data-cn id="cFitL"><input type="checkbox" id="cFit" checked>Scale the caliper values to the groups</label>
@@ -1811,8 +1818,8 @@ const sortedMarks=()=>parseMarks($("fIrMarks").value).filter(m=>m.label&&m.range
 function calMarks(){return sortedMarks().map(m=>Object.assign(m,IRCAL.rise[m.label]!=null?{rise_mm:IRCAL.rise[m.label]}:{}))}
 function calSummary(){
   const t=$("fSightType").value;let txt="";
-  if(t==="notch"){const nr=calMarks().filter(m=>m.rise_mm!=null).length;
-    txt=nr?`${nr} setting${nr>1?"s":""} measured`:"Measure how far the rear notch rises on each setting.";}
+  if(t==="notch"){const ms=calMarks(),nr=ms.filter(m=>m.rise_mm!=null).length;
+    txt=!ms.length?"No leaf settings yet: tap Calibrate leaf.":`Settings ${ms[0].label}–${ms[ms.length-1].label} (${ms[0].range_m}–${ms[ms.length-1].range_m} m)`+(nr?` · ${nr} measured`:" · rise not measured");}
   else if(t==="diopter"){const c=IronCal.clickCal(IRCAL.ladder,calDist());
     txt=c?`Measured click ${fmtClick(c.milPerClick)} from ${c.n} groups`:"Shoot groups at a few click settings at 100 m to measure the true click.";}
   $("fIrCal").textContent=t==="diopter"?"Calibrate clicks":"Calibrate leaf";$("fIrCalS").textContent=txt;
@@ -1831,7 +1838,7 @@ function openCal(){
   $("cTitle").textContent=t==="diopter"?"Calibrate clicks":"Calibrate leaf";
   $("cIntro").textContent=t==="diopter"
     ?"Shoot a group at a few click settings (e.g. 0, +10, +20 up from the zero) at one distance, all from the same aim mark, and enter how high each group's centre is above the aim (− below). The slope is the sight's true click."
-    :"The rear notch's height on each setting, with a caliper from a fixed point (leaf base), square to the bore, the slider pressed down the same way each time. Setting 1 is the reference: raw readings or 0 for setting 1 and the rest from it both work. Settings left empty are interpolated. Groups shot on several settings (Groups, with this load) are fitted to these.";
+    :"The leaf's settings and the range stamped on each (Fill makes 1–20 at 100 m steps; a leaf numbered differently can be typed in). Then the rear notch's height on each setting, with a caliper from a fixed point (leaf base), square to the bore, the slider pressed down the same way each time. Setting 1 is the reference: raw readings or 0 for setting 1 and the rest from it both work. Settings left empty are interpolated. Groups shot on several settings (Groups, with this load) are fitted to these.";
   setv("cDist",IRCAL.dist_m);setv("cRad",$("fIrRad").value);$("cFit").checked=IRCAL.fit;
   $("cForm").querySelectorAll("[data-cn]").forEach(e=>e.hidden=t!=="notch");$("cForm").querySelectorAll("[data-cd]").forEach(e=>e.hidden=t!=="diopter");
   if(t==="notch")drawCalTable();else drawLadder();
@@ -1839,11 +1846,13 @@ function openCal(){
 }
 function drawCalTable(){
   const ms=calMarks();
-  $("cTbl").innerHTML=ms.length?`<thead><tr><th>Set</th><th>Rise mm</th><th>Angle mil</th><th>Leaf says</th><th>True m</th></tr></thead><tbody>`
-    +ms.map(m=>`<tr data-cl="${esc(m.label)}"><td>${esc(m.label)}<small>${m.range_m}</small></td>`
-      +`<td><input type="text" inputmode="decimal" data-ck="rise" value="${esc(m.rise_mm??"")}" aria-label="Rise mm, setting ${esc(m.label)}"></td>`
-      +`<td data-o="ang">–</td><td data-o="nom" class="dim">–</td><td data-o="eff">–</td></tr>`).join("")+`</tbody>`
-    :`<tbody><tr><td>Enter the leaf marks first.</td></tr></tbody>`;
+  $("cTbl").innerHTML=`<thead><tr><th>Set · m</th><th>Rise mm</th><th>Angle mil</th><th>Leaf says</th><th>True m</th><th></th></tr></thead><tbody>`
+    +(ms.length?ms:[{label:"",range_m:""}]).map(calRow).join("")+`</tbody>`;
+}
+function calRow(m){
+  return`<tr data-cl><td><input class="cl" type="text" data-ck="label" value="${esc(m.label)}" aria-label="Setting"><br><input class="cr" type="text" inputmode="numeric" data-ck="range" value="${esc(m.range_m??"")}" placeholder="m" aria-label="Stamped range m"></td>`
+    +`<td><input type="text" inputmode="decimal" data-ck="rise" value="${esc(m.rise_mm??"")}" aria-label="Rise mm"></td>`
+    +`<td data-o="ang">–</td><td data-o="nom" class="dim">–</td><td data-o="eff">–</td><td><button type="button" class="rm" data-calrm aria-label="Remove setting">✕</button></td></tr>`;
 }
 function ladderRow(x){return`<div class="ckrow" data-lad style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px"><label class="f">Clicks up from zero<input type="text" inputmode="numeric" data-k="clicks" value="${esc(x.clicks??"")}" placeholder="0"></label>
   <label class="f">Group cm above aim<input type="text" inputmode="decimal" data-k="poi_cm" value="${esc(x.poi_cm??"")}" placeholder="0"></label><button type="button" class="rm" data-ladrm aria-label="Remove group">✕</button></div>`}
@@ -1851,8 +1860,10 @@ function drawLadder(){$("cLadder").innerHTML=(IRCAL.ladder.length?IRCAL.ladder:[
 function readCal(){                       // the sheet's fields → IRCAL
   IRCAL.fit=$("cFit").checked;
   if($("fSightType").value==="notch"){
-    IRCAL.rise={};
-    $("cTbl").querySelectorAll("[data-cl]").forEach(tr=>{const l=tr.dataset.cl,r=num(tr.querySelector('[data-ck="rise"]').value);if(r!=null)IRCAL.rise[l]=r});
+    IRCAL.rise={};const ms=[];
+    $("cTbl").querySelectorAll("[data-cl]").forEach(tr=>{const g=k=>tr.querySelector(`[data-ck="${k}"]`).value.trim(),l=g("label"),rg=num(g("range")),r=num(g("rise"));
+      if(l&&rg){ms.push({label:l,range_m:rg});if(r!=null)IRCAL.rise[l]=r}});
+    $("fIrMarks").value=marksText(ms);
   }else{IRCAL.dist_m=num($("cDist").value);
     IRCAL.ladder=[...$("cLadder").querySelectorAll("[data-lad]")].map(r=>({clicks:num(r.querySelector('[data-k="clicks"]').value),poi_cm:num(r.querySelector('[data-k="poi_cm"]').value)})).filter(x=>x.clicks!=null&&x.poi_cm!=null)}
 }
@@ -1871,7 +1882,7 @@ function calCompute(){
   const cal=IronCal.leafCal(ms.map(m=>Object.assign({},m,ang[m.label]!=null?{angle:ang[m.label]}:{})),{radius_mm:num($("cRad").value),fit:IRCAL.fit});
   const pl=calProfile(false,true),bare=pl?notchMarks(pl):[],fin=p1?notchMarks(p1):[];
   ms.forEach((m,k)=>{
-    const tr=$("cTbl").querySelector(`[data-cl="${CSS.escape(m.label)}"]`);if(!tr)return;
+    const tr=[...$("cTbl").querySelectorAll("[data-cl]")].find(t=>t.querySelector('[data-ck="label"]').value.trim()===m.label);if(!tr)return;
     const o=n=>tr.querySelector(`[data-o="${n}"]`),f=x=>x==null?"–":x.toFixed(2);
     const sh=cal.shot[k],me=cal.mech[k]!=null?cal.mech[k]*cal.k:null;
     o("ang").innerHTML=k===0&&cal.any?"0":me!=null&&sh!=null?`${f(me)}<small>${f(sh)} shot</small>`:me!=null?f(me):sh!=null?`<small>${f(sh)} shot</small>`:"–";
@@ -1890,6 +1901,17 @@ function calCompute(){
   calSummary();
 }
 $("fIrCal").addEventListener("click",openCal);
+$("cAdd").addEventListener("click",()=>{const ms=calMarks(),L=ms[ms.length-1],st=ms.length>1?L.range_m-ms[ms.length-2].range_m:100,n=L?+L.label:NaN;
+  $("cTbl").querySelector("tbody").insertAdjacentHTML("beforeend",calRow(L?{label:isFinite(n)?String(n+1):"",range_m:L.range_m+st}:{label:"1",range_m:100}));calCompute()});
+$("cTbl").addEventListener("click",e=>{const b=e.target.closest("[data-calrm]");if(!b)return;b.closest("[data-cl]").remove();
+  if(!$("cTbl").querySelector("[data-cl]"))drawCalTable();calCompute()});
+$("cFill").addEventListener("click",()=>{       // settings from…to, the stamped range growing by a fixed step
+  const a=num($("cFrom").value)??1,b=num($("cTo").value)??20,per=num($("cPer").value)||100;
+  if(!(b>=a)||b-a>60){toast("Settings from must be below to (at most 60 settings).");return}
+  readCal();const old=Object.assign({},IRCAL.rise),ms=[];
+  for(let k=a;k<=b;k++)ms.push({label:String(k),range_m:k*per,rise_mm:old[String(k)]});
+  $("fIrMarks").value=marksText(ms);drawCalTable();calCompute();
+});
 $("cForm").addEventListener("input",e=>{if(e.target.id!=="cFit")calCompute()});
 $("cFit").addEventListener("change",calCompute);
 $("cLadAdd").addEventListener("click",()=>{$("cLadder").insertAdjacentHTML("beforeend",ladderRow({}));});
