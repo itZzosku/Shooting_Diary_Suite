@@ -1742,7 +1742,8 @@ $("fZero").addEventListener("change",()=>{       // a scope zero knows its rifle
 const IRON_PRESETS={
   diopter:[["AR-15 A2, carbine (14.5\" radius)",{name:"A2 rear",unit:"MOA",elev_click:1.4,wind_click:0.7,radius_mm:368,post_mm:1.8,aperture_mm:1.8}],
            ["AR-15 A2, rifle (19.75\" radius)",{name:"A2 rear",unit:"MOA",elev_click:1,wind_click:0.5,radius_mm:502,post_mm:1.8,aperture_mm:1.8}]],
-  notch:[["M39 leaf 1–20",{name:"M39 leaf",marks:Array.from({length:20},(_,k)=>({label:String(k+1),mark:String(k+1),range_m:(k+1)*100})),radius_mm:620,post_mm:2}]],
+  notch:[["M39 ramp (35 slots, 1.5–10)",{name:"M39 ramp",marks:leafOf(35,{1:["1.5",150],4:["2",200],12:["3",300],19:["4",400],24:["5",500],27:["6",600],31:["8",800],34:["10",1000]}),radius_mm:620,post_mm:2}],
+         ["Leaf 1–20",{name:"Leaf 1–20",marks:Array.from({length:20},(_,k)=>({label:String(k+1),mark:String(k+1),range_m:(k+1)*100})),radius_mm:620,post_mm:2}]],
 };
 // The leaf: slots numbered 1, 2, 3 … from the bottom ("label"), "mark" what is stamped at a slot (unmarked
 // slots between marks have none), "range_m" the stamped range (unmarked: interpolated between the marks).
@@ -1761,6 +1762,23 @@ function numberSlots(marks){
     const mk=m.mark||(old&&!/\+\d+$/.test(m.label)?m.label:null);return Object.assign({},m,{label:l},mk?{mark:mk}:{mark:undefined})});
   out.forEach(m=>{if(!m.mark)delete m.mark});
   return{marks:out,map};
+}
+/** Ranges for a leaf's slots from its marked ones: evenly by slot between two marks, outside them at the
+    nearest gap's spacing per slot. slots: [{mark?, range_m?}] in order → ranges [m] */
+function slotRanges(slots){
+  const mk=slots.map((x,i)=>({i,r:x.mark&&x.range_m?+x.range_m:null})).filter(x=>x.r);
+  const gap=(a,b)=>a&&b?(b.r-a.r)/(b.i-a.i):50;
+  return slots.map((x,i)=>{
+    if(x.mark&&x.range_m)return+x.range_m;
+    const a=[...mk].reverse().find(q=>q.i<i),b=mk.find(q=>q.i>i);
+    const v=a&&b?a.r+(b.r-a.r)*(i-a.i)/(b.i-a.i):a?a.r+gap(mk[mk.length-2],a)*(i-a.i):b?b.r-gap(b,mk[1])*(b.i-i):100+50*i;
+    return Math.max(10,Math.round(v));
+  });
+}
+/** A leaf from its slot count and its marks: {slot number: [marking, range m]} */
+function leafOf(n,marks){
+  const sl=Array.from({length:n},(_,k)=>marks[k+1]?{mark:marks[k+1][0],range_m:marks[k+1][1]}:{}),rs=slotRanges(sl);
+  return sl.map((x,k)=>Object.assign({label:String(k+1),range_m:rs[k]},x.mark?{mark:x.mark}:{}));
 }
 /** A slot's name for people: "mark 3", or where an unmarked one sits ("between 3 and 4"); short: "3", "3–4". */
 function slotName(g,label,short){
@@ -1952,16 +1970,11 @@ $("cTbl").addEventListener("input",e=>{if(e.target.dataset.ck==="mark"||e.target
 let REMAP_NOW={};
 function slotFix(){
   const rows=[...$("cTbl").querySelectorAll("[data-cl]")],rg=t=>num(t.querySelector('[data-ck="range"]').value);
-  const mk=rows.map((t,i)=>({i,mark:t.querySelector('[data-ck="mark"]').value.trim(),r:rg(t)})).filter(x=>x.mark&&x.r);
-  const per=mk.length>1?(mk[mk.length-1].r-mk[0].r)/(mk[mk.length-1].i-mk[0].i):50;
+  const rs=slotRanges(rows.map(t=>({mark:t.querySelector('[data-ck="mark"]').value.trim(),range_m:rg(t)})));
   rows.forEach((t,i)=>{
     const isMk=!!t.querySelector('[data-ck="mark"]').value.trim(),inp=t.querySelector('[data-ck="range"]');
     t.classList.toggle("btw",!isMk);inp.readOnly=!isMk;
-    if(!isMk){
-      const a=[...mk].reverse().find(x=>x.i<i),b=mk.find(x=>x.i>i);
-      const v=a&&b?a.r+(b.r-a.r)*(i-a.i)/(b.i-a.i):a?a.r+per*(i-a.i):b?b.r-per*(b.i-i):100+per*i;
-      inp.value=Math.max(10,Math.round(v));
-    }
+    if(!isMk)inp.value=rs[i];
     const l=String(i+1);t.querySelector('[data-o="set"]').textContent=l;
     if(t.dataset.lab&&t.dataset.lab!==l)REMAP_NOW[t.dataset.lab]=l;
     t.dataset.lab=l;
@@ -2027,7 +2040,14 @@ function sightState(){
   if(t)$("fIrHint").textContent+=" Eye to rear sight: from your eye in your shooting position to the rear "+(t==="diopter"?"aperture":"notch")+"; with the "+(t==="diopter"?"aperture":"notch width")+" it sizes the sight picture, and post-width holds then count the post as your eye sees it.";
 }
 $("fSightType").addEventListener("change",()=>{sightState();calSummary()});
-$("fIrPre").addEventListener("click",e=>{const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(pr)fillIron(pr[1])});
+$("fIrPre").addEventListener("click",e=>{
+  const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(!pr)return;
+  // this profile's groups stay, on the slot with the same marking (none there: dropped)
+  const before=sortedMarks(),nm=pr[1].marks||[];let dropped=0;
+  const cks=readChecks().map(c=>{const o=before.find(m=>m.label===c.setting),n=o&&o.mark&&nm.find(m=>m.mark===o.mark);if(!n){dropped++;return null}return Object.assign({},c,{setting:n.label})}).filter(Boolean);
+  fillIron(Object.assign({},pr[1],{checks:cks}));
+  if(dropped)toast(`${dropped} group${dropped>1?"s":""} on slots without a marking in the preset dropped.`);
+});
 function readIron(){
   const t=$("fSightType").value;if(!t)return null;
   const g={type:t,name:$("fIrName").value.trim()||null,radius_mm:num($("fIrRad").value),post_mm:num($("fIrPost").value),eye_mm:num($("fIrEye").value)};
