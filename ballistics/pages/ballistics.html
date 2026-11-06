@@ -907,6 +907,14 @@ function solverInput(p,c,extra){
     spinDrift:i.spinDrift,spinScale:i.spinScale,poiRightMrad:i.poiRightMrad||0,aeroJump:i.aeroJump,coriolis:i.coriolis&&(c.lat??i.latitude)!=null&&(c.az??i.azimuthDeg)!=null,
     latitude:c.lat??i.latitude,azimuthDeg:c.az??i.azimuthDeg},extra||{});
 }
+/** B.solve for this profile with its aim point offset (Reticle → Aim vs hit, cm): −10 = you aim 10 cm below the
+    point you want to hit (a 6 o'clock hold), so each range needs 10 cm more elevation – the setting, clicks and
+    holds everywhere are for that. A distance, not an angle: the same cm at every range. */
+function solveAim(p,inp,ranges){
+  const res=B.solve(inp,ranges),off=aimOffCm(p);
+  if(off)for(const r of res.rows)if(r.reached&&r.range>0)r.elevMrad-=off*10/r.range;
+  return res;
+}
 const clean=o=>{const r={};for(const k in o||{})if(o[k]!=null)r[k]=o[k];return r};
 function ready(p){return p&&p.inputs&&p.inputs.bullet&&p.inputs.mv}
 // ------------------------------------------------------------ iron sights
@@ -1092,6 +1100,7 @@ function renderProfiles(){
 function renderNotchSolution(p,res,r,c){
   const n=notchFor(p,r),pm=postMil(ironOf(p));
   if(!n){$("oWarn").innerHTML="<div>The sight's marks aren't reached with this load – check the marks and the zero.</div>";return}
+  const an=aimNote(p);
   $("oE").innerHTML=`${esc(slotName(ironOf(p),n.label,true)||n.label)}<em>${n.locked?"locked":"setting"}</em>`;
   $("oEs").textContent=aimCm(n.holdCm)+(Math.abs(n.holdCm)>=1?` (${Math.abs(n.holdMil).toFixed(2)} mil)`:"")+(n.alt?`\nor ${settingName(ironOf(p),n.alt.label)}: ${aimCm(n.alt.holdCm)}`:"");
   const wc=n.windMil*r.range/10;
@@ -1100,7 +1109,7 @@ function renderNotchSolution(p,res,r,c){
   $("oWs").textContent=(Math.abs(wc)>=1?`aim ${wc<0?"left":"right"} · ${(Math.abs(n.windMil)/pm).toFixed(2)} post widths${why?" · "+why:""}\n`:"")+`${(r.windPer1Mrad*r.range/10).toFixed(1)} cm per 1 m/s`;
   $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
     +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span><span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`;
-  $("oWarn").innerHTML="";
+  $("oWarn").innerHTML=an?`<div class="i">${esc(an)}</div>`:"";
 }
 function renderSolution(){
   const p=prof(),c=cond();const R=num($("rIn").value);
@@ -1111,7 +1120,7 @@ function renderSolution(){
   if(!p.inputs.mv)warn.push("No muzzle velocity on this profile – edit the profile.");
   if(!ready(p)||!(R>0)){$("oWarn").innerHTML=warn.map(w=>`<div>${esc(w)}</div>`).join("");return}
   let res;
-  try{res=B.solve(solverInput(p,c),[R])}catch(e){$("oWarn").innerHTML=`<div>Can't compute: ${esc(e.message==="zero_not_found"?"no zero found – check sight height, zero range and velocity":e.message)}</div>`;return}
+  try{res=solveAim(p,solverInput(p,c),[R])}catch(e){$("oWarn").innerHTML=`<div>Can't compute: ${esc(e.message==="zero_not_found"?"no zero found – check sight height, zero range and velocity":e.message)}</div>`;return}
   const r=res.rows[0],s=scopeOf(p),z=p.inputs.zero;
   if(!r.reached){$("oWarn").innerHTML="<div>The bullet doesn't reach that range.</div>";return}
   if(isNotch(p)){renderNotchSolution(p,res,r,c);return}
@@ -1156,6 +1165,7 @@ function renderSolution(){
   if(p.inputs.coriolis&&((c.lat??p.inputs.latitude)==null||(c.az??p.inputs.azimuthDeg)==null))info.push("Coriolis is on but needs latitude and direction of fire (Location, below the conditions).");
   if(p.inputs.spinDrift&&res.sg==null)info.push("Spin drift needs twist and the bullet's length.");
   if(res.sg!=null&&res.sg<(slowRound?1:1.4))warn.push(slowRound?`Stability factor ${res.sg.toFixed(2)} – under 1, the bullet may not be stable.`:`Stability factor ${res.sg.toFixed(2)} – marginal (under 1.4).`);
+  if(aimNote(p))info.push(aimNote(p));
   $("oWarn").innerHTML=warn.map(w=>`<div>${esc(w)}</div>`).join("")+info.map(w=>`<div class="i">${esc(w)}</div>`).join("");
 }
 /** Where the bullet is against the line of sight, in cm: + below it (drop), − above it (near the zero). */
@@ -1165,7 +1175,7 @@ function renderCard(){
   const [a,step,end]=cardRange();
   if(!ready(p)||!(step>0)||!(end>a)){$("cTable").innerHTML="";return}
   const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<300;x+=step)ranges.push(Math.round(x*10)/10);
-  let res;try{res=B.solve(solverInput(p,c),ranges.filter(x=>x>0))}catch(e){$("cTable").innerHTML="";return}
+  let res;try{res=solveAim(p,solverInput(p,c),ranges.filter(x=>x>0))}catch(e){$("cTable").innerHTML="";return}
   const s=scopeOf(p),R=num($("rIn").value),u=s.unit==="MOA"?"MOA":"mil";
   if(isNotch(p)){
     $("cTable").innerHTML=`<tr><th>m</th><th>Setting</th><th>Aim</th><th>Drop cm</th><th>Wind/1 m/s</th><th>m/s</th><th>TOF</th></tr>`+res.rows.map(r=>{
@@ -1204,7 +1214,7 @@ function stageRows(stage,p){
   const w=stage.wind||{ms:c.ms,clock:c.clock};
   const rows=stage.targets.map(t=>{
     const tw=t.wind||w;
-    let r;try{r=B.solve(solverInput(p,c,{wind:{ms:tw.ms,clock:tw.clock},angleDeg:t.angle_deg||c.angle}),[t.range_m]).rows[0]}catch(e){r=null}
+    let r;try{r=solveAim(p,solverInput(p,c,{wind:{ms:tw.ms,clock:tw.clock},angleDeg:t.angle_deg||c.angle}),[t.range_m]).rows[0]}catch(e){r=null}
     return {t,r};
   });
   const elev=rows.map(x=>x.r&&x.r.reached?B.toUnit(x.r.elevMrad,s.unit):null);
@@ -2380,30 +2390,32 @@ function retScene(p,ret){
   const c=cond();
   if(out.mode==="shot"){
     const R=num($("rIn").value);let r=null;
-    try{r=R>0?B.solve(solverInput(p,c),[R]).rows[0]:null}catch(e){}
+    try{r=R>0?solveAim(p,solverInput(p,c),[R]).rows[0]:null}catch(e){}
     out.R=R;out.wind={ms:c.ms,clock:c.clock};out.angle=c.angle;
     if(r&&r.reached&&ret.iron==="notch"){
       const n=notchFor(p,r);
       if(n){
         const y=n.holdMil,x=-n.windMil,tg=targetShape(R,ret),off=aimOffCm(p);
-        out.holds.push({x,y:y-aimOffU(p,R,ret),main:true,ring:true});   // y grows downwards on the view
-        if(tg)out.targets.push(Object.assign(tg.shape,{x,y}));
-        out.info.push(`Set ${settingName(ironOf(p),n.label)}: put the post's tip on the dot – ${aimCm(n.holdCm+off)}${off?` (aim ${Math.abs(off)} cm ${off<0?"below":"above"} the hit)`:""}, wind ${sideCm(n.windMil*R/10)} (${(Math.abs(n.windMil)/ret.post).toFixed(2)} post widths${n.xMil?`, its own side error included`:""}).`);
+        const yh=y+aimOffU(p,R,ret);   // the hit (circle and target's centre) is the aim offset away from the aim point (y grows down)
+        out.holds.push({x,y:yh,main:true,ring:true});
+        if(tg)out.targets.push(Object.assign(tg.shape,{x,y:yh}));
+        out.info.push(`Set ${settingName(ironOf(p),n.label)}: put the post's tip on the dot – ${aimCm(n.holdCm)}${off?` from your aim point, ${Math.abs(off)} cm ${off<0?"below":"above"} the target's centre`:""}, wind ${sideCm(n.windMil*R/10)} (${(Math.abs(n.windMil)/ret.post).toFixed(2)} post widths${n.xMil?`, its own side error included`:""}).`);
         if(tg)out.info.push(tg.info);
       }
     }else if(r&&r.reached){
       const e=B.toUnit(r.elevMrad,s.unit),w=B.toUnit(r.windMrad,s.unit),click=s.click||0.1;
       const lk=ret.iron?lockOf(p):null;     // a locked diopter stays where it is: everything else is held
       out.dialled=lk?B.toUnit(lk.mil,s.unit):$("vDial").checked?Math.round(e/click)*click:0;
-      const y0=toRet(e-out.dialled,s.unit,ret),x=-toRet(w,s.unit,ret),tg=targetShape(R,ret),y=y0-aimOffU(p,R,ret);
-      out.holds.push({x,y,main:true,ring:!!ret.iron});  // the range is on the readout; a tag would cover marks
-      if(tg)out.targets.push(Object.assign(tg.shape,{x,y:y0}));
+      const y=toRet(e-out.dialled,s.unit,ret),x=-toRet(w,s.unit,ret),tg=targetShape(R,ret);
+      const yh=y+aimOffU(p,R,ret);   // the hit, off the aim point by the aim offset
+      out.holds.push({x,y:yh,main:true,ring:!!ret.iron});  // the range is on the readout; a tag would cover marks
+      if(tg)out.targets.push(Object.assign(tg.shape,{x,y:yh}));
       const yc=RT.convert(y,ret.unit,"MRAD")*R/10;          // the hold in cm, from the aim point
       out.info.push(ret.iron?`${out.dialled?(n=>`${lk?"Locked at":"Dialled"} ${n} click${n===1?"":"s"} ${out.dialled>0?"up":"down"}; `)(Math.abs(Math.round(out.dialled/click))):""}put the post's tip on the dot: ${Math.abs(yc)<1?"centre":aimCm(yc)}, wind ${sideCm(-x*R/10)} (${(Math.abs(x)/ret.post).toFixed(2)} post widths).`
-        :`Put the ${aimOffCm(p)?"aim point":"target"} on the dot: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
+        :`${aimOffCm(p)?"Hold on your aim point":"Put the target on the dot"}: ${y>0.005?"↑ "+y.toFixed(2):y<-0.005?"↓ "+(-y).toFixed(2):"centre"} · wind ${Math.abs(x).toFixed(2)} ${x<0?"left":x>0?"right":""} (${ret.unit==="MOA"?"MOA":"mil"} on this reticle)`);
       if(tg)out.info.push(tg.info);
     }
-    if(aimOffCm(p)&&r&&r.reached)out.info.push(`Aim ${Math.abs(aimOffCm(p))} cm ${aimOffCm(p)<0?"below":"above"} the hit${aimOffCm(p)<0?" (6 o'clock hold)":""}: the dot is where you aim, the target stays where the bullet goes.`);
+    if(aimOffCm(p)&&r&&r.reached)out.info.push(`Aiming ${Math.abs(aimOffCm(p))} cm ${aimOffCm(p)<0?"below":"above"} the target's centre${aimOffCm(p)<0?" (6 o'clock hold)":""}: the setting and holds are for hitting the centre from there, everywhere in the calculator; the circle is where the bullet goes.`);
   }else{
     const st=D.stages.find(x=>x.id===out.mode),rows=st?stageRows(st,p)||[]:[];
     const w=st&&st.wind||{ms:c.ms,clock:c.clock};out.wind=w;out.angle=c.angle;
@@ -2411,8 +2423,9 @@ function retScene(p,ret){
       if(x.bad)continue;
       const y=toRet(x.hold,s.unit,ret),xx=-toRet(x.wind,s.unit,ret);
       const tg=targetShape(x.t.range_m,ret,{kind:x.t.shape||"rect",d:x.t.w_cm,w:x.t.w_cm,h:x.t.h_cm||x.t.w_cm});
-      out.holds.push({x:xx,y:y-aimOffU(p,x.t.range_m,ret),label:x.t.label,ring:!!ret.iron});
-      if(tg)out.targets.push(Object.assign(tg.shape,{x:xx,y,range:x.t.range_m}));
+      const yh=y+aimOffU(p,x.t.range_m,ret);
+      out.holds.push({x:xx,y:yh,label:x.t.label,ring:!!ret.iron});
+      if(tg)out.targets.push(Object.assign(tg.shape,{x:xx,y:yh,range:x.t.range_m}));
     }
     out.targets.sort((a,b)=>a.range-b.range);       // near (big) targets underneath, far (small) ones on top
     const d=rows.find(x=>!x.bad);
@@ -2426,11 +2439,11 @@ function retScene(p,ret){
 let rangeCache={key:null,rows:null};
 function rangeMarks(p,ret,dialled,k,pxPer,halo){
   const s=scopeOf(p),inp=solverInput(p,cond(),{wind:{ms:0,clock:12}});
-  const key=JSON.stringify([inp,dialled,ret.id,ret.rev,s.unit]);
+  const key=JSON.stringify([inp,dialled,ret.id,ret.rev,s.unit,aimOffCm(p)]);
   if(rangeCache.key!==key){
     const ranges=[];for(let r=5;r<=2500;r+=5)ranges.push(r);
     let rows=[];
-    try{rows=B.solve(inp,ranges).rows.filter(r=>r.reached).map(r=>({range:r.range,hold:toRet(B.toUnit(r.elevMrad,s.unit)-dialled,s.unit,ret)}))}catch(e){}
+    try{rows=solveAim(p,inp,ranges).rows.filter(r=>r.reached).map(r=>({range:r.range,hold:toRet(B.toUnit(r.elevMrad,s.unit)-dialled,s.unit,ret)}))}catch(e){}
     rangeCache={key,rows};
   }
   const rows=rangeCache.rows,texts=[];
@@ -2645,6 +2658,7 @@ function fillTargetUI(){
 function tgtFields(){const k=$("vTgt").value;$("vTgtDL").hidden=k!=="circle";$("vTgtWL").hidden=$("vTgtHL").hidden=k!=="rect"&&k!=="diamond"}
 /* Aim point vs point of impact (per profile): where you aim against where the bullet lands, cm: −10 = aim 10 cm
    below the hit (a 6 o'clock hold on a bull), + above. The dot – where you aim – moves by it; targets stay on the hit. */
+const aimNote=p=>{const o=aimOffCm(p);return o?`Aiming ${Math.abs(o)} cm ${o<0?"below":"above"} the target's centre${o<0?" (6 o'clock hold)":""}: the setting and holds are for hitting the centre from there (Reticle → Aim vs hit).`:""};
 const aimOffCm=p=>{const v=p&&U.aimOff&&U.aimOff[p.id];return v?+v:0};
 const aimOffU=(p,R,ret)=>R>0?RT.convert(aimOffCm(p)/100/R*1000,"MRAD",ret.unit):0;
 function fillAimOff(force){const p=prof(),f=$("vAimOff"),id=p?p.id:"";
@@ -2674,7 +2688,7 @@ function targetShape(R,ret,given){
 $("vTgt").addEventListener("change",()=>{U.tgt=Object.assign(tgtState(),{kind:$("vTgt").value});saveUI();tgtFields();renderReticle()});
 $("vAimOff").addEventListener("input",()=>{
   const p=prof();if(!p)return;const t=$("vAimOff").value.trim().replace("−","-").replace(",","."),v=t===""?0:+t;
-  if(!isFinite(v)||Math.abs(v)>300)return;U.aimOff=Object.assign({},U.aimOff,{[p.id]:v});saveUI();renderReticle();
+  if(!isFinite(v)||Math.abs(v)>300)return;U.aimOff=Object.assign({},U.aimOff,{[p.id]:v});saveUI();render();
 });
 for(const [id,k] of [["vTgtD","d"],["vTgtW","w"],["vTgtH","h"]])$(id).addEventListener("input",()=>{const v=num($(id).value);if(v>0&&v<=1000){U.tgt=Object.assign(tgtState(),{[k]:v});saveUI();renderReticle()}});
 fillTargetUI();
@@ -2977,7 +2991,7 @@ $("pdfDope").addEventListener("click",()=>withPdf($("pdfDope"),async()=>{
   const c=cond(),st=D.settings,s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil";
   const [a,step,end]=cardRange();
   const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<60;x+=step)if(x>0)ranges.push(Math.round(x*10)/10);
-  const rows=B.solve(solverInput(p,c),ranges).rows.filter(r=>r.reached);
+  const rows=solveAim(p,solverInput(p,c),ranges).rows.filter(r=>r.reached);
   const doc=await pdfDoc(),W=doc.internal.pageSize.getWidth(),M=22,colW=(W-3*M)/2;
   const fs=rows.length>34?6.5:rows.length>26?7.5:8.5;
   for(const x0 of [M,2*M+colW]){                     // two copies side by side, for cutting
@@ -3002,7 +3016,7 @@ $("pdfWind").addEventListener("click",()=>withPdf($("pdfWind"),async()=>{
   const c=cond(),st=D.settings,s=scopeOf(p),u=s.unit==="MOA"?"MOA":"mil",dec=decs(s.click||0.1);
   const [a,step,end]=cardRange();
   const ranges=[];for(let x=a;x<=end+1e-9&&ranges.length<60;x+=step)if(x>0)ranges.push(Math.round(x*10)/10);
-  const rows=B.solve(solverInput(p,c),ranges).rows.filter(r=>r.reached);
+  const rows=solveAim(p,solverInput(p,c),ranges).rows.filter(r=>r.reached);
   const doc=await pdfDoc(),M=36;
   doc.setFont("helvetica","bold");doc.setFontSize(15);doc.text(PT(p.name+" - wind card"),M,M+8);
   doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(70);doc.text(PT(condLine(p,c)+` · full-value crosswind, ${u}`),M,M+24);doc.setTextColor(0);
