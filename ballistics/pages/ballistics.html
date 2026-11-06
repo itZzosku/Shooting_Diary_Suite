@@ -693,7 +693,7 @@ details summary{cursor:pointer;list-style:revert}
     <div class="actions" data-cd style="margin:0"><button class="ghost" type="button" id="cLadAdd">+ Group</button></div>
     <label class="check" data-cn id="cFitL"><input type="checkbox" id="cFit" checked>Scale the caliper values to the groups</label>
     <div class="src" id="cOut"></div>
-    <div class="actions"><button class="primary" type="button" id="cDone">Done</button><button class="ghost" type="button" id="cUse" data-cd hidden>Use as elevation click</button></div>
+    <div class="actions"><button class="primary" type="button" id="cDone">Done – back to the profile</button><button class="ghost" type="button" id="cUse" data-cd hidden>Use as elevation click</button></div>
   </form>
 </div>
 <!-- groups: where groups landed per setting, with this rifle and load -->
@@ -705,7 +705,7 @@ details summary{cursor:pointer;list-style:revert}
     <div id="fIrChecks" class="cklist"></div>
     <div class="actions" style="margin:0"><button class="ghost" type="button" id="fIrCkAdd">+ Group</button></div>
     <div class="src" id="gOut"></div>
-    <div class="actions"><button class="primary" type="button" id="gDone">Done</button></div>
+    <div class="actions"><button class="primary" type="button" id="gDone">Done – back to the profile</button></div>
   </form>
 </div>
 <!-- reticle library and builder -->
@@ -1872,7 +1872,7 @@ function groupsCompute(){
 }
 $("fIrGrp").addEventListener("click",openGroups);
 $("gForm").addEventListener("input",groupsCompute);$("gForm").addEventListener("change",groupsCompute);
-$("gDone").addEventListener("click",()=>{groupsCompute();closeSheet($("gSheet"))});
+$("gDone").addEventListener("click",()=>{groupsCompute();closeSheet($("gSheet"));toast("Groups updated in the profile – press Save to keep them.")});
 function fillIron(g){
   setv("fIrName",g.name);$("fIrUnit").value=g.unit||"MOA";setv("fIrE",g.elev_click);setv("fIrW",g.wind_click);
   const nb=numberSlots(g.marks);REMAP=Object.assign({},nb.map);
@@ -2051,7 +2051,7 @@ $("cLadAdd").addEventListener("click",()=>{$("cLadder").insertAdjacentHTML("befo
 $("cLadder").addEventListener("click",e=>{const b=e.target.closest("[data-ladrm]");if(!b)return;b.closest("[data-lad]").remove();calCompute()});
 $("cUse").addEventListener("click",()=>{const c=IronCal.clickCal(IRCAL.ladder,calDist());if(!c)return;
   $("fIrE").value=(($("fIrUnit").value==="MOA"?c.milPerClick*B.toUnit(1,"MOA"):c.milPerClick)).toFixed(3);calCompute();toast("Elevation click set – save the profile to keep it.")});
-$("cDone").addEventListener("click",()=>{calCompute();closeSheet($("cSheet"))});
+$("cDone").addEventListener("click",()=>{calCompute();closeSheet($("cSheet"));toast("Leaf updated in the profile – press Save to keep it.")});
 $("fIrMarks").addEventListener("change",calSummary);$("fIrUnit").addEventListener("change",calSummary);
 // Saved sights (pickers.sights): a sight is made once and picked in any profile. Editing a saved sight's fields
 // here and saving the profile updates it for every profile using it; the zero check stays with the profile.
