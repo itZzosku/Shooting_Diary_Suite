@@ -21,7 +21,9 @@
          warnings: [codes], any (some setting measured)} */
   function leafCal(marks, opts) {
     opts = opts || {};
-    const ms = (marks || []).slice().sort((a, b) => a.range_m - b.range_m);
+    // the leaf's order: by slot number when every label is one, else by range
+    const ms = (marks || []).slice().sort((marks || []).every(m => /^\d+$/.test(m.label))
+      ? (a, b) => a.label - b.label : (a, b) => a.range_m - b.range_m);
     const R = has(opts.radius_mm) && +opts.radius_mm > 0 ? +opts.radius_mm / 1000 : null;
     const warnings = [];
     const anyRise = ms.some(m => has(m.rise_mm)), anyPoi = ms.some(m => has(m.angle));

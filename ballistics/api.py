@@ -323,7 +323,10 @@ def _sight(v, name):
                 if x is not None:
                     cm[k] = x
             clean_marks.append(cm)
-        clean_marks.sort(key=lambda m: m["range_m"])
+        if all(m["label"].isdigit() for m in clean_marks):    # slots numbered from the bottom: their own order
+            clean_marks.sort(key=lambda m: int(m["label"]))
+        else:
+            clean_marks.sort(key=lambda m: m["range_m"])
         out.update(marks=clean_marks, notch_mm=num("notch_mm", 0.3, 10))
         checks = v.get("checks")
         if checks is None and v.get("check"):

@@ -261,7 +261,7 @@ header.top{padding-top:6px!important}
 .fsec{font-size:1.05rem;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.62rem}
-.calt input.cl{width:2.6em;text-align:center}.calt tr.btw input.cl{border-style:dashed;color:var(--muted)}.calt input[readonly]{border-style:dashed;color:var(--muted);background:transparent}
+.calt input.cl{width:2.6em;text-align:center}.calt tr.btw input.cl{border-style:dashed;color:var(--muted)}.calt input.bad{border-color:var(--danger);color:var(--danger)}.calt input[readonly]{border-style:dashed;color:var(--muted);background:transparent}
 .calt .rowb{display:flex;flex-direction:column;gap:6px;align-items:center}@media (max-width:400px){.calt th:nth-child(6),.calt td:nth-child(6){display:none}}.calt input.cr{width:3.6em}
 .calt input{width:3.6em;font:inherit;text-align:right;padding:6px 4px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit}
 .calt td,.calt th{padding:4px 2px}.calt th{font-size:.62rem}.calt td.warn{color:var(--accent);font-weight:700}
@@ -687,6 +687,7 @@ details summary{cursor:pointer;list-style:revert}
     <div class="actions" data-cn style="margin:0"><button class="ghost" type="button" id="cFill">Fill</button></div>
     <label class="f" data-cn>Sight radius mm<input type="text" inputmode="decimal" id="cRad"></label>
     <div data-cn style="overflow-x:auto"><table class="tbl calt" id="cTbl"></table></div>
+    <div class="msg" data-cn id="cRgWarn" hidden></div>
     <div class="actions" data-cn style="margin:0"><button class="ghost" type="button" id="cAdd">+ Setting</button></div>
     <div data-cd id="cLadder" class="cklist"></div>
     <div class="actions" data-cd style="margin:0"><button class="ghost" type="button" id="cLadAdd">+ Group</button></div>
@@ -1767,6 +1768,9 @@ const IRON_PRESETS={
   notch:[["M39 ramp (35 slots, 1.5–10)",{name:"M39 ramp",marks:leafOf(35,{1:["1.5",150],4:["2",200],12:["3",300],19:["4",400],24:["5",500],27:["6",600],31:["8",800],34:["10",1000]}),radius_mm:620,post_mm:2}],
          ["Leaf 1–20",{name:"Leaf 1–20",marks:Array.from({length:20},(_,k)=>({label:String(k+1),mark:String(k+1),range_m:(k+1)*100})),radius_mm:620,post_mm:2}]],
 };
+// Slots go by their number when every label is one (the leaf's own order: a mistyped range can't move a slot),
+// else (older leaves named by their markings) by range.
+const bySlot=ms=>ms.every(m=>/^\d+$/.test(m.label))?ms.sort((a,b)=>a.label-b.label):ms.sort((a,b)=>a.range_m-b.range_m);
 // The leaf: slots numbered 1, 2, 3 … from the bottom ("label"), "mark" what is stamped at a slot (unmarked
 // slots between marks have none), "range_m" the stamped range (unmarked: interpolated between the marks).
 const marksText=ms=>JSON.stringify((ms||[]).map(m=>Object.assign({label:m.label,range_m:m.range_m},m.mark?{mark:m.mark}:{})));
@@ -1778,7 +1782,7 @@ function parseMarks(t){
 /** Older leaves named slots by their marking ("3", or "3+1" between 3 and 4): number them from the bottom and
     keep the marking. → {marks, map: old label → new} */
 function numberSlots(marks){
-  const ms=(marks||[]).slice().sort((a,b)=>a.range_m-b.range_m),map={};
+  const ms=(marks||[]).some(m=>m.mark)?bySlot((marks||[]).slice()):(marks||[]).slice().sort((a,b)=>a.range_m-b.range_m),map={};
   const old=!ms.some(m=>m.mark);                 // no markings yet: the labels were the markings
   const out=ms.map((m,i)=>{const l=String(i+1);if(m.label!==l)map[m.label]=l;
     const mk=m.mark||(old&&!/\+\d+$/.test(m.label)?m.label:null);return Object.assign({},m,{label:l},mk?{mark:mk}:{mark:undefined})});
@@ -1804,7 +1808,7 @@ function leafOf(n,marks){
 }
 /** A slot's name for people: "mark 3", or where an unmarked one sits ("between 3 and 4"); short: "3", "3–4". */
 function slotName(g,label,short){
-  const ms=((g&&g.marks)||[]).slice().sort((a,b)=>a.range_m-b.range_m),i=ms.findIndex(m=>m.label===label);if(i<0)return"";
+  const ms=bySlot(((g&&g.marks)||[]).slice()),i=ms.findIndex(m=>m.label===label);if(i<0)return"";
   if(ms[i].mark)return short?ms[i].mark:"mark "+ms[i].mark;
   let a=null,b=null;for(let k=i-1;k>=0&&a==null;k--)if(ms[k].mark)a=ms[k].mark;for(let k=i+1;k<ms.length&&b==null;k++)if(ms[k].mark)b=ms[k].mark;
   return a&&b?(short?`${a}–${b}`:`between ${a} and ${b}`):a?(short?a+"+":"above "+a):b?(short?"<"+b:"below "+b):"";
@@ -1883,14 +1887,15 @@ function fillIron(g){
 let IRCAL={dist_m:null,fit:true,rise:{},ladder:[]};
 let REMAP={};          // slot numbers changed while the form is open: old → new (null: removed), for the lock
 const calDist=()=>IRCAL.dist_m||100;
-const sortedMarks=()=>parseMarks($("fIrMarks").value).filter(m=>m.label&&m.range_m).sort((a,b)=>a.range_m-b.range_m);
+const sortedMarks=()=>bySlot(parseMarks($("fIrMarks").value).filter(m=>m.label&&m.range_m));
 function calMarks(){return sortedMarks().map(m=>Object.assign(m,IRCAL.rise[m.label]!=null?{rise_mm:IRCAL.rise[m.label]}:{}))}
 function leafNow(){return{marks:sortedMarks()}}
 function calSummary(){
   const t=$("fSightType").value;let txt="";
   if(t==="notch"){const ms=calMarks(),nr=ms.filter(m=>m.rise_mm!=null).length;
-    const mk=ms.filter(m=>m.mark);
-    txt=!ms.length?"No leaf settings yet: tap Calibrate leaf.":`${ms.length} settings`+(mk.length?`, marked ${mk[0].mark}–${mk[mk.length-1].mark} (${mk[0].range_m}–${mk[mk.length-1].range_m} m)`:"")+(nr?` · ${nr} measured`:" · rise not measured");}
+    const mk=ms.filter(m=>m.mark),fl=x=>parseFloat(x);
+    const bad=mk.some((m,i)=>i&&(m.range_m<=mk[i-1].range_m||(isFinite(fl(m.mark))&&isFinite(fl(mk[i-1].mark))&&fl(m.mark)<=fl(mk[i-1].mark))));
+    txt=!ms.length?"No leaf settings yet: tap Calibrate leaf.":`${ms.length} settings`+(mk.length?`, marked ${mk[0].mark}–${mk[mk.length-1].mark} (${mk[0].range_m}–${mk[mk.length-1].range_m} m)`:"")+(nr?` · ${nr} measured`:" · rise not measured")+(bad?" · ⚠ markings or ranges out of order: check in Calibrate leaf":"");}
   else if(t==="diopter"){const c=IronCal.clickCal(IRCAL.ladder,calDist());
     txt=c?`Measured click ${fmtClick(c.milPerClick)} from ${c.n} groups`:"Shoot groups at a few click settings at 100 m to measure the true click.";}
   $("fIrCal").textContent=t==="diopter"?"Calibrate clicks":"Calibrate leaf";$("fIrCalS").textContent=txt;
@@ -1899,7 +1904,7 @@ const fmtClick=mil=>$("fIrUnit").value==="MOA"?`${(mil*B.toUnit(1,"MOA")).toFixe
 function calProfile(withCal,noChecks){            // the profile being edited with the sight as it stands in the form
   if(!editP||!editP.inputs)return null;
   const g=readIron();if(!g||g.type!=="notch"||!g.marks.length)return null;
-  g.marks.sort((a,b)=>a.range_m-b.range_m);
+  bySlot(g.marks);
   if(!withCal){g.marks=g.marks.map(m=>Object.assign({label:m.label,range_m:m.range_m},m.mark?{mark:m.mark}:{}))}
   if(noChecks)delete g.checks;
   return Object.assign({},editP,{inputs:Object.assign({},editP.inputs,{sight:g})});
@@ -1993,14 +1998,23 @@ let REMAP_NOW={};
 function slotFix(){
   const rows=[...$("cTbl").querySelectorAll("[data-cl]")],rg=t=>num(t.querySelector('[data-ck="range"]').value);
   const rs=slotRanges(rows.map(t=>({mark:t.querySelector('[data-ck="mark"]').value.trim(),range_m:rg(t)})));
+  let prevMk=null;const badRg=[];
   rows.forEach((t,i)=>{
     const isMk=!!t.querySelector('[data-ck="mark"]').value.trim(),inp=t.querySelector('[data-ck="range"]');
     t.classList.toggle("btw",!isMk);inp.readOnly=!isMk;
     if(!isMk)inp.value=rs[i];
+    inp.classList.toggle("bad",false);
     const l=String(i+1);t.querySelector('[data-o="set"]').textContent=l;
+    if(isMk){const r=rg(t),mk=t.querySelector('[data-ck="mark"]').value.trim(),mi=t.querySelector('[data-ck="mark"]');
+      mi.classList.remove("bad");
+      if(prevMk&&r!=null&&r<=prevMk.r){inp.classList.add("bad");badRg.push(`mark ${mk} at ${r} m is not further than mark ${prevMk.mark} (${prevMk.r} m) below it`)}
+      if(prevMk&&isFinite(parseFloat(mk))&&isFinite(parseFloat(prevMk.mark))&&parseFloat(mk)<=parseFloat(prevMk.mark)){mi.classList.add("bad");rows[prevMk.i].querySelector('[data-ck="mark"]').classList.add("bad");
+        badRg.push(`mark ${prevMk.mark} (set ${prevMk.i+1}) is below mark ${mk} (set ${i+1})`)}
+      if(r!=null)prevMk={r,mark:mk,i}}
     if(t.dataset.lab&&t.dataset.lab!==l)REMAP_NOW[t.dataset.lab]=l;
     t.dataset.lab=l;
   });
+  $("cRgWarn").hidden=!badRg.length;$("cRgWarn").textContent=badRg.length?"Check the ranges: "+badRg.join("; ")+".":"";
   // groups on a slot that moved go with it; on a removed slot they are dropped
   if(Object.keys(REMAP_NOW).length){
     const m=REMAP_NOW;REMAP_NOW={};let dropped=0;
