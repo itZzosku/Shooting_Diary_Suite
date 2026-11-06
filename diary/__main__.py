@@ -130,6 +130,10 @@ def import_json(path, replace):
     z = zero.import_rows(conn, data, replace)
     from . import loans
     ln = loans.import_rows(conn, data, replace)
+    from . import EXTENSIONS
+    ext_counts = {}
+    for ext in EXTENSIONS:                    # e.g. the ballistic calculator's tables
+        ext_counts.update(ext["import"](conn, data, replace))
     conn.commit()
     conn.close()
     extra = f", {c['chrono_strings']} strings / {c['chrono_shots']} velocities" if c["chrono_shots"] else ""
@@ -137,6 +141,8 @@ def import_json(path, replace):
         extra += f", {z['scopes']} scopes / {z['scope_zeros']} zeroes"
     if ln:
         extra += f", {ln} loans"
+    if ext_counts.get("bal_profiles") or ext_counts.get("bal_stages"):
+        extra += f", {ext_counts.get('bal_profiles', 0)} ballistic profiles / {ext_counts.get('bal_stages', 0)} stages"
     print(f"Imported {n} visits and {g} guns{extra} → {DATA_DIR}")
 
 
@@ -457,6 +463,8 @@ def zero_import(path, replace, dry_run):
 
 
 def main():
+    from . import load_extensions
+    load_extensions()                         # their tables go into backups and imports too
     p = argparse.ArgumentParser(prog="python -m diary")
     sub = p.add_subparsers(dest="cmd", required=True)
     u = argparse.ArgumentParser(add_help=False)

@@ -38,6 +38,21 @@ PROFILE_KEYS = ("name", "sra", "ipsc", "hunterNo")
 bp = Blueprint("diary", __name__, template_folder="templates", static_folder="static",
                static_url_path="/static")
 
+# Packages that keep tables in each account's database (ballistics/): {name, init(conn), export(conn) -> dict,
+# import(conn, data, replace)}. They register themselves through their bridge; load_extensions() imports the
+# known ones for the command line, where no web app does it.
+EXTENSIONS = []
+EXTENSION_MODULES = ("ballistics",)
+
+
+def load_extensions():
+    import importlib
+    for name in EXTENSION_MODULES:
+        try:
+            importlib.import_module(name)
+        except ImportError:
+            pass
+
 
 # ------------------------------------------------------------------ setup
 def init_app(app):
@@ -139,6 +154,8 @@ def init_db(path=None):
     init_loans(conn)
     from .zero import init_zero
     init_zero(conn)
+    for ext in EXTENSIONS:                    # tables other packages keep in each account's file (ballistics)
+        ext["init"](conn)
     conn.commit()
     conn.close()
 
@@ -587,6 +604,31 @@ def put_password():
         return jsonify(error="too_short", min=users.MIN_PASSWORD), 400
     session["diary_pw"] = users.stamp(users.get(u["id"]))
     return jsonify(ok=True)
+
+
+NAV_FEATURES = ("log", "velocity", "zeroes", "ballistics", "loans", "calculator", "ammo")
+NAV_DEFAULT = ["log", "velocity", "zeroes"]
+
+
+@bp.get("/api/nav")
+@login_required
+def get_nav():
+    """The three features in this account's top bar (static/nav.js draws it)."""
+    try:
+        nav = json.loads(kv_get("nav") or "null")
+    except ValueError:
+        nav = None
+    return jsonify(nav=nav if isinstance(nav, list) and len(nav) == 3 else NAV_DEFAULT, features=list(NAV_FEATURES))
+
+
+@bp.put("/api/nav")
+@login_required
+def put_nav():
+    nav = _json_body().get("nav")
+    if not (isinstance(nav, list) and len(nav) == 3 and len(set(nav)) == 3 and all(x in NAV_FEATURES for x in nav)):
+        return jsonify(error="pick_three"), 400
+    kv_set("nav", json.dumps(nav))
+    return jsonify(ok=True, nav=nav)
 
 
 @bp.get("/api/profile")

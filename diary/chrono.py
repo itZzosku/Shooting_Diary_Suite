@@ -447,8 +447,7 @@ def list_strings(conn, f=None):
     for r in conn.execute("SELECT * FROM chrono_strings st" + w + " ORDER BY date DESC, started_at DESC", args):
         s = dict(r)
         inc = [x["v_ms"] for x in shots.get(s["id"], []) if not x["excluded"]]
-        bgr = s["bullet_gr"] or (lmap.get(s["load_id"]) or {}).get("bullet_gr")
-        s["stats"] = stats(inc, bgr)
+        s["stats"] = stats(inc, bullet_weight(s, lmap.get(s["load_id"])))
         s["shot_count"] = len(shots.get(s["id"], []))
         out.append(s)
     return out
@@ -461,9 +460,15 @@ def get_string(conn, sid):
     s = dict(r)
     s["shots"] = _shots_by_string(conn, " WHERE st.id=?", (sid,)).get(sid, [])
     load = conn.execute("SELECT bullet_gr FROM loads WHERE id=?", (s["load_id"],)).fetchone() if s["load_id"] else None
-    s["stats"] = stats([x["v_ms"] for x in s["shots"] if not x["excluded"]],
-                       s["bullet_gr"] or (load["bullet_gr"] if load else None))
+    s["stats"] = stats([x["v_ms"] for x in s["shots"] if not x["excluded"]], bullet_weight(s, load))
     return s
+
+
+def bullet_weight(s, load):
+    """Bullet weight for energy: the linked load's, else the one in the imported file. The file's is whatever
+    the chronograph app was set to (ShotView keeps its last projectile weight), so a load picked for the
+    string is the better source."""
+    return (load["bullet_gr"] if load and load["bullet_gr"] else None) or s.get("bullet_gr")
 
 
 def days(conn, gun=None, load=None, cold_bore=True):
@@ -743,6 +748,56 @@ def api_weather():
         return jsonify(error="bad_value"), 400
     conn.commit()
     return jsonify(shots_filled=n)
+
+
+FMI_TZ = "Europe/Helsinki"          # shot times in the files are the phone's local time; FMI covers Finland
+
+
+def _local_epoch(date, t):
+    """'2026-10-15', '13:23:05' (Finnish local time) → UTC epoch seconds."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+    hh, mm, *ss = (int(x) for x in str(t).split(":"))
+    d = _dt.datetime(*(int(x) for x in date.split("-")), hh, mm, ss[0] if ss else 0, tzinfo=ZoneInfo(FMI_TZ))
+    return d.timestamp()
+
+
+@bp.post("/api/chrono/fmi")
+@login_required
+def api_fmi_weather():
+    """Weather for imported strings from FMI's observations: JSON {lat, lon, alt_m?, at: [{date, t}]} (local
+    times) → {results: [{temp_c, rh, hpa (station pressure, needs alt_m), hpa_sea, station, distance_km,
+    time} | null]} in the same order."""
+    from . import fmi
+    b = _body()
+    try:
+        lat, lon = _f(b.get("lat"), -90, 90), _f(b.get("lon"), -180, 180)
+        alt = _f(b.get("alt_m"), -500, 9000)
+        at = b.get("at")
+        if lat is None or lon is None or not isinstance(at, list) or not 1 <= len(at) <= 200:
+            raise ValueError
+        times = []
+        for x in at:
+            if not (isinstance(x, dict) and DATE_RE.match(str(x.get("date", ""))) and
+                    re.match(r"^\d{1,2}:\d{2}(:\d{2})?$", str(x.get("t", "")))):
+                raise ValueError
+            times.append(_local_epoch(x["date"], x["t"]))
+    except (TypeError, ValueError):
+        return jsonify(error="bad_request"), 400
+    try:
+        rows = fmi.observed(lat, lon, times, alt)
+    except Exception:                    # FMI down, timeout, bad XML: say so, the import still works
+        return jsonify(error="weather_unavailable"), 502
+    out = []
+    for r in rows:
+        if not r:
+            out.append(None)
+            continue
+        src = r["sources"].get("t2m") or next(iter(r["sources"].values()))
+        out.append({"temp_c": r["temp_c"], "rh": r["rh"], "hpa": r.get("hpa_station"), "hpa_sea": r["hpa_sea"],
+                    "station": src["station"], "distance_km": src["distance_km"], "time": src["time"],
+                    "sources": r["sources"]})
+    return jsonify(results=out)
 
 
 @bp.get("/api/chrono/days")

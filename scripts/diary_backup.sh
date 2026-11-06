@@ -15,3 +15,5 @@ cd "$REPO_DIR"
 # Club ammo (separate database): a dated copy next to the diary backups; shooters' names older than
 # CLUB_NAMES_YEARS (default 3) are forgotten first, as the privacy page says
 "$PYTHON" -m club backup "$BACKUP_DIR" --keep "$KEEP"
+# Shared reticle library of the ballistic calculator: a dated copy as well
+"$PYTHON" -m ballistics backup "$BACKUP_DIR" --keep "$KEEP"

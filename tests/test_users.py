@@ -325,10 +325,37 @@ def test_service_worker_precache_files_exist():
     block = sw[sw.index("const PRECACHE"):sw.index("];", sw.index("const PRECACHE"))]
     paths = re.findall(r'"static/([^"]+)"', block)
     assert len(paths) > 10
-    for p in paths:
-        assert os.path.isfile(os.path.join(here, p)), p
+    bal = os.path.join(os.path.dirname(os.path.dirname(diary.__file__)), "ballistics", "static")
+    for p in paths:                    # static/ballistics/* is served from the ballistics package
+        f = os.path.join(bal, p[len("ballistics/"):]) if p.startswith("ballistics/") else os.path.join(here, p)
+        assert os.path.isfile(f), p
     fonts = {f for f in os.listdir(os.path.join(here, "fonts")) if f.endswith(".woff2")}
     assert fonts <= {p.split("/")[-1] for p in paths}          # every font is precached
+
+
+def _precache_hash():
+    """Hash of every precached file's content (they are served cache-first, so a change needs a new VERSION)."""
+    import hashlib
+    import re
+    here = os.path.join(os.path.dirname(diary.__file__), "static")
+    bal = os.path.join(os.path.dirname(os.path.dirname(diary.__file__)), "ballistics", "static")
+    sw = open(os.path.join(here, "sw.js"), encoding="utf-8").read()
+    block = sw[sw.index("const PRECACHE"):sw.index("];", sw.index("const PRECACHE"))]
+    h = hashlib.sha256()
+    for p in sorted(re.findall(r'"static/([^"]+)"', block)):
+        f = os.path.join(bal, p[len("ballistics/"):]) if p.startswith("ballistics/") else os.path.join(here, p)
+        h.update(p.encode() + b"\0" + open(f, "rb").read() + b"\0")
+    return h.hexdigest()[:16], sw
+
+
+def test_service_worker_version_bumped_with_cached_files():
+    """Phones keep serving the old copy of a cache-first file until VERSION changes. sw.js records the hash
+    of the precached files it was last bumped for; change a file → bump VERSION and update the hash."""
+    import re
+    digest, sw = _precache_hash()
+    m = re.search(r'CACHED_FILES_HASH = "([0-9a-f]+)"', sw)
+    assert m and m.group(1) == digest, (
+        f"A precached file changed: bump VERSION in diary/static/sw.js and set CACHED_FILES_HASH = \"{digest}\"")
 
 
 def test_demo_account(two):
@@ -426,3 +453,13 @@ def test_lockout_ends_when_admin_resets_password(two, monkeypatch):
     assert phone.post("/diary/login", data={"username": "mikko", "password": "mikko-password-2"},
                       environ_base=env).status_code == 302
     diary._fails.clear()
+
+
+def test_top_bar_choice_per_account(two):
+    app, o, m = two
+    assert o.get("/diary/api/nav").get_json()["nav"] == ["log", "velocity", "zeroes"]
+    assert o.put("/diary/api/nav", json={"nav": ["ballistics", "log", "calculator"]}, headers=H).status_code == 200
+    assert o.get("/diary/api/nav").get_json()["nav"] == ["ballistics", "log", "calculator"]
+    assert m.get("/diary/api/nav").get_json()["nav"] == ["log", "velocity", "zeroes"], "each account its own"
+    for bad in (["log", "log", "zeroes"], ["log", "velocity"], ["log", "velocity", "nope"], "log"):
+        assert o.put("/diary/api/nav", json={"nav": bad}, headers=H).status_code == 400

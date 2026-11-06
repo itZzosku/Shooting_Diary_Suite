@@ -400,3 +400,85 @@ def test_backup_keeps_velocity_settings():
     assert chrono.aliases(conn) == {"KP-15": "g-wwsd"}           # alias to a gun that doesn't exist is dropped
     assert chrono.known_powders(conn) == ["N555", "N133"]
     conn.close()
+
+
+# ------------------------------------------------------------------ FMI weather for imported strings
+FMI_HIST = b"""<?xml version="1.0" encoding="UTF-8"?>
+<wfs:FeatureCollection xmlns:wfs="http://www.opengis.net/wfs/2.0" xmlns:om="http://www.opengis.net/om/2.0"
+  xmlns:omso="http://inspire.ec.europa.eu/schemas/omso/3.0" xmlns:gml="http://www.opengis.net/gml/3.2"
+  xmlns:wml2="http://www.opengis.net/waterml/2.0" xmlns:target="http://xml.fmi.fi/namespace/om/atmosphericfeatures/1.1"
+  xmlns:sams="http://www.opengis.net/samplingSpatial/2.0">%s</wfs:FeatureCollection>"""
+SERIES = """<wfs:member><omso:PointTimeSeriesObservation><om:featureOfInterest><sams:SF_SpatialSamplingFeature>
+  <sams:sampledFeature><target:LocationCollection><target:member><target:Location>
+   <gml:name codeSpace="http://xml.fmi.fi/namespace/locationcode/name">%(name)s</gml:name>
+  </target:Location></target:member></target:LocationCollection></sams:sampledFeature>
+  <sams:shape><gml:Point><gml:pos>%(lat)s %(lon)s </gml:pos></gml:Point></sams:shape>
+ </sams:SF_SpatialSamplingFeature></om:featureOfInterest>
+ <om:result><wml2:MeasurementTimeseries gml:id="obs-obs-1-1-%(param)s">%(points)s</wml2:MeasurementTimeseries></om:result>
+</omso:PointTimeSeriesObservation></wfs:member>"""
+
+
+def _fmi_hist():
+    """15 Oct 2026 (UTC+3 in Finland): temperature rising 1 °C per hour from 9 °C at 09:00 UTC (12:00 local);
+    the near station has no barometer, the far one has."""
+    pts = lambda f: "".join(f"<wml2:point><wml2:MeasurementTVP><wml2:time>2026-10-15T{h:02d}:{m:02d}:00Z</wml2:time>"
+                            f"<wml2:value>{f(h + m / 60)}</wml2:value></wml2:MeasurementTVP></wml2:point>"
+                            for h in range(8, 14) for m in (0, 10, 20, 30, 40, 50))
+    near, far = dict(name="Near", lat="63.01", lon="22.71"), dict(name="Airport", lat="63.04", lon="22.05")
+    m = [SERIES % dict(near, param="t2m", points=pts(lambda x: round(9 + (x - 9), 2))),
+         SERIES % dict(near, param="rh", points=pts(lambda x: 80)),
+         SERIES % dict(near, param="p_sea", points=pts(lambda x: "NaN")),
+         SERIES % dict(far, param="p_sea", points=pts(lambda x: 1010.0)),
+         SERIES % dict(far, param="t2m", points=pts(lambda x: 2.0))]
+    return FMI_HIST % "".join(m).encode()
+
+
+def test_fmi_observed_at_shot_times():
+    from diary import fmi
+    calls = []
+    fake = lambda lat, lon, start=None, end=None: calls.append((start, end)) or _fmi_hist()  # noqa: E731
+    t12 = chrono._local_epoch("2026-10-15", "12:00")          # = 09:00 UTC
+    t1335 = chrono._local_epoch("2026-10-15", "13:35:00")     # = 10:35 UTC → nearest obs 10:30 (10.5 °C)
+    late = chrono._local_epoch("2026-10-15", "23:00")         # no observations near → None
+    r = fmi.observed(63.0, 22.7, [t1335, t12, late], alt_m=50, fetch=fake)
+    assert r[1]["temp_c"] == 9 and r[0]["temp_c"] == 10.5, "the nearest station, the closest time"
+    assert r[0]["sources"]["p_sea"]["station"] == "Airport", "pressure from the nearest station with a barometer"
+    assert 1003 < r[0]["hpa_station"] < 1005, "station pressure at 50 m"
+    assert r[2] is None
+    assert len(calls) == 1, "one request for the day"
+
+
+def test_fmi_endpoint(client, monkeypatch):
+    from diary import fmi
+    monkeypatch.setattr(fmi.observed, "__defaults__", (None, lambda lat, lon, start=None, end=None: _fmi_hist()))
+    r = client.post("/diary/api/chrono/fmi", json={"lat": 63.0, "lon": 22.7, "alt_m": 50,
+                                                    "at": [{"date": "2026-10-15", "t": "12:00:00"}, {"date": "2026-10-15", "t": "23:00"}]})
+    assert r.status_code == 200, r.get_json()
+    res = r.get_json()["results"]
+    assert res[0]["temp_c"] == 9 and res[0]["rh"] == 80 and res[0]["station"] == "Near" and res[0]["hpa"] > 1000
+    assert res[1] is None
+    assert client.post("/diary/api/chrono/fmi", json={"lat": 63, "lon": 22.7, "at": [{"date": "x", "t": "12"}]}).status_code == 400
+
+    def boom(*a, **k):
+        raise OSError("down")
+    monkeypatch.setattr(fmi.observed, "__defaults__", (None, boom))
+    r = client.post("/diary/api/chrono/fmi", json={"lat": 63.0, "lon": 22.7, "at": [{"date": "2026-10-15", "t": "12:00"}]})
+    assert r.status_code == 502 and r.get_json()["error"] == "weather_unavailable"
+
+
+def test_energy_uses_the_loads_bullet_weight(client):
+    """ShotView keeps its last projectile weight: a file saying 123 gr for a 55 gr load must not set the energy."""
+    conn = diary.connect()
+    conn.execute("INSERT OR REPLACE INTO loads(id,name,kind,cal,bullet_gr) VALUES('l-55','S&B 55 gr','factory','.223 Rem',55)")
+    conn.commit()
+    r = client.post("/diary/api/chrono/commit", json={"strings": [
+        {"date": "2025-02-18", "started_at": "11:55", "name": "x", "bullet_gr": 123, "load_id": "l-55",
+         "shots": [{"v_ms": 898.2, "t": "11:55:00"}]},
+        {"date": "2025-02-18", "started_at": "12:30", "name": "y", "bullet_gr": 123,
+         "shots": [{"v_ms": 898.2, "t": "12:30:00"}]}]})
+    assert r.status_code == 200, r.get_json()
+    a, b = (client.get("/diary/api/chrono/strings/" + c["id"]).get_json() for c in r.get_json()["created"])
+    assert a["stats"]["ke_j"] == pytest.approx(1438, abs=1), "the load's 55 gr"
+    assert b["stats"]["ke_j"] == pytest.approx(3215, abs=2), "no load: the file's 123 gr"
+    listed = {s["id"]: s for s in client.get("/diary/api/chrono/strings?date=2025-02-18").get_json()}
+    assert listed[a["id"]]["stats"]["ke_j"] == pytest.approx(1438, abs=1)

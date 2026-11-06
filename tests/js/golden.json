@@ -1,0 +1,1223 @@
+{
+ "source": "py-ballisticcalc 3.1.1 (LGPL, used only to generate these numbers; not shipped). Spin drift and Coriolis off. Generator: tests/js/gen_golden.py",
+ "cases": [
+  {
+   "name": "6.5 CM G7, standard air",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.305,
+     "weightGr": 140,
+     "diameterMm": 6.71,
+     "lengthMm": 35.3
+    },
+    "mv": 823,
+    "sightHeightMm": 50,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": 0.0,
+     "windMrad": -0.0,
+     "v": 773.2,
+     "tof": 0.1254
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.5715,
+     "windMrad": -0.0,
+     "v": 725.09,
+     "tof": 0.2589
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.3849,
+     "windMrad": -0.0,
+     "v": 678.75,
+     "tof": 0.4015
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.3247,
+     "windMrad": -0.0,
+     "v": 634.23,
+     "tof": 0.5539
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.3771,
+     "windMrad": -0.0,
+     "v": 591.39,
+     "tof": 0.7172
+    },
+    {
+     "range": 600,
+     "elevMrad": 4.547,
+     "windMrad": -0.0,
+     "v": 550.02,
+     "tof": 0.8925
+    },
+    {
+     "range": 700,
+     "elevMrad": 5.847,
+     "windMrad": -0.0,
+     "v": 510.02,
+     "tof": 1.0813
+    },
+    {
+     "range": 800,
+     "elevMrad": 7.2944,
+     "windMrad": -0.0,
+     "v": 471.3,
+     "tof": 1.2853
+    },
+    {
+     "range": 900,
+     "elevMrad": 8.9123,
+     "windMrad": -0.0,
+     "v": 433.92,
+     "tof": 1.5065
+    },
+    {
+     "range": 1000,
+     "elevMrad": 10.7292,
+     "windMrad": -0.0,
+     "v": 398.02,
+     "tof": 1.7472
+    },
+    {
+     "range": 1100,
+     "elevMrad": 12.7807,
+     "windMrad": -0.0,
+     "v": 363.96,
+     "tof": 2.0101
+    },
+    {
+     "range": 1200,
+     "elevMrad": 15.1095,
+     "windMrad": -0.0,
+     "v": 333.63,
+     "tof": 2.2978
+    }
+   ]
+  },
+  {
+   "name": "6.5 CM G7, cold -20 C",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.305,
+     "weightGr": 140,
+     "diameterMm": 6.71,
+     "lengthMm": 35.3
+    },
+    "mv": 823,
+    "sightHeightMm": 50,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": -20,
+     "hpa": 1013.25,
+     "rh": 50
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": 0.0033,
+     "windMrad": -0.0,
+     "v": 768.14,
+     "tof": 0.1258
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.586,
+     "windMrad": -0.0,
+     "v": 715.24,
+     "tof": 0.2607
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.4206,
+     "windMrad": -0.0,
+     "v": 664.42,
+     "tof": 0.4058
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.3946,
+     "windMrad": -0.0,
+     "v": 615.78,
+     "tof": 0.5621
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.4974,
+     "windMrad": -0.0,
+     "v": 569.28,
+     "tof": 0.731
+    },
+    {
+     "range": 600,
+     "elevMrad": 4.7384,
+     "windMrad": -0.0,
+     "v": 524.68,
+     "tof": 0.914
+    },
+    {
+     "range": 700,
+     "elevMrad": 6.1352,
+     "windMrad": -0.0,
+     "v": 481.75,
+     "tof": 1.1129
+    },
+    {
+     "range": 800,
+     "elevMrad": 7.7129,
+     "windMrad": -0.0,
+     "v": 440.4,
+     "tof": 1.33
+    },
+    {
+     "range": 900,
+     "elevMrad": 9.504,
+     "windMrad": -0.0,
+     "v": 400.67,
+     "tof": 1.5682
+    },
+    {
+     "range": 1000,
+     "elevMrad": 11.5505,
+     "windMrad": -0.0,
+     "v": 362.8,
+     "tof": 1.8306
+    }
+   ]
+  },
+  {
+   "name": "6.5 CM G7, hot +30 C humid",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.305,
+     "weightGr": 140,
+     "diameterMm": 6.71,
+     "lengthMm": 35.3
+    },
+    "mv": 823,
+    "sightHeightMm": 50,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 30,
+     "hpa": 1013.25,
+     "rh": 80
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": -0.0016,
+     "windMrad": -0.0,
+     "v": 775.68,
+     "tof": 0.1252
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.5645,
+     "windMrad": -0.0,
+     "v": 729.9,
+     "tof": 0.2581
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.3678,
+     "windMrad": -0.0,
+     "v": 685.74,
+     "tof": 0.3994
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.2916,
+     "windMrad": -0.0,
+     "v": 643.22,
+     "tof": 0.55
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.3208,
+     "windMrad": -0.0,
+     "v": 602.19,
+     "tof": 0.7107
+    },
+    {
+     "range": 600,
+     "elevMrad": 4.4585,
+     "windMrad": -0.0,
+     "v": 562.47,
+     "tof": 0.8825
+    },
+    {
+     "range": 700,
+     "elevMrad": 5.7149,
+     "windMrad": -0.0,
+     "v": 523.98,
+     "tof": 1.0667
+    },
+    {
+     "range": 800,
+     "elevMrad": 7.1048,
+     "windMrad": -0.0,
+     "v": 486.65,
+     "tof": 1.2648
+    },
+    {
+     "range": 900,
+     "elevMrad": 8.6471,
+     "windMrad": -0.0,
+     "v": 450.52,
+     "tof": 1.4784
+    },
+    {
+     "range": 1000,
+     "elevMrad": 10.3656,
+     "windMrad": -0.0,
+     "v": 415.7,
+     "tof": 1.7095
+    }
+   ]
+  },
+  {
+   "name": "6.5 CM G7, 1000 m altitude",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.305,
+     "weightGr": 140,
+     "diameterMm": 6.71,
+     "lengthMm": 35.3
+    },
+    "mv": 823,
+    "sightHeightMm": 50,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 8.5,
+     "hpa": 898.7,
+     "rh": 30
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": -0.0032,
+     "windMrad": -0.0,
+     "v": 778.03,
+     "tof": 0.125
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.5579,
+     "windMrad": -0.0,
+     "v": 734.43,
+     "tof": 0.2573
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.3518,
+     "windMrad": -0.0,
+     "v": 692.24,
+     "tof": 0.3975
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.2612,
+     "windMrad": -0.0,
+     "v": 651.52,
+     "tof": 0.5464
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.2695,
+     "windMrad": -0.0,
+     "v": 612.25,
+     "tof": 0.7048
+    },
+    {
+     "range": 600,
+     "elevMrad": 4.3785,
+     "windMrad": -0.0,
+     "v": 574.28,
+     "tof": 0.8734
+    },
+    {
+     "range": 700,
+     "elevMrad": 5.5962,
+     "windMrad": -0.0,
+     "v": 537.49,
+     "tof": 1.0534
+    },
+    {
+     "range": 800,
+     "elevMrad": 6.9347,
+     "windMrad": -0.0,
+     "v": 501.78,
+     "tof": 1.246
+    },
+    {
+     "range": 900,
+     "elevMrad": 8.4096,
+     "windMrad": -0.0,
+     "v": 467.12,
+     "tof": 1.4526
+    },
+    {
+     "range": 1000,
+     "elevMrad": 10.0401,
+     "windMrad": -0.0,
+     "v": 433.53,
+     "tof": 1.6749
+    }
+   ]
+  },
+  {
+   "name": "6.5 CM G7, 300 m zero",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.305,
+     "weightGr": 140,
+     "diameterMm": 6.71,
+     "lengthMm": 35.3
+    },
+    "mv": 823,
+    "sightHeightMm": 50,
+    "zeroRangeM": 300,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": -1.3849,
+     "windMrad": -0.0,
+     "v": 773.2,
+     "tof": 0.1254
+    },
+    {
+     "range": 200,
+     "elevMrad": -0.8133,
+     "windMrad": -0.0,
+     "v": 725.09,
+     "tof": 0.2589
+    },
+    {
+     "range": 300,
+     "elevMrad": -0.0,
+     "windMrad": -0.0,
+     "v": 678.74,
+     "tof": 0.4015
+    },
+    {
+     "range": 400,
+     "elevMrad": 0.9398,
+     "windMrad": -0.0,
+     "v": 634.22,
+     "tof": 0.5539
+    },
+    {
+     "range": 500,
+     "elevMrad": 1.9922,
+     "windMrad": -0.0,
+     "v": 591.38,
+     "tof": 0.7172
+    },
+    {
+     "range": 600,
+     "elevMrad": 3.1622,
+     "windMrad": -0.0,
+     "v": 550.01,
+     "tof": 0.8925
+    },
+    {
+     "range": 700,
+     "elevMrad": 4.4621,
+     "windMrad": -0.0,
+     "v": 510.0,
+     "tof": 1.0813
+    },
+    {
+     "range": 800,
+     "elevMrad": 5.9097,
+     "windMrad": -0.0,
+     "v": 471.29,
+     "tof": 1.2853
+    },
+    {
+     "range": 900,
+     "elevMrad": 7.5276,
+     "windMrad": -0.0,
+     "v": 433.9,
+     "tof": 1.5065
+    },
+    {
+     "range": 1000,
+     "elevMrad": 9.3445,
+     "windMrad": -0.0,
+     "v": 398.03,
+     "tof": 1.7472
+    }
+   ]
+  },
+  {
+   "name": "6.5 CM G7, wind 4 m/s from 9",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.305,
+     "weightGr": 140,
+     "diameterMm": 6.71,
+     "lengthMm": 35.3
+    },
+    "mv": 823,
+    "sightHeightMm": 50,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "wind": {
+     "ms": 4,
+     "clock": 9
+    },
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": 0.0,
+     "windMrad": -0.1541,
+     "v": 773.2,
+     "tof": 0.1254
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.5715,
+     "windMrad": -0.3181,
+     "v": 725.09,
+     "tof": 0.2589
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.3849,
+     "windMrad": -0.4926,
+     "v": 678.75,
+     "tof": 0.4015
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.3247,
+     "windMrad": -0.6786,
+     "v": 634.23,
+     "tof": 0.5539
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.3771,
+     "windMrad": -0.8772,
+     "v": 591.39,
+     "tof": 0.7172
+    },
+    {
+     "range": 600,
+     "elevMrad": 4.5471,
+     "windMrad": -1.0899,
+     "v": 550.02,
+     "tof": 0.8925
+    },
+    {
+     "range": 700,
+     "elevMrad": 5.847,
+     "windMrad": -1.3188,
+     "v": 510.02,
+     "tof": 1.0813
+    },
+    {
+     "range": 800,
+     "elevMrad": 7.2945,
+     "windMrad": -1.5664,
+     "v": 471.31,
+     "tof": 1.2853
+    },
+    {
+     "range": 900,
+     "elevMrad": 8.9123,
+     "windMrad": -1.8353,
+     "v": 433.92,
+     "tof": 1.5065
+    },
+    {
+     "range": 1000,
+     "elevMrad": 10.7293,
+     "windMrad": -2.1286,
+     "v": 398.03,
+     "tof": 1.7472
+    }
+   ]
+  },
+  {
+   "name": "6.5 CM G7, wind 5 m/s from 2",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.305,
+     "weightGr": 140,
+     "diameterMm": 6.71,
+     "lengthMm": 35.3
+    },
+    "mv": 823,
+    "sightHeightMm": 50,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "wind": {
+     "ms": 5,
+     "clock": 2
+    },
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": 0.0001,
+     "windMrad": 0.1672,
+     "v": 772.96,
+     "tof": 0.1254
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.5722,
+     "windMrad": 0.3451,
+     "v": 724.62,
+     "tof": 0.259
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.3867,
+     "windMrad": 0.5346,
+     "v": 678.03,
+     "tof": 0.4017
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.3284,
+     "windMrad": 0.7367,
+     "v": 633.28,
+     "tof": 0.5543
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.3839,
+     "windMrad": 0.9526,
+     "v": 590.21,
+     "tof": 0.7179
+    },
+    {
+     "range": 600,
+     "elevMrad": 4.5582,
+     "windMrad": 1.1841,
+     "v": 548.62,
+     "tof": 0.8936
+    },
+    {
+     "range": 700,
+     "elevMrad": 5.8642,
+     "windMrad": 1.4334,
+     "v": 508.39,
+     "tof": 1.083
+    },
+    {
+     "range": 800,
+     "elevMrad": 7.3201,
+     "windMrad": 1.7032,
+     "v": 469.46,
+     "tof": 1.2877
+    },
+    {
+     "range": 900,
+     "elevMrad": 8.9493,
+     "windMrad": 1.9967,
+     "v": 431.85,
+     "tof": 1.5098
+    },
+    {
+     "range": 1000,
+     "elevMrad": 10.7816,
+     "windMrad": 2.3172,
+     "v": 395.72,
+     "tof": 1.7518
+    }
+   ]
+  },
+  {
+   "name": ".308 175 gr G7",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.243,
+     "weightGr": 175,
+     "diameterMm": 7.82,
+     "lengthMm": 31.2
+    },
+    "mv": 790,
+    "sightHeightMm": 55,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 5,
+     "hpa": 1000,
+     "rh": 60
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": 0.0006,
+     "windMrad": -0.0,
+     "v": 728.42,
+     "tof": 0.1318
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.6522,
+     "windMrad": -0.0,
+     "v": 669.65,
+     "tof": 0.275
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.6006,
+     "windMrad": -0.0,
+     "v": 613.79,
+     "tof": 0.431
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.7276,
+     "windMrad": -0.0,
+     "v": 560.56,
+     "tof": 0.6015
+    },
+    {
+     "range": 500,
+     "elevMrad": 4.0303,
+     "windMrad": -0.0,
+     "v": 509.6,
+     "tof": 0.7886
+    },
+    {
+     "range": 600,
+     "elevMrad": 5.5308,
+     "windMrad": -0.0,
+     "v": 460.75,
+     "tof": 0.995
+    },
+    {
+     "range": 700,
+     "elevMrad": 7.2657,
+     "windMrad": -0.0,
+     "v": 414.05,
+     "tof": 1.2239
+    },
+    {
+     "range": 800,
+     "elevMrad": 9.2857,
+     "windMrad": -0.0,
+     "v": 369.95,
+     "tof": 1.4795
+    },
+    {
+     "range": 900,
+     "elevMrad": 11.6573,
+     "windMrad": -0.0,
+     "v": 330.14,
+     "tof": 1.7662
+    },
+    {
+     "range": 1000,
+     "elevMrad": 14.4479,
+     "windMrad": -0.0,
+     "v": 309.49,
+     "tof": 2.0806
+    }
+   ]
+  },
+  {
+   "name": ".308 168 gr G1",
+   "input": {
+    "bullet": {
+     "model": "G1",
+     "bc": 0.475,
+     "weightGr": 168,
+     "diameterMm": 7.82,
+     "lengthMm": 31.0
+    },
+    "mv": 800,
+    "sightHeightMm": 55,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "wind": {
+     "ms": 3,
+     "clock": 3
+    },
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": 0.0,
+     "windMrad": 0.1551,
+     "v": 737.76,
+     "tof": 0.1302
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.6284,
+     "windMrad": 0.323,
+     "v": 678.33,
+     "tof": 0.2715
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.5504,
+     "windMrad": 0.5054,
+     "v": 621.63,
+     "tof": 0.4255
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.6478,
+     "windMrad": 0.704,
+     "v": 567.84,
+     "tof": 0.5939
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.9166,
+     "windMrad": 0.9205,
+     "v": 517.25,
+     "tof": 0.7784
+    },
+    {
+     "range": 600,
+     "elevMrad": 5.3754,
+     "windMrad": 1.1562,
+     "v": 470.33,
+     "tof": 0.9812
+    },
+    {
+     "range": 700,
+     "elevMrad": 7.0528,
+     "windMrad": 1.4115,
+     "v": 427.71,
+     "tof": 1.2043
+    },
+    {
+     "range": 800,
+     "elevMrad": 8.9827,
+     "windMrad": 1.6852,
+     "v": 390.19,
+     "tof": 1.4494
+    },
+    {
+     "range": 900,
+     "elevMrad": 11.2007,
+     "windMrad": 1.9737,
+     "v": 358.67,
+     "tof": 1.7171
+    },
+    {
+     "range": 1000,
+     "elevMrad": 13.7381,
+     "windMrad": 2.2702,
+     "v": 333.75,
+     "tof": 2.0067
+    }
+   ]
+  },
+  {
+   "name": ".223 77 gr G1",
+   "input": {
+    "bullet": {
+     "model": "G1",
+     "bc": 0.372,
+     "weightGr": 77,
+     "diameterMm": 5.7,
+     "lengthMm": 25.0
+    },
+    "mv": 840,
+    "sightHeightMm": 60,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": 0.0,
+     "windMrad": -0.0,
+     "v": 758.73,
+     "tof": 0.1253
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.5555,
+     "windMrad": -0.0,
+     "v": 682.12,
+     "tof": 0.2643
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.4467,
+     "windMrad": -0.0,
+     "v": 610.01,
+     "tof": 0.4193
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.5546,
+     "windMrad": -0.0,
+     "v": 542.71,
+     "tof": 0.5932
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.8888,
+     "windMrad": -0.0,
+     "v": 480.97,
+     "tof": 0.789
+    },
+    {
+     "range": 600,
+     "elevMrad": 5.4885,
+     "windMrad": -0.0,
+     "v": 426.0,
+     "tof": 1.0101
+    },
+    {
+     "range": 700,
+     "elevMrad": 7.4063,
+     "windMrad": -0.0,
+     "v": 379.39,
+     "tof": 1.2592
+    },
+    {
+     "range": 800,
+     "elevMrad": 9.6978,
+     "windMrad": -0.0,
+     "v": 342.98,
+     "tof": 1.5371
+    }
+   ]
+  },
+  {
+   "name": ".338 LM 300 gr G7",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.381,
+     "weightGr": 300,
+     "diameterMm": 8.61,
+     "lengthMm": 47.0
+    },
+    "mv": 830,
+    "sightHeightMm": 60,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": 15,
+     "hpa": 1013.25,
+     "rh": 0
+    },
+    "atmo": {
+     "tempC": 0,
+     "hpa": 990,
+     "rh": 70
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": 0.0004,
+     "windMrad": -0.0,
+     "v": 789.17,
+     "tof": 0.1236
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.4885,
+     "windMrad": -0.0,
+     "v": 749.44,
+     "tof": 0.2536
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.2339,
+     "windMrad": -0.0,
+     "v": 710.82,
+     "tof": 0.3906
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.0924,
+     "windMrad": -0.0,
+     "v": 673.37,
+     "tof": 0.5352
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.0406,
+     "windMrad": -0.0,
+     "v": 637.12,
+     "tof": 0.6878
+    },
+    {
+     "range": 600,
+     "elevMrad": 4.0759,
+     "windMrad": -0.0,
+     "v": 602.05,
+     "tof": 0.8493
+    },
+    {
+     "range": 700,
+     "elevMrad": 5.2024,
+     "windMrad": -0.0,
+     "v": 568.04,
+     "tof": 1.0203
+    },
+    {
+     "range": 800,
+     "elevMrad": 6.4279,
+     "windMrad": -0.0,
+     "v": 534.98,
+     "tof": 1.2017
+    },
+    {
+     "range": 900,
+     "elevMrad": 7.7624,
+     "windMrad": -0.0,
+     "v": 502.82,
+     "tof": 1.3946
+    },
+    {
+     "range": 1000,
+     "elevMrad": 9.2186,
+     "windMrad": -0.0,
+     "v": 471.52,
+     "tof": 1.6
+    },
+    {
+     "range": 1200,
+     "elevMrad": 12.561,
+     "windMrad": -0.0,
+     "v": 411.49,
+     "tof": 2.0542
+    },
+    {
+     "range": 1400,
+     "elevMrad": 16.6185,
+     "windMrad": -0.0,
+     "v": 355.74,
+     "tof": 2.5775
+    },
+    {
+     "range": 1600,
+     "elevMrad": 21.614,
+     "windMrad": -0.0,
+     "v": 314.08,
+     "tof": 3.1816
+    }
+   ]
+  },
+  {
+   "name": "zero in cold, fire warm",
+   "input": {
+    "bullet": {
+     "model": "G7",
+     "bc": 0.305,
+     "weightGr": 140,
+     "diameterMm": 6.71,
+     "lengthMm": 35.3
+    },
+    "mv": 823,
+    "sightHeightMm": 50,
+    "zeroRangeM": 100,
+    "zeroAtmo": {
+     "tempC": -10,
+     "hpa": 1020,
+     "rh": 40
+    },
+    "atmo": {
+     "tempC": 25,
+     "hpa": 1005,
+     "rh": 40
+    },
+    "wind": null,
+    "angleDeg": 0
+   },
+   "expected": [
+    {
+     "range": 100,
+     "elevMrad": -0.0037,
+     "windMrad": -0.0,
+     "v": 775.08,
+     "tof": 0.1252
+    },
+    {
+     "range": 200,
+     "elevMrad": 0.5637,
+     "windMrad": -0.0,
+     "v": 728.75,
+     "tof": 0.2583
+    },
+    {
+     "range": 300,
+     "elevMrad": 1.3693,
+     "windMrad": -0.0,
+     "v": 684.07,
+     "tof": 0.3999
+    },
+    {
+     "range": 400,
+     "elevMrad": 2.2969,
+     "windMrad": -0.0,
+     "v": 641.06,
+     "tof": 0.5509
+    },
+    {
+     "range": 500,
+     "elevMrad": 3.3316,
+     "windMrad": -0.0,
+     "v": 599.6,
+     "tof": 0.7122
+    },
+    {
+     "range": 600,
+     "elevMrad": 4.4769,
+     "windMrad": -0.0,
+     "v": 559.49,
+     "tof": 0.8849
+    },
+    {
+     "range": 700,
+     "elevMrad": 5.7435,
+     "windMrad": -0.0,
+     "v": 520.64,
+     "tof": 1.0702
+    },
+    {
+     "range": 800,
+     "elevMrad": 7.1468,
+     "windMrad": -0.0,
+     "v": 482.99,
+     "tof": 1.2696
+    },
+    {
+     "range": 900,
+     "elevMrad": 8.7067,
+     "windMrad": -0.0,
+     "v": 446.56,
+     "tof": 1.485
+    },
+    {
+     "range": 1000,
+     "elevMrad": 10.4478,
+     "windMrad": -0.0,
+     "v": 411.48,
+     "tof": 1.7183
+    }
+   ]
+  }
+ ]
+}

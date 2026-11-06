@@ -78,6 +78,9 @@ def export_data(conn):
     out.update(chrono.export_rows(conn))
     out.update(loans.export_rows(conn))
     out.update(zero.export_rows(conn))
+    from . import EXTENSIONS
+    for ext in EXTENSIONS:                    # e.g. the ballistic calculator's tables
+        out.update(ext["export"](conn))
     return out
 
 

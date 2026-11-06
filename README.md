@@ -1,7 +1,7 @@
 # Shooting Diary Suite
 
 A self-hosted shooting diary for a few people: range visits and the licence record, muzzle velocities
-(Garmin Xero), scope zeroes, guns loaned to friends and a click calculator. Flask + SQLite, served by Waitress,
+(Garmin Xero), scope zeroes, a ballistic calculator, guns loaned to friends and a click calculator. Flask + SQLite, served by Waitress,
 installable on the phone. Each person has their own account and their own database file.
 
 The site is the diary: the bare domain (`/`) redirects to `/diary/`. Everything under `/diary/` needs a login
@@ -18,6 +18,7 @@ New user? See the **[quick start guide](docs/QUICKSTART.md)** for how to use the
 | `/diary/log` | **Diary** – range visits, guns and their round counts, licence export (PDF/CSV) |
 | `/diary/velocity` | **Velocity** – Garmin Xero strings, loads, trends, charge ladders |
 | `/diary/zeroes` | **Zeroes** – scope dial positions, swaps, zeroing card (PDF) |
+| `/diary/ballistics` | **Ballistics** – holds and clicks for any range, range/dope/wind cards, match stages and match mode, reticle view and builder with targets (SRA, PV, pistol, metso, teeri, hirvi, karhu), truing from logged dope (drag scale; velocity too without chrono data), velocity from the chrono, FMI weather, iron sights (notch leaf with caliper calibration and per-setting groups, diopter with measured clicks), near/far zero, profiles by gun, duplicate and share as JSON (solver runs in the browser, works offline) |
 | `/diary/loans` | **Guns loaned** – friends' shots with your guns/ammo and what they owe (tile only) |
 | `/diary/calculator` | **Click calculator** – group offset → clicks to dial (tile only) |
 | `/diary/login`, `/diary/signup`, `/diary/privacy` | Public |
@@ -30,9 +31,12 @@ Diary, Velocity and Zeroes have a switcher at the top (Home · Diary · Velocity
 click calculator are opened from their tiles. The old `/diary/chrono`, `/diary/zero` and `/diary/lent`
 addresses redirect. Long-press the installed app icon for shortcuts.
 
-Code lives in `diary/` and `club/`; `main.py` calls `diary.init_app(app)` and `club.init_app(app)` and redirects `/`.
+Code lives in `diary/`, `club/` and `ballistics/`; `main.py` calls `diary.init_app(app)`, `club.init_app(app)` and
+`ballistics.init_app(app)` and redirects `/`. `club/` and `ballistics/` reach the diary only through their `bridge.py`.
+The ballistic calculator keeps its per-account tables (`bal_*`) in each account's diary database – so the diary's
+backups carry them – and the shared reticle library in `diary_data/library.db`.
 
-Data is stored outside git in `diary_data/`: `users.db` (accounts), one SQLite file per account (`diary.db` for
+Data is stored outside git in `diary_data/`: `users.db` (accounts), `library.db` (the shared reticle library, kept by admins), one SQLite file per account (`diary.db` for
 the first one, `users/<name>.db` for the rest), `clubs.db` (club ammo), `deleted/` (final copies of deleted accounts, 30 days) and the
 cookie key. `diary_data/`, `diary_backups/`, `.env`, `diary_seed*.json` and `*.xls(x)` are in `.gitignore` –
 this repo is public, never commit them. Tests use synthetic data only.
@@ -110,7 +114,7 @@ DIARY_SMTP_PASSWORD=abcdefghijklmnop     # Gmail app password, myaccount.google.
 crontab -e                  # 17 3 * * 0  /root/Shooting_Diary_Suite/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
 ```
 
-The same script also copies the club ammo database (`python -m club backup`): `clubs-YYYY-MM-DD.db`, newest 12
+The same script also copies the reticle library (`python -m ballistics backup`: `library-YYYY-MM-DD.db`) and the club ammo database (`python -m club backup`): `clubs-YYYY-MM-DD.db`, newest 12
 (not e-mailed). Before that, shooters' names on club entries older than `CLUB_NAMES_YEARS` (default 3) are blanked.
 
 Backups contain everyone's data, licence numbers included – the privacy page says they go to the admin's

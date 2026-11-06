@@ -1,0 +1,902 @@
+"""Ballistic calculator API: profiles, bullets, matches and stages. The trajectory itself is computed in the browser
+(static/solver.js) so it works offline at the range; the server stores the records and resolves a profile's links
+to the diary (gun, load, scope, scope zero, chrono velocities) into the numbers the page needs.
+
+Tables in each account's diary database:
+  bal_bullets       bullet: diameter, length, weight, drag model, BC (or velocity bands)
+  bal_sights        saved iron sights (a diopter's clicks, a leaf's marks), reused by profiles
+  bal_curves        custom Mach → Cd drag curves (phase 3; table only)
+  bal_profiles      gun + load + bullet + scope + zero, sight height, twist, zero atmosphere, muzzle velocity
+  bal_observations  dope confirmed at the range (where the shots landed), for truing
+  bal_matches       a match: name, date, optional range visit
+  bal_stages        a stage: ordered target list, dial strategy, stage wind
+Design: "Ballistic Calculator — Design Document".
+"""
+import json
+import os
+import re
+import secrets
+import time
+
+from flask import abort, jsonify, request
+
+from . import PAGES, bp
+from .bridge import DATE_RE, ID_RE, db, kv_get, kv_set, login_required
+from . import bridge
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS bal_bullets (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, maker TEXT,
+    diameter_mm REAL NOT NULL, length_mm REAL, weight_gr REAL NOT NULL,
+    drag_model TEXT NOT NULL DEFAULT 'G7', bc REAL, bc_bands TEXT, curve_id TEXT,
+    notes TEXT DEFAULT '', archived INTEGER NOT NULL DEFAULT 0, updated TEXT);
+CREATE TABLE IF NOT EXISTS bal_curves (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, points TEXT NOT NULL,
+    source TEXT DEFAULT '', notes TEXT DEFAULT '', updated TEXT);
+CREATE TABLE IF NOT EXISTS bal_profiles (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL,
+    gun_id TEXT, load_id TEXT, bullet_id TEXT, scope_id TEXT, zero_id TEXT, reticle_id TEXT,
+    sight_height_mm REAL NOT NULL DEFAULT 50, twist_mm REAL, twist_dir TEXT NOT NULL DEFAULT 'R',
+    zero_range_m REAL NOT NULL DEFAULT 100, zero_temp_c REAL, zero_hpa REAL, zero_rh REAL,
+    mv_ms REAL, mv_temp_c REAL, mv_source TEXT NOT NULL DEFAULT 'manual',
+    temp_sens REAL, temp_sens_source TEXT NOT NULL DEFAULT 'manual',
+    mv_scale REAL NOT NULL DEFAULT 1, drag_scale REAL NOT NULL DEFAULT 1,
+    latitude REAL, notes TEXT DEFAULT '',
+    ord INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, updated TEXT);
+CREATE TABLE IF NOT EXISTS bal_observations (
+    id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, date TEXT NOT NULL, visit_id TEXT,
+    range_m REAL NOT NULL, elev REAL NOT NULL, unit TEXT NOT NULL,
+    temp_c REAL, hpa REAL, rh REAL, angle_deg REAL, mv_ms REAL,
+    use_for_truing INTEGER NOT NULL DEFAULT 1, note TEXT DEFAULT '', op_id TEXT, created TEXT);
+CREATE INDEX IF NOT EXISTS bal_obs_profile ON bal_observations(profile_id, date);
+CREATE TABLE IF NOT EXISTS bal_matches (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, date TEXT, visit_id TEXT,
+    notes TEXT DEFAULT '', archived INTEGER NOT NULL DEFAULT 0, updated TEXT);
+CREATE TABLE IF NOT EXISTS bal_stages (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, match_id TEXT, ord INTEGER NOT NULL DEFAULT 0, profile_id TEXT,
+    dial_mode TEXT NOT NULL DEFAULT 'each', dial_target INTEGER, wind TEXT, targets TEXT NOT NULL,
+    notes TEXT DEFAULT '', updated TEXT);
+CREATE INDEX IF NOT EXISTS bal_stages_match ON bal_stages(match_id, ord);
+CREATE TABLE IF NOT EXISTS bal_sights (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, data TEXT NOT NULL,
+    archived INTEGER NOT NULL DEFAULT 0, updated TEXT);
+"""
+TABLES = ("bal_bullets", "bal_curves", "bal_sights", "bal_profiles", "bal_observations", "bal_matches", "bal_stages")
+DRAG_MODELS = ("G1", "G7")          # RA4 and custom curves come later (see the design doc's open questions)
+DIAL_MODES = ("each", "first_hold_rest", "one")
+SETTINGS_KEY = "bal_settings"
+RANGES_KEY = "bal_ranges"            # saved shooting ranges: [{id, name, lat, lon, alt_m}]
+DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000, "by_profile": {},
+                    "by_gun": {}}       # gun id → {twist_mm, twist_dir}: a new profile's start (the barrel's)
+GUN_FIELDS = ("twist_mm", "twist_dir")      # sight height belongs to the scope on it: only suggested (page)
+
+
+# The server's Python code is loaded once; pages are read from disk on every request. After a git pull without a
+# restart the page is new and the server old: the page says so (a newer .py on disk than when we started).
+_CODE_DIRS = [os.path.dirname(os.path.abspath(__file__)),
+              os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "diary")]
+
+
+def _code_mtime():
+    t = 0.0
+    for d in _CODE_DIRS:
+        try:
+            t = max([t] + [os.path.getmtime(os.path.join(d, f)) for f in os.listdir(d) if f.endswith(".py")])
+        except OSError:
+            pass
+    return t
+
+
+_STARTED_CODE = _code_mtime()
+
+
+def code_stale():
+    return _code_mtime() > _STARTED_CODE + 1
+
+
+PROFILE_COLUMNS = {             # added after phase 1: chrono window and the small corrections
+    "mv_strings": "INTEGER", "spin_drift": "INTEGER NOT NULL DEFAULT 0", "coriolis": "INTEGER NOT NULL DEFAULT 0",
+    "aero_jump": "INTEGER NOT NULL DEFAULT 0", "azimuth_deg": "REAL",
+    "spin_scale": "REAL",
+    "sight": "TEXT",            # iron sights (JSON, see _sight); empty = the linked scope
+    "sight_id": "TEXT",
+    "poi_x_cm": "REAL", "poi_x_range_m": "REAL"}   # "shoots N cm right (+) / left (−) at M m" – a horizontal offset         # a saved sight (bal_sights) instead of the sight's own fields; its check stays here       # spin drift × this (Litz's formula reads high for subsonic .22 LR); empty = 1
+
+
+OBS_COLUMNS = {"powder_c": "REAL", "wind_ms": "REAL", "wind_clock": "REAL", "updated": "TEXT"}
+
+
+def init_ballistics(conn):
+    conn.executescript(SCHEMA)
+    for table, cols in (("bal_profiles", PROFILE_COLUMNS), ("bal_observations", OBS_COLUMNS)):
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for col, typ in cols.items():
+            if col not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+
+
+def _now():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def new_id(text, prefix):
+    s = re.sub(r"[^A-Za-z0-9]+", "-", str(text)).strip("-").lower()
+    return (prefix + s)[:56].rstrip("-") + "-" + secrets.token_hex(2)
+
+
+# ------------------------------------------------------------------ validation
+def _num(lo, hi, required=False):
+    def check(v, name):
+        if v is None or v == "":
+            if required:
+                raise ValueError(name + "_required")
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("bad_" + name)
+        if not (lo <= f <= hi) or f != f:
+            raise ValueError("bad_" + name)
+        return f
+    return check
+
+
+def _int(lo, hi):
+    def check(v, name):
+        if v is None or v == "":
+            return None
+        try:
+            i = int(v)
+        except (TypeError, ValueError):
+            raise ValueError("bad_" + name)
+        if not lo <= i <= hi:
+            raise ValueError("bad_" + name)
+        return i
+    return check
+
+
+def _text(maxlen, required=False):
+    def check(v, name):
+        s = " ".join(str(v or "").split())[:maxlen] if name != "notes" else str(v or "")[:maxlen]
+        if required and not s.strip():
+            raise ValueError(name + "_required")
+        return s
+    return check
+
+
+def _ref(v, name):
+    if v is None or v == "":
+        return None
+    if not ID_RE.match(str(v)):
+        raise ValueError("bad_" + name)
+    return str(v)
+
+
+def _choice(options, default):
+    def check(v, name):
+        if v is None or v == "":
+            return default
+        if v not in options:
+            raise ValueError("bad_" + name)
+        return v
+    return check
+
+
+def _flag(v, name):
+    return 1 if v in (True, 1, "1", "true") else 0
+
+
+def _date(v, name):
+    if v is None or v == "":
+        return None
+    if not DATE_RE.match(str(v)):
+        raise ValueError("bad_" + name)
+    return str(v)
+
+
+def _bands(v, name):
+    """Multi-BC: [[v_min m/s, bc], ...], 1–8 bands, velocities ascending from 0."""
+    if v in (None, "", []):
+        return None
+    if isinstance(v, str):
+        try:
+            v = json.loads(v)
+        except ValueError:
+            raise ValueError("bad_" + name)
+    if not isinstance(v, list) or not 1 <= len(v) <= 8:
+        raise ValueError("bad_" + name)
+    out = []
+    for item in v:
+        try:
+            vel, bc = float(item[0]), float(item[1])
+        except (TypeError, ValueError, IndexError):
+            raise ValueError("bad_" + name)
+        if not (0 <= vel <= 1500 and 0.05 <= bc <= 1.5) or (out and vel <= out[-1][0]):
+            raise ValueError("bad_" + name)
+        out.append([vel, bc])
+    return json.dumps(out)
+
+
+def _wind(v, name):
+    if v in (None, "", {}):
+        return None
+    if not isinstance(v, dict):
+        raise ValueError("bad_" + name)
+    ms = _num(0, 30)(v.get("ms"), "wind_ms") or 0
+    clock = _num(0, 12)(v.get("clock"), "wind_clock") or 0
+    return {"ms": ms, "clock": clock}
+
+
+SHAPE_RE = re.compile(r"^[a-z0-9]{1,20}$")
+
+
+def _shape(v):
+    """Stage target shape: rect (default), circle, diamond or a target preset key (sra2024, pv03, pistol …)."""
+    if v in (None, "", "rect"):
+        return None
+    if not isinstance(v, str) or not SHAPE_RE.match(v):
+        raise ValueError("bad_shape")
+    return v
+
+
+def _targets(v, name):
+    if not isinstance(v, list) or not 1 <= len(v) <= 30:
+        raise ValueError("bad_" + name)
+    out = []
+    for i, t in enumerate(v):
+        if not isinstance(t, dict):
+            raise ValueError("bad_" + name)
+        out.append({
+            "label": _text(20)(t.get("label") or f"T{i + 1}", "label"),
+            "range_m": _num(1, 3000, required=True)(t.get("range_m"), "range"),
+            "w_cm": _num(0, 1000)(t.get("w_cm"), "width"),
+            "h_cm": _num(0, 1000)(t.get("h_cm"), "height"),
+            "angle_deg": _num(-60, 60)(t.get("angle_deg"), "angle"),
+            "wind": _wind(t.get("wind"), "wind"),
+            "shape": _shape(t.get("shape")),
+        })
+    return json.dumps(out)
+
+
+def _json_wind(v, name):
+    w = _wind(v, name)
+    return json.dumps(w) if w else None
+
+
+def _sight(v, name):
+    """Iron sights instead of a scope (JSON):
+      {"type": "diopter", "name", "unit": MOA|MRAD, "elev_click", "wind_click", "radius_mm", "post_mm", "aperture_mm"}
+        – an aperture rear sight with click adjustments (AR-15 A2 style): clicks up/down and left/right.
+      {"type": "notch", "name", "marks": [{"label" (the slot's number from the bottom), "mark" (stamped there, if any),
+                                           "range_m"}], "radius_mm", "post_mm", "notch_mm"}
+        – a range-marked notch rear sight (M39 tangent leaf style): the nearest setting and a hold in cm.
+        Each mark is "true at" its range for this load (by default the range on the leaf); moving a mark's range
+        is how the leaf is calibrated to dope. "checks": [{"setting", "range_m", "cm"}] – where groups landed on a
+        setting at a range (cm above the aim, − below). One check shifts every setting by its angle (the front post
+        shooting high or low, as M39s often do on their lowest setting); with checks on several settings each
+        setting's shift is interpolated between the checked ones.
+    radius_mm (sight radius) and post_mm (front post width) size the sight picture and the post-width holds;
+    eye_mm (eye to the rear sight) with notch_mm / aperture_mm (rear notch width / aperture) size the rear sight as
+    the eye sees it, and makes the post as seen from the eye (post ÷ (radius + eye)) the post-width hold.
+    Calibration (with the sight, not the load): a mark may carry "rise_mm" (rear notch height measured from a fixed
+    point); "cal_fit": false keeps the caliper values unscaled when groups (the checks, with the load) are fitted.
+    A check may carry "x_cm" (group right of the aim, − left): the setting's own sideways error. A diopter may carry "ladder": [{"clicks", "poi_cm"}] at
+    "cal_dist_m" to measure its true click (see static/ironcal.js)."""
+    if v in (None, "", {}):
+        return None
+    if isinstance(v, str):
+        try:
+            v = json.loads(v)
+        except ValueError:
+            raise ValueError(f"bad_{name}")
+    if not isinstance(v, dict) or v.get("type") not in ("diopter", "notch"):
+        raise ValueError(f"bad_{name}")
+    num = lambda k, lo, hi, req=False: _num(lo, hi, req)(v.get(k), f"{name}_{k}")  # noqa: E731
+    out = {"type": v["type"], "name": _text(60)(v.get("name"), f"{name}_name") or None,
+           "radius_mm": num("radius_mm", 50, 1500), "post_mm": num("post_mm", 0.2, 8),
+           "eye_mm": num("eye_mm", 20, 900)}
+    if v["type"] == "diopter":
+        out.update(unit=_choice(("MOA", "MRAD"), "MOA")(v.get("unit"), f"{name}_unit"),
+                   elev_click=num("elev_click", 0.01, 10, True), wind_click=num("wind_click", 0.01, 10, True),
+                   aperture_mm=num("aperture_mm", 0.3, 10))
+        ladder = v.get("ladder")
+        if ladder:
+            if not isinstance(ladder, list) or len(ladder) > 20 or not all(isinstance(x, dict) for x in ladder):
+                raise ValueError(f"bad_{name}_ladder")
+            out["ladder"] = [{"clicks": _num(-200, 200, True)(x.get("clicks"), f"{name}_ladder_clicks"),
+                              "poi_cm": _num(-500, 500, True)(x.get("poi_cm"), f"{name}_ladder_cm")} for x in ladder]
+    else:
+        marks = v.get("marks")
+        if not isinstance(marks, list) or not 1 <= len(marks) <= 80:      # marked settings and the slots between
+            raise ValueError(f"bad_{name}_marks")
+        clean_marks = []
+        for m in marks:
+            if not isinstance(m, dict):
+                raise ValueError(f"bad_{name}_marks")
+            label = _text(8, True)(m.get("label"), f"{name}_mark_label")
+            cm = {"label": label, "range_m": _num(10, 3000, True)(m.get("range_m"), f"{name}_mark_range")}
+            mk = _text(8)(m.get("mark"), f"{name}_mark_mark")      # what is stamped on the leaf at this slot, if anything
+            if mk:
+                cm["mark"] = mk
+            for k, lo, hi in (("rise_mm", -10, 80),):
+                x = _num(lo, hi)(m.get(k), f"{name}_mark_{k}")
+                if x is not None:
+                    cm[k] = x
+            clean_marks.append(cm)
+        if all(m["label"].isdigit() for m in clean_marks):    # slots numbered from the bottom: their own order
+            clean_marks.sort(key=lambda m: int(m["label"]))
+        else:
+            clean_marks.sort(key=lambda m: m["range_m"])
+        out.update(marks=clean_marks, notch_mm=num("notch_mm", 0.3, 10))
+        checks = v.get("checks")
+        if checks is None and v.get("check"):
+            checks = [v["check"]]                    # the single check of earlier versions
+        if checks:             # where groups actually landed: "at 100 m on setting 1, 15 cm high" (cm: + high)
+            if not isinstance(checks, list) or len(checks) > 20:
+                raise ValueError(f"bad_{name}_check")
+            labels = {m["label"] for m in clean_marks}
+            out["checks"] = []
+            for chk in checks:
+                if not isinstance(chk, dict):
+                    raise ValueError(f"bad_{name}_check")
+                label = _text(8, True)(chk.get("setting"), f"{name}_check_setting")
+                if label not in labels:
+                    raise ValueError(f"bad_{name}_check_setting")
+                c = {"setting": label, "range_m": _num(10, 3000, True)(chk.get("range_m"), f"{name}_check_range"),
+                     "cm": _num(-300, 300, True)(chk.get("cm"), f"{name}_check_cm")}
+                x = _num(-300, 300)(chk.get("x_cm"), f"{name}_check_x")
+                if x is not None:            # 0 is a measurement too: the group was centred
+                    c["x_cm"] = x
+                out["checks"].append(c)
+            out["checks"].sort(key=lambda c: c["range_m"])
+    if out.get("ladder"):
+        out["cal_dist_m"] = num("cal_dist_m", 10, 300)
+    if any("rise_mm" in m for m in out.get("marks") or []) and v.get("cal_fit") is False:
+        out["cal_fit"] = False
+    return json.dumps({k: x for k, x in out.items() if x is not None})
+
+
+def _sight_data(v, name):
+    """A saved sight's data: a sight without the zero check (that belongs to a rifle and load, i.e. the profile)."""
+    out = _sight(v, name)
+    if out is None:
+        raise ValueError(f"{name}_required")
+    d = json.loads(out)
+    d.pop("checks", None)
+    return json.dumps(d)
+
+
+SIGHT = {"name": _text(60, True), "data": _sight_data, "archived": _flag}
+BULLET = {
+    "name": _text(80, True), "maker": _text(40), "diameter_mm": _num(2, 20, True), "length_mm": _num(3, 80),
+    "weight_gr": _num(10, 1000, True), "drag_model": _choice(DRAG_MODELS, "G7"), "bc": _num(0.05, 1.5),
+    "bc_bands": _bands, "notes": _text(2000), "archived": _flag,
+}
+PROFILE = {
+    "name": _text(80, True), "gun_id": _ref, "load_id": _ref, "bullet_id": _ref, "scope_id": _ref, "zero_id": _ref,
+    "sight_height_mm": _num(10, 150, True), "twist_mm": _num(150, 800), "twist_dir": _choice(("R", "L"), "R"),
+    "zero_range_m": _num(25, 600, True), "zero_temp_c": _num(-40, 60), "zero_hpa": _num(500, 1100),
+    "zero_rh": _num(0, 100), "mv_ms": _num(100, 1500), "mv_temp_c": _num(-40, 60), "temp_sens": _num(-5, 5),
+    "mv_scale": _num(0.8, 1.2), "drag_scale": _num(0.5, 1.5), "latitude": _num(-90, 90),
+    "notes": _text(2000), "ord": _int(0, 100000), "archived": _flag,
+    "mv_source": _choice(("manual", "chrono"), "manual"), "temp_sens_source": _choice(("manual", "chrono"), "manual"),
+    "mv_strings": _int(1, 50), "spin_drift": _flag, "coriolis": _flag, "aero_jump": _flag,
+    "azimuth_deg": _num(0, 360), "reticle_id": _ref, "spin_scale": _num(0, 3), "sight": _sight, "sight_id": _ref,
+    "poi_x_cm": _num(-300, 300), "poi_x_range_m": _num(10, 2000),
+}
+MATCH = {"name": _text(80, True), "date": _date, "visit_id": _ref, "notes": _text(2000), "archived": _flag}
+STAGE = {
+    "name": _text(80, True), "match_id": _ref, "ord": _int(0, 1000), "profile_id": _ref,
+    "dial_mode": _choice(DIAL_MODES, "each"), "dial_target": _int(0, 29), "wind": _json_wind,
+    "targets": _targets, "notes": _text(2000),
+}
+OBSERVATION = {                 # elevation from the zero that put the group on the aim point, in the scope's unit
+    "profile_id": _ref, "date": _date, "range_m": _num(10, 3000, True), "elev": _num(-30, 200, True),
+    "unit": _choice(("MRAD", "MOA"), "MRAD"), "temp_c": _num(-40, 60), "hpa": _num(500, 1100), "rh": _num(0, 100),
+    "angle_deg": _num(-60, 60), "powder_c": _num(-40, 70), "wind_ms": _num(0, 30), "wind_clock": _num(0, 12),
+    "use_for_truing": lambda v, n: 0 if v in (False, 0, "0", "false") else 1, "note": _text(500),
+}
+DEFAULTS = {"bal_profiles": {"mv_scale": 1, "drag_scale": 1, "ord": 0}, "bal_stages": {"ord": 0}}
+
+
+def clean(spec, body):
+    return {k: check(body.get(k), k) for k, check in spec.items()}
+
+
+def upsert(conn, table, rid, row):
+    row = dict(row, updated=_now())
+    for k, v in DEFAULTS.get(table, {}).items():
+        if row.get(k) is None:
+            row[k] = v
+    cols = list(row)
+    conn.execute(f"INSERT INTO {table}(id,{','.join(cols)}) VALUES(?,{','.join('?' * len(cols))}) "
+                 f"ON CONFLICT(id) DO UPDATE SET {','.join(f'{c}=excluded.{c}' for c in cols)}",
+                 [rid, *[row[c] for c in cols]])
+
+
+# ------------------------------------------------------------------ reads
+def _rows(conn, sql, args=()):
+    return [dict(r) for r in conn.execute(sql, args)]
+
+
+def bullet_rows(conn):
+    rows = _rows(conn, "SELECT * FROM bal_bullets ORDER BY archived, name")
+    for r in rows:
+        r["bc_bands"] = json.loads(r["bc_bands"]) if r["bc_bands"] else None
+    return rows
+
+
+def stage_rows(conn):
+    rows = _rows(conn, "SELECT * FROM bal_stages ORDER BY match_id, ord, name")
+    for r in rows:
+        r["targets"] = json.loads(r["targets"])
+        r["wind"] = json.loads(r["wind"]) if r["wind"] else None
+    return rows
+
+
+def pickers(conn):
+    """The diary records a profile can link to, in the shape the profile sheet needs."""
+    return {"guns": bridge.guns(conn), "loads": bridge.loads(conn), "scopes": bridge.scopes(conn),
+            "sights": sight_rows(conn)}
+
+
+def sight_rows(conn):
+    """Saved iron sights, data parsed, with how many profiles use each."""
+    rows = _rows(conn, "SELECT * FROM bal_sights ORDER BY archived, name")
+    uses = {r[0]: r[1] for r in conn.execute("SELECT sight_id, COUNT(*) FROM bal_profiles WHERE sight_id IS NOT NULL GROUP BY sight_id")}
+    for r in rows:
+        r["data"] = json.loads(r["data"])
+        r["profiles"] = uses.get(r["id"], 0)
+    return rows
+
+
+DEFAULT_STRINGS = 3
+
+
+def chrono_velocity(conn, gun_id, load_id, n_strings=DEFAULT_STRINGS):
+    """Muzzle velocity from the newest chrono strings for this gun + load (excluded shots dropped), and the
+    temperature sensitivity over every day of them – the same figures the Velocity page shows."""
+    if not (gun_id and load_id):
+        return None
+    try:
+        ds = bridge.chrono_days(conn, gun_id, load_id)          # newest first
+    except Exception:                                           # velocity tables not created yet
+        return None
+    if not ds:
+        return None
+    picked = []
+    for d in ds:
+        picked += d["strings"]
+        if len(picked) >= n_strings:
+            break
+    picked = picked[:max(n_strings, 1)]
+    shots, stemp = bridge.chrono_shots(conn, picked)
+    v, temps = [], []
+    for sid in picked:
+        for x in shots.get(sid, []):
+            if x["excluded"]:
+                continue
+            v.append(x["v_ms"])
+            t = x["temp_c"] if x["temp_c"] is not None else stemp.get(sid)
+            if t is not None:
+                temps.append(t)
+    if not v:
+        return None
+    st = bridge.stats(v)
+    dates = sorted(d["date"] for d in ds if set(d["strings"]) & set(picked))
+    return {"mv": st["avg"], "sd": st["sd"], "es": st["es"], "n": st["n"], "strings": len(picked),
+            "from": dates[0], "to": dates[-1], "temp_c": round(sum(temps) / len(temps), 1) if temps else None,
+            "temp_sens": bridge.temp_sensitivity([(d["temp_c"], d["stats"]["avg"]) for d in ds]),
+            "days": len(ds)}
+
+
+def resolve_inputs(profile, bullets, picks, conn=None):
+    """One flat object of what the solver and the readout need, each value with where it came from."""
+    by = lambda rows, rid: next((r for r in rows if r["id"] == rid), None)  # noqa: E731
+    b = by(bullets, profile["bullet_id"]) if profile["bullet_id"] else None
+    scope = by(picks["scopes"], profile["scope_id"]) if profile["scope_id"] else None
+    zero = by(scope["zeros"], profile["zero_id"]) if scope and profile["zero_id"] else None
+    gun = by(picks["guns"], profile["gun_id"]) if profile["gun_id"] else None
+    load = by(picks["loads"], profile["load_id"]) if profile["load_id"] else None
+    warn = []
+    if not b:
+        warn.append("no_bullet")
+    if profile["mv_ms"] is None:
+        warn.append("no_velocity")
+    if b and load and load.get("bullet_gr") and abs(load["bullet_gr"] - b["weight_gr"]) > 0.5:
+        warn.append("bullet_weight_differs")
+    ch = None
+    if conn is not None and (profile.get("mv_source") == "chrono" or profile.get("temp_sens_source") == "chrono"):
+        ch = chrono_velocity(conn, profile["gun_id"], profile["load_id"], profile.get("mv_strings") or DEFAULT_STRINGS)
+    mv, mv_t, mv_src = profile["mv_ms"], profile["mv_temp_c"], "manual"
+    if profile.get("mv_source") == "chrono":
+        if ch:
+            mv, mv_t, mv_src = ch["mv"], ch["temp_c"], "chrono"
+        else:
+            warn.append("no_chrono_data")
+    ts, ts_src = profile["temp_sens"], "manual"
+    if profile.get("temp_sens_source") == "chrono":
+        if ch and ch["temp_sens"] is not None:
+            ts, ts_src = ch["temp_sens"], "chrono"
+        else:
+            warn.append("no_chrono_temp_sens")
+    if mv is None and "no_velocity" not in warn:
+        warn.append("no_velocity")
+    elif mv is not None and "no_velocity" in warn:
+        warn.remove("no_velocity")
+    out = {
+        "bullet": b and {"model": b["drag_model"], "bc": b["bc"], "bands": b["bc_bands"],
+                         "diameterMm": b["diameter_mm"], "lengthMm": b["length_mm"], "weightGr": b["weight_gr"],
+                         "name": b["name"]},
+        "mv": mv, "mvTempC": mv_t, "tempSens": ts, "mvSource": mv_src, "tempSensSource": ts_src, "chrono": ch,
+        "mvScale": profile["mv_scale"], "dragScale": profile["drag_scale"],
+        "spinDrift": bool(profile.get("spin_drift")),
+        "spinScale": profile.get("spin_scale") if profile.get("spin_scale") is not None else 1,
+        "poiRightMrad": (profile["poi_x_cm"] / (profile["poi_x_range_m"] / 10))
+        if profile.get("poi_x_cm") and profile.get("poi_x_range_m") else 0,
+        "coriolis": bool(profile.get("coriolis")),
+        "aeroJump": bool(profile.get("aero_jump")), "azimuthDeg": profile.get("azimuth_deg"),
+        "reticleId": profile.get("reticle_id"),
+        "sightHeightMm": profile["sight_height_mm"], "zeroRangeM": profile["zero_range_m"],
+        "zeroAtmo": {"tempC": profile["zero_temp_c"], "hpa": profile["zero_hpa"], "rh": profile["zero_rh"]},
+        "twistMm": profile["twist_mm"], "twistDir": profile["twist_dir"], "latitude": profile["latitude"],
+        "scope": scope and {"name": scope["name"], "unit": scope["unit"] or "MRAD", "click": scope["click"] or 0.1,
+                            "zeroStop": scope["zero_stop"], "elevTurn": scope["elev_turn"],
+                            "windTurn": scope["wind_turn"]},
+        "zero": zero and {"name": zero["name"], "distanceM": zero["distance_m"], "elev": zero["elev"] or 0,
+                          "wind": zero["wind"] or 0},
+        "sight": None,
+        "gun": gun and gun["name"], "load": load and load["short"],
+        "warnings": warn,
+    }
+    sight = json.loads(profile["sight"]) if profile.get("sight") else None
+    saved = by(picks.get("sights") or [], profile.get("sight_id")) if profile.get("sight_id") else None
+    if saved:                  # a saved sight: its marks / clicks, this profile's zero check
+        checks = (sight or {}).get("checks") or ([sight["check"]] if sight and sight.get("check") else [])
+        sight = dict(saved["data"], name=saved["data"].get("name") or saved["name"], saved_id=saved["id"])
+        if sight["type"] == "notch":
+            labels = {m["label"] for m in sight["marks"]}
+            ok = [c for c in checks if c["setting"] in labels]
+            if ok:
+                sight["checks"] = ok
+    elif sight and sight.get("check") and not sight.get("checks"):
+        sight["checks"] = [sight.pop("check")]
+    elif profile.get("sight_id"):
+        warn.append("sight_missing")
+    if sight:                  # iron sights replace the scope: clicks (diopter) or settings + holds (notch)
+        out["sight"] = sight
+        out["zero"] = None
+        out["scope"] = {"name": sight.get("name") or ("Diopter sight" if sight["type"] == "diopter" else "Notch sight"),
+                        "unit": sight.get("unit", "MRAD"), "click": sight.get("elev_click", 0.01),
+                        "windClick": sight.get("wind_click"), "iron": sight["type"]}
+    return out
+
+
+def settings(conn):
+    stored = kv_get(SETTINGS_KEY, conn)
+    return dict(DEFAULT_SETTINGS, **(json.loads(stored) if stored else {}))
+
+
+def saved_ranges(conn):
+    stored = kv_get(RANGES_KEY, conn)
+    return json.loads(stored) if stored else []
+
+
+def everything(conn):
+    picks = pickers(conn)
+    bullets = bullet_rows(conn)
+    profiles = _rows(conn, "SELECT * FROM bal_profiles ORDER BY archived, ord, name")
+    for p in profiles:
+        p["inputs"] = resolve_inputs(p, bullets, picks, conn)
+    from .reticles import all_reticles
+    me = bridge.current_user()
+    is_admin = bool(me and me["is_admin"] and not me.get("demo"))
+    return {"profiles": profiles, "bullets": bullets,
+            # admins see archived reticles too (to restore or delete them); others only those their profiles use
+            "reticles": all_reticles({p["reticle_id"] for p in profiles if p["reticle_id"]}, everything=is_admin),
+            "is_admin": is_admin,
+            "matches": _rows(conn, "SELECT * FROM bal_matches ORDER BY archived, date DESC, name"),
+            "stages": stage_rows(conn),
+            "observations": _rows(conn, "SELECT * FROM bal_observations ORDER BY date, range_m, rowid"),
+            "settings": settings(conn), "ranges": saved_ranges(conn), "pickers": picks,
+            "stale_code": code_stale()}
+
+
+def summary(conn):
+    """Home tile: number of profiles and the next or latest match."""
+    n = conn.execute("SELECT COUNT(*) FROM bal_profiles WHERE NOT archived").fetchone()[0]
+    m = conn.execute("SELECT name, date FROM bal_matches WHERE NOT archived ORDER BY date DESC LIMIT 1").fetchone()
+    return {"profiles": n, "match": dict(m) if m else None}
+
+
+# ------------------------------------------------------------------ backup
+def export_rows(conn):
+    out = {t: _rows(conn, f"SELECT * FROM {t} ORDER BY rowid") for t in TABLES}
+    out["bal_kv"] = {k: kv_get(k, conn) for k in (SETTINGS_KEY, RANGES_KEY) if kv_get(k, conn) is not None}
+    return out
+
+
+def import_rows(conn, data, replace=False):
+    if replace and any(t in data for t in TABLES):
+        for t in TABLES:
+            conn.execute(f"DELETE FROM {t}")
+    for t in TABLES:
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({t})")}
+        for row in data.get(t, []):
+            cols = [c for c in row if c in have]
+            conn.execute(f"INSERT OR REPLACE INTO {t}({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
+                         [row[c] for c in cols])
+    for k, v in (data.get("bal_kv") or {}).items():
+        if k in (SETTINGS_KEY, RANGES_KEY) and isinstance(v, str):
+            conn.execute("INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, v))
+    return {t: len(data.get(t, [])) for t in TABLES}
+
+
+# ------------------------------------------------------------------ routes
+@bp.get("/ballistics")
+@login_required
+def page_ballistics():
+    return bridge.static_page(PAGES, "ballistics.html")
+
+
+def _body():
+    if not request.is_json:              # JSON only: a cross-site form can't send it (CSRF)
+        abort(415)
+    b = request.get_json(silent=True)
+    if not isinstance(b, dict):
+        abort(400)
+    return b
+
+
+def _id(v):
+    if not ID_RE.match(v or ""):
+        abort(400)
+    return v
+
+
+def _fetch_only():
+    if request.headers.get("X-Requested-With") != "fetch":
+        abort(403)
+
+
+@bp.get("/api/ballistics")
+@login_required
+def api_bal_all():
+    return jsonify(everything(db()))
+
+
+def _put(table, spec, rid, extra=None):
+    rid = _id(rid)
+    try:
+        row = clean(spec, _body())
+        if extra:
+            extra(row)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    conn = db()
+    upsert(conn, table, rid, row)
+    conn.commit()
+    return jsonify(ok=True, id=rid)
+
+
+def _bullet_rules(row):
+    if row["bc"] is None and not row["bc_bands"]:
+        raise ValueError("bc_required")
+
+
+def _stage_rules(row):
+    if row["dial_mode"] == "one" and row["dial_target"] is None:
+        row["dial_target"] = 0
+
+
+@bp.put("/api/ballistics/sights/<sid>")
+@login_required
+def api_bal_put_sight(sid):
+    return _put("bal_sights", SIGHT, sid)
+
+
+@bp.delete("/api/ballistics/sights/<sid>")
+@login_required
+def api_bal_delete_sight(sid):
+    _fetch_only()
+    conn = db()
+    n = conn.execute("SELECT COUNT(*) FROM bal_profiles WHERE sight_id=?", (_id(sid),)).fetchone()[0]
+    if n:
+        return jsonify(error="in_use", profiles=n), 409
+    conn.execute("DELETE FROM bal_sights WHERE id=?", (sid,))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+@bp.put("/api/ballistics/bullets/<bid>")
+@login_required
+def api_bal_put_bullet(bid):
+    return _put("bal_bullets", BULLET, bid, _bullet_rules)
+
+
+@bp.delete("/api/ballistics/bullets/<bid>")
+@login_required
+def api_bal_delete_bullet(bid):
+    _fetch_only()
+    conn = db()
+    n = conn.execute("SELECT COUNT(*) FROM bal_profiles WHERE bullet_id=?", (_id(bid),)).fetchone()[0]
+    if n:
+        return jsonify(error="in_use", profiles=n), 409
+    conn.execute("DELETE FROM bal_bullets WHERE id=?", (bid,))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+@bp.put("/api/ballistics/profiles/<pid>")
+@login_required
+def api_bal_put_profile(pid):
+    res = _put("bal_profiles", PROFILE, pid)
+    if isinstance(res, tuple):              # validation error
+        return res
+    conn = db()
+    p = dict(conn.execute("SELECT * FROM bal_profiles WHERE id=?", (pid,)).fetchone())
+    if p.get("gun_id"):                     # the gun keeps the last twist set for it
+        s = settings(conn)
+        s["by_gun"] = dict(s.get("by_gun") or {}, **{p["gun_id"]: {k: p[k] for k in GUN_FIELDS}})
+        kv_set(SETTINGS_KEY, json.dumps(s))
+    p["inputs"] = resolve_inputs(p, bullet_rows(conn), pickers(conn), conn)
+    return jsonify(ok=True, id=pid, profile=p)
+
+
+@bp.delete("/api/ballistics/profiles/<pid>")
+@login_required
+def api_bal_delete_profile(pid):
+    _fetch_only()
+    conn = db()
+    conn.execute("DELETE FROM bal_observations WHERE profile_id=?", (_id(pid),))
+    conn.execute("UPDATE bal_stages SET profile_id=NULL WHERE profile_id=?", (pid,))
+    conn.execute("DELETE FROM bal_profiles WHERE id=?", (pid,))
+    conn.commit()
+    s = settings(conn)
+    if pid in (s.get("by_profile") or {}):
+        del s["by_profile"][pid]
+        kv_set(SETTINGS_KEY, json.dumps(s))
+    return jsonify(ok=True)
+
+
+@bp.put("/api/ballistics/matches/<mid>")
+@login_required
+def api_bal_put_match(mid):
+    return _put("bal_matches", MATCH, mid)
+
+
+@bp.delete("/api/ballistics/matches/<mid>")
+@login_required
+def api_bal_delete_match(mid):
+    _fetch_only()
+    conn = db()
+    conn.execute("DELETE FROM bal_stages WHERE match_id=?", (_id(mid),))
+    conn.execute("DELETE FROM bal_matches WHERE id=?", (mid,))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+@bp.put("/api/ballistics/stages/<sid>")
+@login_required
+def api_bal_put_stage(sid):
+    return _put("bal_stages", STAGE, sid, _stage_rules)
+
+
+@bp.delete("/api/ballistics/stages/<sid>")
+@login_required
+def api_bal_delete_stage(sid):
+    _fetch_only()
+    conn = db()
+    conn.execute("DELETE FROM bal_stages WHERE id=?", (_id(sid),))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+def _obs_rules(row):
+    if not row["profile_id"]:
+        raise ValueError("profile_id_required")
+    if not row["date"]:
+        raise ValueError("date_required")
+    if not db().execute("SELECT 1 FROM bal_profiles WHERE id=?", (row["profile_id"],)).fetchone():
+        raise ValueError("bad_profile_id")
+
+
+@bp.put("/api/ballistics/observations/<oid>")
+@login_required
+def api_bal_put_observation(oid):
+    return _put("bal_observations", OBSERVATION, oid, _obs_rules)
+
+
+@bp.delete("/api/ballistics/observations/<oid>")
+@login_required
+def api_bal_delete_observation(oid):
+    _fetch_only()
+    conn = db()
+    conn.execute("DELETE FROM bal_observations WHERE id=?", (_id(oid),))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+@bp.put("/api/ballistics/settings")
+@login_required
+def api_bal_put_settings():
+    """Range card from / step / to. With profile_id they are that profile's own (a .22 card stays short,
+    a .308 card long); the top-level values (the last set) are the start for profiles that have none yet."""
+    b = _body()
+    try:
+        card = {"card_start": _num(0, 3000, True)(b.get("card_start"), "card_start"),
+                "card_step": _num(1, 500, True)(b.get("card_step"), "card_step"),
+                "card_end": _num(10, 3000, True)(b.get("card_end"), "card_end")}
+        if card["card_end"] <= card["card_start"]:
+            raise ValueError("bad_card_end")
+        pid = b.get("profile_id")
+        if pid is not None and not (isinstance(pid, str) and ID_RE.match(pid)):
+            raise ValueError("bad_profile_id")
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    conn = db()
+    s = settings(conn)
+    if pid:
+        if not conn.execute("SELECT 1 FROM bal_profiles WHERE id=?", (pid,)).fetchone():
+            return jsonify(error="not_found"), 404
+        s["by_profile"] = dict(s.get("by_profile") or {}, **{pid: card})
+    s.update(card)                         # a new profile starts from the last card set
+    kv_set(SETTINGS_KEY, json.dumps(s))
+    return jsonify(ok=True, settings=s)
+
+
+RANGE = {"name": _text(60, True), "lat": _num(-90, 90, True), "lon": _num(-180, 180, True), "alt_m": _num(-500, 9000)}
+
+
+@bp.get("/api/ballistics/ranges")
+@login_required
+def api_bal_get_ranges():
+    """Saved shooting places (also offered by the velocity import's "Fetch weather")."""
+    return jsonify(ranges=saved_ranges(db()))
+
+
+@bp.put("/api/ballistics/ranges")
+@login_required
+def api_bal_put_ranges():
+    """The whole list of saved ranges (venue name, position, altitude), replaced at once."""
+    b = request.get_json(silent=True) if request.is_json else abort(415)
+    if not isinstance(b, list) or len(b) > 100:
+        return jsonify(error="bad_ranges"), 400
+    out = []
+    try:
+        for r in b:
+            if not isinstance(r, dict):
+                raise ValueError("bad_ranges")
+            row = clean(RANGE, r)
+            row["id"] = r.get("id") if ID_RE.match(str(r.get("id") or "")) else new_id(row["name"], "r-")
+            out.append(row)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    kv_set(RANGES_KEY, json.dumps(out, ensure_ascii=False))
+    return jsonify(ok=True, ranges=out)
+
+
+@bp.get("/api/ballistics/weather")
+@login_required
+def api_bal_weather():
+    """Latest FMI observations near ?lat=&lon= (&alt= metres for station pressure)."""
+    from . import weather
+    try:
+        lat = _num(-90, 90, True)(request.args.get("lat"), "lat")
+        lon = _num(-180, 180, True)(request.args.get("lon"), "lon")
+        alt = _num(-500, 9000)(request.args.get("alt"), "alt")
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    try:
+        return jsonify(weather.current(lat, lon, alt))
+    except ValueError as e:
+        return jsonify(error=str(e) if str(e) == "no_stations" else "weather_unavailable"), 502
+    except Exception:                       # network, timeout, bad XML
+        return jsonify(error="weather_unavailable"), 502
+
+
+@bp.get("/api/ballistics/summary")
+@login_required
+def api_bal_summary():
+    """The home page tile."""
+    return jsonify(summary(db()))
