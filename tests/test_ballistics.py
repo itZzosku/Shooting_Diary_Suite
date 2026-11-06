@@ -77,6 +77,8 @@ def test_profile_resolves_scope_zero_and_bullet(client):
     assert [p["id"] for p in data["profiles"]] == ["p-1"]
     assert data["pickers"]["scopes"][0]["zeros"][0]["id"] == "z-1"
     assert data["settings"]["card_step"] == 50
+    assert data["settings"]["by_gun"] == {"g-ab10": {"sight_height_mm": 55, "twist_mm": 254, "twist_dir": "R"}}, \
+        "the gun keeps the sight height and twist for its next profile"
 
 
 def test_missing_bullet_and_velocity_are_warnings_not_errors(client):
@@ -149,7 +151,7 @@ def test_stage_validation(client, change):
 def test_settings(client):
     assert client.put("/diary/api/ballistics/settings", json={"card_start": 25, "card_step": 10,
                                                               "card_end": 300}).status_code == 200
-    assert _all(client)["settings"] == {"card_start": 25, "card_step": 10, "card_end": 300, "by_profile": {}}
+    assert _all(client)["settings"] == {"card_start": 25, "card_step": 10, "card_end": 300, "by_profile": {}, "by_gun": _all(client)["settings"]["by_gun"]}
     assert client.put("/diary/api/ballistics/settings", json={"card_start": 300, "card_step": 10,
                                                               "card_end": 100}).status_code == 400
 

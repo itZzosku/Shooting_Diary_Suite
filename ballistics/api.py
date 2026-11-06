@@ -65,7 +65,9 @@ DRAG_MODELS = ("G1", "G7")          # RA4 and custom curves come later (see the 
 DIAL_MODES = ("each", "first_hold_rest", "one")
 SETTINGS_KEY = "bal_settings"
 RANGES_KEY = "bal_ranges"            # saved shooting ranges: [{id, name, lat, lon, alt_m}]
-DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000, "by_profile": {}}
+DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000, "by_profile": {},
+                    "by_gun": {}}       # gun id → {sight_height_mm, twist_mm, twist_dir}: a new profile's start
+GUN_FIELDS = ("sight_height_mm", "twist_mm", "twist_dir")
 
 
 PROFILE_COLUMNS = {             # added after phase 1: chrono window and the small corrections
@@ -701,6 +703,10 @@ def api_bal_put_profile(pid):
         return res
     conn = db()
     p = dict(conn.execute("SELECT * FROM bal_profiles WHERE id=?", (pid,)).fetchone())
+    if p.get("gun_id"):                     # the gun keeps the last sight height and twist set for it
+        s = settings(conn)
+        s["by_gun"] = dict(s.get("by_gun") or {}, **{p["gun_id"]: {k: p[k] for k in GUN_FIELDS}})
+        kv_set(SETTINGS_KEY, json.dumps(s))
     p["inputs"] = resolve_inputs(p, bullet_rows(conn), pickers(conn), conn)
     return jsonify(ok=True, id=pid, profile=p)
 

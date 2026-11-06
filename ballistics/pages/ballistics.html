@@ -258,6 +258,7 @@ header.top{padding-top:6px!important}
 .otbl tr[data-oedit]{cursor:pointer}
 .otbl td small{display:block;font-family:var(--f-body);font-size:.72rem;color:var(--muted)}
 .cklist{display:flex;flex-direction:column;gap:8px}
+.fsec{font-size:1.05rem;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.7rem}
 .calt input{width:4.4em;font:inherit;text-align:right;padding:6px 5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit}
@@ -538,9 +539,28 @@ details summary{cursor:pointer;list-style:revert}
   <form class="sheet-in" id="pForm" autocomplete="off">
     <div class="sheet-bar"><h2 id="pTitle">Profile</h2><button class="ghost" type="button" data-close>Close</button></div>
     <label class="f">Name<input type="text" id="fName" required placeholder="e.g. T3x 6.5 CM match"></label>
-    <div class="grid2"><label class="f">Gun<select id="fGun"></select></label><label class="f">Load<select id="fLoad"></select></label></div>
+    <h2 class="fsec">Rifle</h2>
+    <label class="f">Gun<select id="fGun"></select></label>
+    <div class="g3"><label class="f">Sight height mm<input type="text" inputmode="decimal" id="fSight" required placeholder="50"></label>
+      <label class="f">Twist mm / turn<input type="text" inputmode="decimal" id="fTwist" placeholder="203"></label>
+      <label class="f">Twist<select id="fTwistDir"><option value="R">Right</option><option value="L">Left</option></select></label></div>
+    <p class="hint" style="margin:0" id="fGunH">Sight height and twist are kept with the gun: a new profile for it starts with them.</p>
+    <h2 class="fsec">Ammunition</h2>
+    <label class="f">Load<select id="fLoad"></select></label>
+    <div class="prow"><label class="f">Bullet<select id="fBullet"></select></label><button class="ghost" type="button" id="fBulEdit">Edit</button><button class="ghost" type="button" id="fBulNew">New</button></div>
+    <div class="lbl">Muzzle velocity</div>
+    <div class="g3"><label class="f">From<select id="fMvSrc"><option value="manual">Typed in</option><option value="chrono">Chrono strings</option></select></label>
+      <label class="f" id="fMvNL">Newest strings<input type="text" inputmode="numeric" id="fMvN" placeholder="3"></label>
+      <label class="f">Temp. sensitivity<select id="fTsSrc"><option value="manual">Typed in</option><option value="chrono">From chrono days</option></select></label></div>
+    <div class="src" id="fChrono"></div>
+    <div class="g3"><label class="f">Velocity m/s<input type="text" inputmode="decimal" id="fMv" placeholder="823"></label>
+      <label class="f">At powder °C<input type="text" inputmode="decimal" id="fMvT" placeholder="15"></label>
+      <label class="f">m/s per °C<input type="text" inputmode="decimal" id="fTs" placeholder="none"></label></div>
+    <p class="hint" style="margin:0" id="fMvHint">Typed-in values are also the fallback when the chrono has no strings for this gun and load.</p>
+    <h2 class="fsec">Sight and zero</h2>
     <label class="f">Sight<select id="fSightType"><option value="">Scope</option><option value="diopter">Iron sights – diopter with clicks (AR-15 style)</option><option value="notch">Iron sights – notch with a range leaf (M39 style)</option></select></label>
     <div class="grid2" id="fScopeRow"><label class="f">Scope<select id="fScope"></select></label><label class="f">Scope zero<select id="fZero"></select></label></div>
+    <label class="f" id="fRetL">Reticle<select id="fRet"></select></label>
     <div class="ironbox" id="fIron" hidden>
       <label class="f">Saved sight<select id="fIrSaved"></select></label>
       <div class="hint" id="fIrSavedH" hidden></div>
@@ -558,21 +578,13 @@ details summary{cursor:pointer;list-style:revert}
       <div class="calrow" data-notch><button class="ghost" type="button" id="fIrGrp">Groups</button><span class="hint" id="fIrGrpS"></span></div>
       <p class="hint" style="margin:0" id="fIrHint"></p>
     </div>
-    <div class="prow"><label class="f">Bullet<select id="fBullet"></select></label><button class="ghost" type="button" id="fBulEdit">Edit</button><button class="ghost" type="button" id="fBulNew">New</button></div>
-    <div class="g3"><label class="f">Sight height mm<input type="text" inputmode="decimal" id="fSight" required placeholder="50"></label>
-      <label class="f">Twist mm / turn<input type="text" inputmode="decimal" id="fTwist" placeholder="203"></label>
-      <label class="f">Twist<select id="fTwistDir"><option value="R">Right</option><option value="L">Left</option></select></label></div>
-    <h2 style="font-size:1.05rem">Muzzle velocity</h2>
-    <div class="g3"><label class="f">From<select id="fMvSrc"><option value="manual">Typed in</option><option value="chrono">Chrono strings</option></select></label>
-      <label class="f" id="fMvNL">Newest strings<input type="text" inputmode="numeric" id="fMvN" placeholder="3"></label>
-      <label class="f">Temp. sensitivity<select id="fTsSrc"><option value="manual">Typed in</option><option value="chrono">From chrono days</option></select></label></div>
-    <div class="src" id="fChrono"></div>
-    <div class="g3"><label class="f">Velocity m/s<input type="text" inputmode="decimal" id="fMv" placeholder="823"></label>
-      <label class="f">At powder °C<input type="text" inputmode="decimal" id="fMvT" placeholder="15"></label>
-      <label class="f">m/s per °C<input type="text" inputmode="decimal" id="fTs" placeholder="none"></label></div>
-    <p class="hint" style="margin:0" id="fMvHint">Typed-in values are also the fallback when the chrono has no strings for this gun and load.</p>
-    <h2 style="font-size:1.05rem">Reticle and corrections</h2>
-    <label class="f" id="fRetL">Reticle<select id="fRet"></select></label>
+    <div class="lbl">Zero</div>
+    <div class="g4"><label class="f">Range m<input type="text" inputmode="decimal" id="fZr" required placeholder="100"></label>
+      <label class="f">Temp °C<input type="text" inputmode="decimal" id="fZt" placeholder="15"></label>
+      <label class="f">Station hPa<input type="text" inputmode="decimal" id="fZp" placeholder="1013"></label>
+      <label class="f">Humidity %<input type="text" inputmode="decimal" id="fZh" placeholder="0"></label></div>
+    <p class="hint" style="margin:0">The zero is computed in the zero-day conditions; leave them empty for standard air (15 °C, 1013 hPa).</p>
+    <h2 class="fsec">Corrections</h2>
     <div class="g3"><label class="f">Shoots cm sideways<input type="text" inputmode="decimal" id="fPoiX" placeholder="0"></label>
       <label class="f">to the<select id="fPoiD"><option value="1">right</option><option value="-1">left</option></select></label>
       <label class="f">at m<input type="text" inputmode="numeric" id="fPoiR" placeholder="100"></label></div>
@@ -582,12 +594,6 @@ details summary{cursor:pointer;list-style:revert}
     <p class="hint" style="margin:0">Spin drift needs the twist and the bullet's length.<span id="fSpinH"> The formula is made for supersonic bullets and reads high for .22 LR: × about 0.6 matches Strelok. Empty = 1.</span></p>
     <label class="check"><input type="checkbox" id="fAj">Aerodynamic jump from crosswind</label>
     <label class="check"><input type="checkbox" id="fCor">Coriolis (needs latitude and direction of fire)</label>
-    <h2 style="font-size:1.05rem">Zero</h2>
-    <div class="g4"><label class="f">Range m<input type="text" inputmode="decimal" id="fZr" required placeholder="100"></label>
-      <label class="f">Temp °C<input type="text" inputmode="decimal" id="fZt" placeholder="15"></label>
-      <label class="f">Station hPa<input type="text" inputmode="decimal" id="fZp" placeholder="1013"></label>
-      <label class="f">Humidity %<input type="text" inputmode="decimal" id="fZh" placeholder="0"></label></div>
-    <p class="hint" style="margin:0">The zero is computed in the zero-day conditions; leave them empty for standard air (15 °C, 1013 hPa).</p>
     <label class="check"><input type="checkbox" id="fArch">Hide from the profile list</label>
     <div class="msg" id="pMsg" hidden></div>
     <div class="actions"><button class="primary" type="submit">Save</button><button class="ghost" type="button" id="pExport" hidden>Export for a friend</button><button class="danger" type="button" id="pDel" hidden>Delete</button></div>
@@ -1670,9 +1676,23 @@ function fillScopeZero(scopeId,zeroId){
   $("fZero").innerHTML=opt("","– none –")+(sc?sc.zeros.filter(z=>!z.archived||z.id===zeroId).map(z=>opt(z.id,`${z.name}${z.distance_m?" · "+z.distance_m+" m":""}`,z.id===zeroId)).join(""):"");
 }
 function fillBullets(sel){$("fBullet").innerHTML=opt("","– none –")+D.bullets.filter(b=>!b.archived||b.id===sel).map(b=>opt(b.id,`${b.name} · ${b.drag_model} ${b.bc??"bands"}`,b.id===sel)).join("")}
-function openProfile(p){
+// Sight height and twist are kept per gun (settings.by_gun, set by each profile save; else the gun's newest
+// profile): a new profile, or picking a gun for one, starts from them.
+function gunDefaults(gid){
+  if(!gid)return null;const s=((D.settings||{}).by_gun||{})[gid];if(s)return s;
+  const ps=D.profiles.filter(p=>p.gun_id===gid),p=ps[ps.length-1];
+  return p?{sight_height_mm:p.sight_height_mm,twist_mm:p.twist_mm,twist_dir:p.twist_dir}:null;
+}
+function applyGun(d){if(!d)return;setv("fSight",d.sight_height_mm);setv("fTwist",d.twist_mm);$("fTwistDir").value=d.twist_dir||"R"}
+function gunHint(){
+  const d=gunDefaults($("fGun").value);
+  $("fGunH").textContent=!$("fGun").value?"Sight height and twist are kept with the gun: a new profile for it starts with them."
+    :d?`Kept with this gun (${[d.sight_height_mm!=null&&d.sight_height_mm+" mm sight height",d.twist_mm&&"1 turn in "+d.twist_mm+" mm "+(d.twist_dir==="L"?"left":"right")].filter(Boolean).join(", ")}); saving updates them.`
+    :"Saved with this gun for its next profiles.";
+}
+function openProfile(p,gunId){
   editP=p;$("pTitle").textContent=p?"Edit profile":"New profile";$("pDel").hidden=!p;$("pExport").hidden=!p;
-  const P=D.pickers,x=p||{sight_height_mm:50,zero_range_m:100,twist_dir:"R"};
+  const P=D.pickers,x=p||Object.assign({sight_height_mm:50,zero_range_m:100,twist_dir:"R",gun_id:gunId||null},gunDefaults(gunId)||{});
   $("fGun").innerHTML=opt("","– none –")+P.guns.filter(g=>!g.archived||g.id===x.gun_id).map(g=>opt(g.id,g.name+(g.cal?" · "+g.cal:""),g.id===x.gun_id)).join("");
   $("fLoad").innerHTML=opt("","– none –")+P.loads.filter(l=>!l.archived||l.id===x.load_id).map(l=>opt(l.id,l.name,l.id===x.load_id)).join("");
   $("fScope").innerHTML=opt("","– none –")+P.scopes.filter(s=>!s.archived||s.id===x.scope_id).map(s=>opt(s.id,`${s.name} · ${+s.click} ${s.unit}`,s.id===x.scope_id)).join("");
@@ -1690,7 +1710,7 @@ function openProfile(p){
   $("fRet").innerHTML=opt("","– none –")+(D.reticles||[]).filter(r=>!r.archived||r.id===x.reticle_id).map(r=>opt(r.id,`${r.maker?r.maker+" ":""}${r.name} · ${r.focal_plane} ${r.unit==="MOA"?"MOA":"mil"}`,r.id===x.reticle_id)).join("");
   chronoHint(p);
   setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
-  openSheet("pSheet");if(!p)$("fName").focus();
+  gunHint();openSheet("pSheet");if(!p)$("fName").focus();
 }
 function chronoHint(p){
   const ch=p&&p.inputs&&p.inputs.chrono,on=$("fMvSrc").value==="chrono"||$("fTsSrc").value==="chrono";
@@ -1922,7 +1942,8 @@ function readIron(){
 function spinState(){const on=$("fSpin").checked;$("fSpinSL").hidden=$("fSpinH").hidden=!on}
 $("fSpin").addEventListener("change",spinState);
 $("pEdit").addEventListener("click",()=>openProfile(prof()));
-$("pNew").addEventListener("click",()=>openProfile(null));
+$("pNew").addEventListener("click",()=>openProfile(null,$("pGun").value||null));
+$("fGun").addEventListener("change",()=>{if(!editP)applyGun(gunDefaults($("fGun").value));gunHint()});
 $("pForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const body={name:$("fName").value,gun_id:$("fGun").value||null,load_id:$("fLoad").value||null,scope_id:$("fScope").value||null,zero_id:$("fZero").value||null,
@@ -1948,6 +1969,7 @@ $("pForm").addEventListener("submit",async e=>{
   const id=editP?editP.id:newId(body.name,"p-");
   const err=await write("PUT","api/ballistics/profiles/"+encodeURIComponent(id),body);
   if(err)return msg("pMsg",err);
+  if(body.gun_id){D.settings=Object.assign({},D.settings);D.settings.by_gun=Object.assign({},D.settings.by_gun,{[body.gun_id]:{sight_height_mm:body.sight_height_mm,twist_mm:body.twist_mm,twist_dir:body.twist_dir}})}
   U.profile=id;closeSheet($("pSheet"));render();
 });
 $("pDel").addEventListener("click",async()=>{
