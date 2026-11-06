@@ -1005,7 +1005,7 @@ function fillLock(p){
   const g=ironOf(p);$("lockRow").hidden=!g;if(!g)return;
   const cur=lockVal(p,g)??"";
   let o=`<option value="">Auto – ${g.type==="notch"?"nearest setting":"dial each range"}</option>`;
-  if(g.type==="notch"){const nm=notchMarks(p);o+=g.marks.map(m=>{const x=nm.find(q=>q.label===m.label),sn=slotName(g,m.label);return`<option value="${esc(m.label)}">Locked at ${esc(m.label)}${sn?" · "+esc(sn):""} (${x?effTxt(x):m.range_m+" m"})</option>`}).join("")}
+  if(g.type==="notch"){const nm=notchMarks(p);o+=g.marks.map(m=>{const x=nm.find(q=>q.label===m.label),sn=slotName(g,m.label);return`<option value="${esc(m.label)}">Locked at ${esc(settingName(g,m.label))} (${x?effTxt(x):m.range_m+" m"})</option>`}).join("")}
   else for(let n=-10;n<=40;n++)o+=`<option value="${n}">Locked at ${n?Math.abs(n)+" click"+(Math.abs(n)>1?"s":"")+(n>0?" up":" down"):"the zero"}</option>`;
   $("sLock").innerHTML=o;$("sLock").value=[...$("sLock").options].some(x=>x.value===String(cur))?String(cur):"";
   const lk=lockOf(p);
@@ -1084,12 +1084,11 @@ function renderProfiles(){
 function renderNotchSolution(p,res,r,c){
   const n=notchFor(p,r),pm=postMil(ironOf(p));
   if(!n){$("oWarn").innerHTML="<div>The sight's marks aren't reached with this load – check the marks and the zero.</div>";return}
-  const sn=slotName(ironOf(p),n.label);
-  $("oE").innerHTML=`${esc(n.label)}<em>${n.locked?"locked":"setting"}${sn?" · "+esc(sn):""}</em>`;
-  $("oEs").textContent=aimCm(n.holdCm)+(Math.abs(n.holdCm)>=1?` (${Math.abs(n.holdMil).toFixed(2)} mil)`:"")+(n.alt?`\nor setting ${n.alt.label}: ${aimCm(n.alt.holdCm)}`:"");
+  $("oE").innerHTML=`${esc(slotName(ironOf(p),n.label,true)||n.label)}<em>${n.locked?"locked":"setting"}</em>`;
+  $("oEs").textContent=aimCm(n.holdCm)+(Math.abs(n.holdCm)>=1?` (${Math.abs(n.holdMil).toFixed(2)} mil)`:"")+(n.alt?`\nor ${settingName(ironOf(p),n.alt.label)}: ${aimCm(n.alt.holdCm)}`:"");
   const wc=n.windMil*r.range/10;
   $("oW").innerHTML=Math.abs(wc)<1?`0<em>cm</em>`:`${Math.round(Math.abs(wc))}<em>cm ${wc<0?"L":"R"}</em>`;
-  const why=[c.ms&&"wind",p.inputs.spinDrift&&"spin drift",solverInput(p,c).coriolis&&"Coriolis",p.inputs.poiRightMrad&&"load offset",n.xMil&&`setting ${n.label}'s own ${Math.abs(n.xMil*r.range/10).toFixed(0)} cm`].filter(Boolean).join(" + ");
+  const why=[c.ms&&"wind",p.inputs.spinDrift&&"spin drift",solverInput(p,c).coriolis&&"Coriolis",p.inputs.poiRightMrad&&"load offset",n.xMil&&`${settingName(ironOf(p),n.label)}'s own ${Math.abs(n.xMil*r.range/10).toFixed(0)} cm`].filter(Boolean).join(" + ");
   $("oWs").textContent=(Math.abs(wc)>=1?`aim ${wc<0?"left":"right"} · ${(Math.abs(n.windMil)/pm).toFixed(2)} post widths${why?" · "+why:""}\n`:"")+`${(r.windPer1Mrad*r.range/10).toFixed(1)} cm per 1 m/s`;
   $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
     +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span><span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`;
@@ -1164,7 +1163,7 @@ function renderCard(){
     $("cTable").innerHTML=`<tr><th>m</th><th>Setting</th><th>Aim</th><th>Drop cm</th><th>Wind/1 m/s</th><th>m/s</th><th>TOF</th></tr>`+res.rows.map(r=>{
       if(!r.reached)return`<tr><td>${r.range}</td><td colspan="6" class="dim">not reached</td></tr>`;
       const n=notchFor(p,r),cls=[r.subsonic?"ss":r.transonic?"ts":"",r.range===R?"cur":""].join(" ").trim();
-      return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${n?esc(n.label)+(slotName(ironOf(p),n.label,true)?`<small class="dim"> · ${esc(slotName(ironOf(p),n.label,true))}</small>`:""):"–"}</td><td>${n?(Math.abs(n.holdCm)<1?"0":(n.holdCm>0?"↑":"↓")+Math.round(Math.abs(n.holdCm))+" cm")+(Math.abs(n.xCm)>=1?` ${n.xCm<0?"←":"→"}${Math.round(Math.abs(n.xCm))}`:""):"–"}</td><td>${dropCm(r)}</td><td>${(r.windPer1Mrad*r.range/10).toFixed(1)} cm</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
+      return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${n?esc(slotName(ironOf(p),n.label,true)||n.label):"–"}</td><td>${n?(Math.abs(n.holdCm)<1?"0":(n.holdCm>0?"↑":"↓")+Math.round(Math.abs(n.holdCm))+" cm")+(Math.abs(n.xCm)>=1?` ${n.xCm<0?"←":"→"}${Math.round(Math.abs(n.xCm))}`:""):"–"}</td><td>${dropCm(r)}</td><td>${(r.windPer1Mrad*r.range/10).toFixed(1)} cm</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
     }).join("");
     return;
   }
@@ -1810,11 +1809,14 @@ function leafOf(n,marks){
     below the first mark, from it down. short: "3", "3 +2". */
 function slotName(g,label,short){
   const ms=bySlot(((g&&g.marks)||[]).slice()),i=ms.findIndex(m=>m.label===label);if(i<0)return"";
-  if(ms[i].mark)return short?ms[i].mark:"mark "+ms[i].mark;
-  for(let k=i-1;k>=0;k--)if(ms[k].mark){const n=i-k;return short?`${ms[k].mark} +${n}`:`mark ${ms[k].mark} + ${n} notch${n>1?"es":""}`}
-  for(let k=i+1;k<ms.length;k++)if(ms[k].mark){const n=k-i;return short?`${ms[k].mark} −${n}`:`mark ${ms[k].mark} − ${n} notch${n>1?"es":""}`}
+  const pre=short===true?"":short==="lock"?"":"mark ",nn=n=>short===true?String(n):`${n} notch${n>1?"es":""}`,sp=short===true?"":" ";
+  if(ms[i].mark)return pre+ms[i].mark;
+  for(let k=i-1;k>=0;k--)if(ms[k].mark)return`${pre}${ms[k].mark} +${sp}${nn(i-k)}`;
+  for(let k=i+1;k<ms.length;k++)if(ms[k].mark)return`${pre}${ms[k].mark} −${sp}${nn(k-i)}`;
   return"";
 }
+/** How a setting is called where you shoot: by the leaf's markings when it has them ("2 + 3 notches"), else its number. */
+const settingName=(g,label)=>slotName(g,label,"lock")||label;
 /* ---- groups (sheet #gSheet): where groups landed on each setting, with this rifle and load (the profile) ----
    Height decides where the leaf really points (and calibrates it with the caliper), side the setting's own
    sideways error beyond what the solver already has (spin drift, the load's horizontal offset). */
@@ -2296,7 +2298,7 @@ function retScene(p,ret){
         const y=n.holdMil,x=-n.windMil;
         out.holds.push({x,y,main:true,ring:true});
         const tg=targetShape(R,ret);if(tg)out.targets.push(Object.assign(tg.shape,{x,y}));
-        out.info.push(`Setting ${n.label}: put the post's tip on the dot – ${aimCm(n.holdCm)}, wind ${sideCm(n.windMil*R/10)} (${(Math.abs(n.windMil)/ret.post).toFixed(2)} post widths${n.xMil?`, setting ${n.label}'s own side error included`:""}).`);
+        out.info.push(`Set ${settingName(ironOf(p),n.label)}: put the post's tip on the dot – ${aimCm(n.holdCm)}, wind ${sideCm(n.windMil*R/10)} (${(Math.abs(n.windMil)/ret.post).toFixed(2)} post widths${n.xMil?`, its own side error included`:""}).`);
         if(tg)out.info.push(tg.info);
       }
     }else if(r&&r.reached){
