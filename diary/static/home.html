@@ -215,7 +215,7 @@ header.top{padding-top:6px!important}
 </head>
 <body>
 <div class="wrap">
-  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a></nav>
+  <nav class="pnav" aria-label="Pages"><a href="./" aria-label="Home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="t">Home</span></a><a href="log">Diary</a><a href="velocity">Velocity</a><a href="zeroes">Zeroes</a></nav><script src="static/nav.js"></script>
   <header class="top">
     <div><h1>Shooting <span>diary</span></h1><div class="who" id="who"></div></div>
     <div class="hbtns">
@@ -272,6 +272,7 @@ header.top{padding-top:6px!important}
       <span class="now" id="nClub"></span>
     </a>
   </nav>
+  <div style="display:flex;justify-content:center;margin-top:14px"><button class="ghost" type="button" id="navBtn">Choose the top bar</button></div>
 </div>
 <div class="toast" id="toast" hidden></div>
 <div class="sheet" id="accSheet" hidden role="dialog" aria-modal="true" aria-labelledby="accTitle">
@@ -307,6 +308,17 @@ header.top{padding-top:6px!important}
     <p class="hint" style="margin:0">Your other phones and computers are logged out; this one stays logged in.</p>
     <div class="msg" id="pwMsg" hidden></div>
     <div class="actions"><button class="primary" type="submit">Change password</button></div>
+  </form>
+</div>
+<div class="sheet" id="navSheet" hidden role="dialog" aria-modal="true" aria-labelledby="navTitle">
+  <form class="sheet-in" id="navForm">
+    <div class="sheet-bar"><h2 id="navTitle">Top bar</h2><button class="ghost" type="button" id="navClose">Close</button></div>
+    <p style="margin:0">The three features next to Home at the top of every page, in this order. Saved with your account, so your other phones get them too.</p>
+    <label class="f">First<select id="nav1"></select></label>
+    <label class="f">Second<select id="nav2"></select></label>
+    <label class="f">Third<select id="nav3"></select></label>
+    <div class="msg" id="navMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="ghost" type="button" id="navReset">Back to default</button></div>
   </form>
 </div>
 <script src="static/drafts.js"></script>
@@ -355,6 +367,28 @@ async function loadBallistics(){
 load();loadClubs();loadBallistics();
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){load();loadBallistics()}});
 
+// The top bar's three features (static/nav.js draws the bar)
+const NAV_SEL=["nav1","nav2","nav3"];
+function navFill(list){
+  const club=!$("clubTile").hidden||list.includes("ammo");
+  const fs=Nav.FEATURES.filter(f=>f.id!=="ammo"||club);
+  NAV_SEL.forEach((id,k)=>{$(id).innerHTML=fs.map(f=>`<option value="${f.id}"${f.id===list[k]?" selected":""}>${esc(f.name)}</option>`).join("")});
+  $("navMsg").hidden=true;
+}
+$("navBtn").addEventListener("click",()=>{navFill(Nav.get());$("navSheet").hidden=false});
+$("navClose").addEventListener("click",()=>{$("navSheet").hidden=true});
+$("navReset").addEventListener("click",()=>navFill(Nav.DEFAULT));
+// picking a feature already in another slot swaps the two
+NAV_SEL.forEach(id=>$(id).addEventListener("focus",e=>{e.target.dataset.was=e.target.value}));
+NAV_SEL.forEach(id=>$(id).addEventListener("change",e=>{
+  const v=e.target.value,o=NAV_SEL.map($).find(s=>s!==e.target&&s.value===v);if(o)o.value=e.target.dataset.was||o.value;e.target.dataset.was=v;
+}));
+$("navForm").addEventListener("submit",async e=>{
+  e.preventDefault();const list=NAV_SEL.map(id=>$(id).value);
+  const err=await Nav.set(list);
+  if(err){$("navMsg").textContent=err==="pick_three"?"Pick three different features.":err==="offline"?"No connection – try again when online.":"Couldn't save.";$("navMsg").hidden=false;return}
+  $("navSheet").hidden=true;toast("Top bar saved");
+});
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2600)}
 
 // A field the browser won't accept blocks the form silently on some phones (Firefox on Android shows no

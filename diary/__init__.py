@@ -606,6 +606,31 @@ def put_password():
     return jsonify(ok=True)
 
 
+NAV_FEATURES = ("log", "velocity", "zeroes", "ballistics", "loans", "calculator", "ammo")
+NAV_DEFAULT = ["log", "velocity", "zeroes"]
+
+
+@bp.get("/api/nav")
+@login_required
+def get_nav():
+    """The three features in this account's top bar (static/nav.js draws it)."""
+    try:
+        nav = json.loads(kv_get("nav") or "null")
+    except ValueError:
+        nav = None
+    return jsonify(nav=nav if isinstance(nav, list) and len(nav) == 3 else NAV_DEFAULT, features=list(NAV_FEATURES))
+
+
+@bp.put("/api/nav")
+@login_required
+def put_nav():
+    nav = _json_body().get("nav")
+    if not (isinstance(nav, list) and len(nav) == 3 and len(set(nav)) == 3 and all(x in NAV_FEATURES for x in nav)):
+        return jsonify(error="pick_three"), 400
+    kv_set("nav", json.dumps(nav))
+    return jsonify(ok=True, nav=nav)
+
+
 @bp.get("/api/profile")
 @login_required
 def get_profile():

@@ -453,3 +453,13 @@ def test_lockout_ends_when_admin_resets_password(two, monkeypatch):
     assert phone.post("/diary/login", data={"username": "mikko", "password": "mikko-password-2"},
                       environ_base=env).status_code == 302
     diary._fails.clear()
+
+
+def test_top_bar_choice_per_account(two):
+    app, o, m = two
+    assert o.get("/diary/api/nav").get_json()["nav"] == ["log", "velocity", "zeroes"]
+    assert o.put("/diary/api/nav", json={"nav": ["ballistics", "log", "calculator"]}, headers=H).status_code == 200
+    assert o.get("/diary/api/nav").get_json()["nav"] == ["ballistics", "log", "calculator"]
+    assert m.get("/diary/api/nav").get_json()["nav"] == ["log", "velocity", "zeroes"], "each account its own"
+    for bad in (["log", "log", "zeroes"], ["log", "velocity"], ["log", "velocity", "nope"], "log"):
+        assert o.put("/diary/api/nav", json={"nav": bad}, headers=H).status_code == 400
