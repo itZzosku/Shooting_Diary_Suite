@@ -42,6 +42,42 @@
       if (j && valid(j.nav) && JSON.stringify(j.nav) !== JSON.stringify(cur)) { cur = j.nav; keep(cur); draw(cur); }
     }).catch(() => {});
 
+  /* Every sheet gets its main button (Save, Done, Log …) in the top bar too, next to Close, so a long form can be
+     saved without scrolling to the bottom. It presses the sheet's first visible primary/submit button and takes
+     its name (shortened); a sheet with none, or with a save button in its bar already, is left alone. */
+  const css = document.createElement("style");
+  css.textContent = ".sheet-bar .topacts{display:flex;gap:8px;align-items:center;flex-shrink:0}.sheet-bar h2{min-width:0}" +
+    ".sheet-bar .topsave{padding:8px 16px;font-size:.92rem;min-height:0}.sheet-bar .topsave[hidden]{display:none}";
+  document.head.appendChild(css);
+  const short = t => { t = (t || "").trim().split(/\s+[–—-]\s+/)[0]; return t.length <= 16 ? t : /save/i.test(t) ? "Save" : t.split(/\s+/)[0]; };
+  function mainButton(sheet, bar) {
+    return [...sheet.querySelectorAll("button.primary, button[type=submit]")]
+      .find(b => !bar.contains(b) && !b.disabled && b.offsetParent !== null && b.textContent.trim());
+  }
+  function refresh(sheet) {
+    const bar = sheet.querySelector(".sheet-bar"), top = bar && bar.querySelector("[data-topsave]");
+    if (!top) return;
+    const b = mainButton(sheet, bar), name = b ? short(b.textContent) : "";
+    if (top.hidden !== !b) top.hidden = !b;                 // only real changes: the observer below sees our writes too
+    if (b && top.textContent !== name) top.textContent = name;
+  }
+  function addTopSave() {
+    document.querySelectorAll(".sheet").forEach(sheet => {
+      const bar = sheet.querySelector(".sheet-bar");
+      if (!bar || bar.querySelector("[data-topsave], button.primary, button[type=submit]")) return;
+      const close = [...bar.children].find(e => e.tagName === "BUTTON");
+      if (!close) return;
+      const wrap = document.createElement("div"); wrap.className = "topacts";
+      const top = document.createElement("button"); top.type = "button"; top.className = "primary topsave"; top.dataset.topsave = ""; top.hidden = true;
+      top.addEventListener("click", () => { const b = mainButton(sheet, bar); if (b) b.click(); });
+      close.replaceWith(wrap); wrap.append(top, close);
+      // the main button can change while the sheet is open (another form shown, a button revealed)
+      new MutationObserver(ms => { if (ms.some(m => m.target !== top)) refresh(sheet); }).observe(sheet, {attributes: true, subtree: true, attributeFilter: ["hidden", "disabled", "class"]});
+      refresh(sheet);
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", addTopSave); else addTopSave();
+
   window.Nav = {
     FEATURES, DEFAULT,
     get: () => cur.slice(),
