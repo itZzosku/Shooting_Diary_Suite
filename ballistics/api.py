@@ -243,7 +243,8 @@ def _sight(v, name):
     """Iron sights instead of a scope (JSON):
       {"type": "diopter", "name", "unit": MOA|MRAD, "elev_click", "wind_click", "radius_mm", "post_mm", "aperture_mm"}
         – an aperture rear sight with click adjustments (AR-15 A2 style): clicks up/down and left/right.
-      {"type": "notch", "name", "marks": [{"label", "range_m"}], "radius_mm", "post_mm", "notch_mm"}
+      {"type": "notch", "name", "marks": [{"label" (the slot's number from the bottom), "mark" (stamped there, if any),
+                                           "range_m"}], "radius_mm", "post_mm", "notch_mm"}
         – a range-marked notch rear sight (M39 tangent leaf style): the nearest setting and a hold in cm.
         Each mark is "true at" its range for this load (by default the range on the leaf); moving a mark's range
         is how the leaf is calibrated to dope. "checks": [{"setting", "range_m", "cm"}] – where groups landed on a
@@ -290,6 +291,9 @@ def _sight(v, name):
                 raise ValueError(f"bad_{name}_marks")
             label = _text(8, True)(m.get("label"), f"{name}_mark_label")
             cm = {"label": label, "range_m": _num(10, 3000, True)(m.get("range_m"), f"{name}_mark_range")}
+            mk = _text(8)(m.get("mark"), f"{name}_mark_mark")      # what is stamped on the leaf at this slot, if anything
+            if mk:
+                cm["mark"] = mk
             for k, lo, hi in (("rise_mm", -10, 80),):
                 x = _num(lo, hi)(m.get(k), f"{name}_mark_{k}")
                 if x is not None:
