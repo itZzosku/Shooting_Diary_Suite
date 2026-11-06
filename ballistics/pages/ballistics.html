@@ -976,14 +976,16 @@ function milToRange(p,maxR){
 const effTxt=m=>m.eff!=null?`≈${Math.round(m.eff/5)*5} m`:`${m.range} m`;
 // The sight can be locked (U.lock[profile]): a notch at one setting, a diopter at a number of clicks from the
 // zero. Then nothing is chosen per range: the rest is a hold, "aim N cm high / low".
+// A diopter starts locked at its zero (aperture sights are mostly shot with holds); "Auto" is then an explicit "".
+const lockVal=(p,g)=>{const v=U.lock&&U.lock[p.id];return v==null&&g&&g.type==="diopter"?"0":v};
 function lockOf(p){
-  const g=ironOf(p),v=p&&U.lock&&U.lock[p.id];if(!g||v==null||v==="")return null;
+  const g=ironOf(p),v=p&&lockVal(p,g);if(!g||v==null||v==="")return null;
   if(g.type==="notch")return g.marks.some(m=>m.label===v)?{notch:v}:null;
   const n=parseInt(v,10);return isFinite(n)?{clicks:n,mil:n*(+g.elev_click)/(g.unit==="MOA"?B.toUnit(1,"MOA"):1)}:null;
 }
 function fillLock(p){
   const g=ironOf(p);$("lockRow").hidden=!g;if(!g)return;
-  const cur=(U.lock||{})[p.id]??"";
+  const cur=lockVal(p,g)??"";
   let o=`<option value="">Auto – ${g.type==="notch"?"nearest setting":"dial each range"}</option>`;
   if(g.type==="notch"){const nm=notchMarks(p);o+=g.marks.map(m=>{const x=nm.find(q=>q.label===m.label);return`<option value="${esc(m.label)}">Locked at ${esc(m.label)} (${x?effTxt(x):m.range_m+" m"})</option>`}).join("")}
   else for(let n=-10;n<=40;n++)o+=`<option value="${n}">Locked at ${n?Math.abs(n)+" click"+(Math.abs(n)>1?"s":"")+(n>0?" up":" down"):"the zero"}</option>`;
