@@ -261,7 +261,8 @@ header.top{padding-top:6px!important}
 .fsec{font-size:1.05rem;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.7rem}
-.calt input.cl{width:3em;text-align:center}.calt input.cr{width:4.2em;margin-top:4px}
+.calt input.cl{width:3em;text-align:center}.calt tr.btw input.cl{border-style:dashed;color:var(--muted)}
+.calt .rowb{display:flex;flex-direction:column;gap:6px;align-items:center}.calt input.cr{width:4.2em;margin-top:4px}
 .calt input{width:4.4em;font:inherit;text-align:right;padding:6px 5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit}
 .calt td,.calt th{padding:4px 3px}.calt td.warn{color:var(--accent);font-weight:700}
 .calt th{white-space:normal}
@@ -676,11 +677,12 @@ details summary{cursor:pointer;list-style:revert}
     <div class="sheet-bar"><h2 id="cTitle">Calibrate</h2><button class="ghost" type="button" data-close>Close</button></div>
     <p class="hint" style="margin:0" id="cIntro"></p>
     <label class="f" data-cd>Shot at m<input type="text" inputmode="numeric" id="cDist" placeholder="100"></label>
-    <div data-cn class="ckl" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto">
-      <label class="f">Settings from<input type="text" inputmode="numeric" id="cFrom" placeholder="1"></label>
+    <div data-cn class="ckl" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+      <label class="f">Marks from<input type="text" inputmode="numeric" id="cFrom" placeholder="1"></label>
       <label class="f">to<input type="text" inputmode="numeric" id="cTo" placeholder="20"></label>
-      <label class="f">m per setting<input type="text" inputmode="numeric" id="cPer" placeholder="100"></label>
-      <button class="ghost" type="button" id="cFill">Fill</button></div>
+      <label class="f">m per mark<input type="text" inputmode="numeric" id="cPer" placeholder="100"></label>
+      <label class="f">Slots between<input type="text" inputmode="numeric" id="cBetw" placeholder="0"></label></div>
+    <div class="actions" data-cn style="margin:0"><button class="ghost" type="button" id="cFill">Fill</button></div>
     <label class="f" data-cn>Sight radius mm<input type="text" inputmode="decimal" id="cRad"></label>
     <div data-cn style="overflow-x:auto"><table class="tbl calt" id="cTbl"></table></div>
     <div class="actions" data-cn style="margin:0"><button class="ghost" type="button" id="cAdd">+ Setting</button></div>
@@ -1838,7 +1840,7 @@ function openCal(){
   $("cTitle").textContent=t==="diopter"?"Calibrate clicks":"Calibrate leaf";
   $("cIntro").textContent=t==="diopter"
     ?"Shoot a group at a few click settings (e.g. 0, +10, +20 up from the zero) at one distance, all from the same aim mark, and enter how high each group's centre is above the aim (− below). The slope is the sight's true click."
-    :"The leaf's settings and the range stamped on each (Fill makes 1–20 at 100 m steps; a leaf numbered differently can be typed in). Then the rear notch's height on each setting, with a caliper from a fixed point (leaf base), square to the bore, the slider pressed down the same way each time. Setting 1 is the reference: raw readings or 0 for setting 1 and the rest from it both work. Settings left empty are interpolated. Groups shot on several settings (Groups, with this load) are fitted to these.";
+    :"The leaf's settings and the range stamped on each. Fill makes the marks (1–20 at 100 m) and any unmarked slots between them (3+1, 3+2 … ranges in between); ＋ adds a slot after a row, ✕ removes one, and a leaf numbered differently can be typed in. Unmarked slots really need their rise measured: their ranges are only a guess. Then the rear notch's height on each setting, with a caliper from a fixed point (leaf base), square to the bore, the slider pressed down the same way each time. Setting 1 is the reference: raw readings or 0 for setting 1 and the rest from it both work. Settings left empty are interpolated. Groups shot on several settings (Groups, with this load) are fitted to these.";
   setv("cDist",IRCAL.dist_m);setv("cRad",$("fIrRad").value);$("cFit").checked=IRCAL.fit;
   $("cForm").querySelectorAll("[data-cn]").forEach(e=>e.hidden=t!=="notch");$("cForm").querySelectorAll("[data-cd]").forEach(e=>e.hidden=t!=="diopter");
   if(t==="notch")drawCalTable();else drawLadder();
@@ -1849,10 +1851,11 @@ function drawCalTable(){
   $("cTbl").innerHTML=`<thead><tr><th>Set · m</th><th>Rise mm</th><th>Angle mil</th><th>Leaf says</th><th>True m</th><th></th></tr></thead><tbody>`
     +(ms.length?ms:[{label:"",range_m:""}]).map(calRow).join("")+`</tbody>`;
 }
+const isBetween=l=>/^.+\+\d+$/.test(l);           // "3+1": the first unmarked slot after mark 3
 function calRow(m){
-  return`<tr data-cl><td><input class="cl" type="text" data-ck="label" value="${esc(m.label)}" aria-label="Setting"><br><input class="cr" type="text" inputmode="numeric" data-ck="range" value="${esc(m.range_m??"")}" placeholder="m" aria-label="Stamped range m"></td>`
+  return`<tr data-cl${isBetween(m.label)?' class="btw"':""}><td><input class="cl" type="text" data-ck="label" value="${esc(m.label)}" aria-label="Setting"><br><input class="cr" type="text" inputmode="numeric" data-ck="range" value="${esc(m.range_m??"")}" placeholder="m" aria-label="Stamped range m"></td>`
     +`<td><input type="text" inputmode="decimal" data-ck="rise" value="${esc(m.rise_mm??"")}" aria-label="Rise mm"></td>`
-    +`<td data-o="ang">–</td><td data-o="nom" class="dim">–</td><td data-o="eff">–</td><td><button type="button" class="rm" data-calrm aria-label="Remove setting">✕</button></td></tr>`;
+    +`<td data-o="ang">–</td><td data-o="nom" class="dim">–</td><td data-o="eff">–</td><td><div class="rowb"><button type="button" class="rm" data-calins aria-label="Add a slot after this one" title="Slot after this one">＋</button><button type="button" class="rm" data-calrm aria-label="Remove setting">✕</button></div></td></tr>`;
 }
 function ladderRow(x){return`<div class="ckrow" data-lad style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px"><label class="f">Clicks up from zero<input type="text" inputmode="numeric" data-k="clicks" value="${esc(x.clicks??"")}" placeholder="0"></label>
   <label class="f">Group cm above aim<input type="text" inputmode="decimal" data-k="poi_cm" value="${esc(x.poi_cm??"")}" placeholder="0"></label><button type="button" class="rm" data-ladrm aria-label="Remove group">✕</button></div>`}
@@ -1901,15 +1904,33 @@ function calCompute(){
   calSummary();
 }
 $("fIrCal").addEventListener("click",openCal);
-$("cAdd").addEventListener("click",()=>{const ms=calMarks(),L=ms[ms.length-1],st=ms.length>1?L.range_m-ms[ms.length-2].range_m:100,n=L?+L.label:NaN;
+$("cAdd").addEventListener("click",()=>{const ms=calMarks(),L=ms[ms.length-1],st=ms.length>1?L.range_m-ms[ms.length-2].range_m:100,n=L?Math.floor(parseFloat(L.label)):NaN;
   $("cTbl").querySelector("tbody").insertAdjacentHTML("beforeend",calRow(L?{label:isFinite(n)?String(n+1):"",range_m:L.range_m+st}:{label:"1",range_m:100}));calCompute()});
-$("cTbl").addEventListener("click",e=>{const b=e.target.closest("[data-calrm]");if(!b)return;b.closest("[data-cl]").remove();
-  if(!$("cTbl").querySelector("[data-cl]"))drawCalTable();calCompute()});
+$("cTbl").addEventListener("click",e=>{
+  const ins=e.target.closest("[data-calins]");
+  if(ins){                                  // an unmarked slot after this row, halfway to the next one
+    const tr=ins.closest("[data-cl]"),rg=t=>num(t.querySelector('[data-ck="range"]').value),nx=tr.nextElementSibling;
+    const a=rg(tr),b=nx?rg(nx):null;if(!a)return;
+    tr.insertAdjacentHTML("afterend",calRow({label:tr.querySelector('[data-ck="label"]').value.trim()+"+1",range_m:Math.round(b?(a+b)/2:a+50)}));
+    relabel();calCompute();return;
+  }
+  const b=e.target.closest("[data-calrm]");if(!b)return;b.closest("[data-cl]").remove();
+  if(!$("cTbl").querySelector("[data-cl]"))drawCalTable();relabel();calCompute()});
+// Slots between marks are named after the mark before them, numbered up: 3, 3+1, 3+2, 4 …
+function relabel(){
+  let base=null,n=0;
+  $("cTbl").querySelectorAll("[data-cl]").forEach(tr=>{
+    const inp=tr.querySelector('[data-ck="label"]'),l=inp.value.trim();
+    if(!isBetween(l)){base=l;n=0;tr.classList.remove("btw");return}
+    n++;inp.value=(base||l.replace(/\+\d+$/,""))+"+"+n;tr.classList.add("btw");
+  });
+}
 $("cFill").addEventListener("click",()=>{       // settings from…to, the stamped range growing by a fixed step
-  const a=num($("cFrom").value)??1,b=num($("cTo").value)??20,per=num($("cPer").value)||100;
-  if(!(b>=a)||b-a>60){toast("Settings from must be below to (at most 60 settings).");return}
+  const a=num($("cFrom").value)??1,b=num($("cTo").value)??20,per=num($("cPer").value)||100,n=Math.max(0,Math.round(num($("cBetw").value)||0));
+  if(!(b>=a)||(b-a)*(n+1)+1>80){toast("Marks from must be below to, at most 80 slots in all.");return}
   readCal();const old=Object.assign({},IRCAL.rise),ms=[];
-  for(let k=a;k<=b;k++)ms.push({label:String(k),range_m:k*per,rise_mm:old[String(k)]});
+  for(let k=a;k<=b;k++){ms.push({label:String(k),range_m:k*per});
+    if(k<b)for(let j=1;j<=n;j++)ms.push({label:`${k}+${j}`,range_m:Math.round(per*(k+j/(n+1)))})}
   $("fIrMarks").value=marksText(ms);drawCalTable();calCompute();
 });
 $("cForm").addEventListener("input",e=>{if(e.target.id!=="cFit")calCompute()});

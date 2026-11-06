@@ -282,7 +282,7 @@ def _sight(v, name):
                               "poi_cm": _num(-500, 500, True)(x.get("poi_cm"), f"{name}_ladder_cm")} for x in ladder]
     else:
         marks = v.get("marks")
-        if not isinstance(marks, list) or not 1 <= len(marks) <= 40:
+        if not isinstance(marks, list) or not 1 <= len(marks) <= 80:      # marked settings and the slots between
             raise ValueError(f"bad_{name}_marks")
         clean_marks = []
         for m in marks:
