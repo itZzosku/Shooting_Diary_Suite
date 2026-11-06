@@ -391,6 +391,7 @@ details summary{cursor:pointer;list-style:revert}
     <div class="grid2"><label class="f">Gun<select id="pGun"></select></label><label class="f">Profile<select id="pSel"></select></label></div>
     <div class="pact">
       <button class="ghost" type="button" id="pEdit">Edit</button>
+      <button class="ghost" type="button" id="pDup">Duplicate</button>
       <button class="ghost" type="button" id="pNew">New</button>
       <button class="ghost" type="button" id="pImport">Import</button><input type="file" id="pImportF" accept=".json,application/json" hidden>
     </div>
@@ -1058,7 +1059,7 @@ function renderProfiles(){
   const sub=list.filter(x=>gunKey(x)===cur);
   $("pSel").innerHTML=sub.length?sub.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join(""):`<option value="">No profiles yet – tap New</option>`;
   if(p){$("pSel").value=p.id;U.gunLast=Object.assign({},U.gunLast,{[cur||"_"]:p.id})}
-  $("pEdit").disabled=!p;
+  $("pEdit").disabled=$("pDup").disabled=!p;
   if(!p){$("pInfo").innerHTML="A profile is a gun + load + bullet + scope. Start with <b>New</b>.";return}
   const i=p.inputs,b=i.bullet,s=i.scope;
   const parts=[];
@@ -1720,8 +1721,12 @@ function gunHint(){
     :"The twist is saved with this gun for its next profiles.";
   sightSuggestions();
 }
-function openProfile(p,gunId){
-  editP=p;$("pTitle").textContent=p?"Edit profile":"New profile";$("pDel").hidden=!p;$("pExport").hidden=!p;
+// copyOf: a profile to duplicate – the form holds a copy of it (no id yet: saving makes a new profile)
+let COPY_FROM=null;
+function openProfile(p,gunId,copyOf){
+  COPY_FROM=copyOf?copyOf.id:null;
+  if(copyOf)p=Object.assign({},copyOf,{id:null,name:copyOf.name+" (copy)",archived:0});
+  editP=p;$("pTitle").textContent=copyOf?"Duplicate profile":p?"Edit profile":"New profile";$("pDel").hidden=!p||!!copyOf;$("pExport").hidden=!p||!!copyOf;
   // a new profile: the gun's twist; its sight height only when the gun has none to suggest (else picked from them)
   const used=gunId&&D.profiles.some(q=>q.gun_id===gunId&&q.sight_height_mm!=null);
   const P=D.pickers,x=p||Object.assign({sight_height_mm:used?null:50,zero_range_m:100,twist_dir:"R",gun_id:gunId||null},gunDefaults(gunId)||{});
@@ -1743,6 +1748,7 @@ function openProfile(p,gunId){
   chronoHint(p);
   setv("fZt",x.zero_temp_c);setv("fZp",x.zero_hpa);setv("fZh",x.zero_rh);$("fArch").checked=!!x.archived;
   gunHint();openSheet("pSheet");if(!p)$("fName").focus();
+  if(copyOf){$("fName").focus();$("fName").select()}
 }
 function chronoHint(p){
   const ch=p&&p.inputs&&p.inputs.chrono,on=$("fMvSrc").value==="chrono"||$("fTsSrc").value==="chrono";
@@ -2104,6 +2110,7 @@ function readIron(){
 function spinState(){const on=$("fSpin").checked;$("fSpinSL").hidden=$("fSpinH").hidden=!on}
 $("fSpin").addEventListener("change",spinState);
 $("pEdit").addEventListener("click",()=>openProfile(prof()));
+$("pDup").addEventListener("click",()=>{const p=prof();if(p)openProfile(null,null,p)});
 $("pNew").addEventListener("click",()=>openProfile(null,$("pGun").value||null));
 $("fGun").addEventListener("change",()=>{if(!editP)applyGun(gunDefaults($("fGun").value));gunHint()});
 $("pForm").addEventListener("submit",async e=>{
@@ -2128,12 +2135,14 @@ $("pForm").addEventListener("submit",async e=>{
       body.sight_id=sid;
     }
   }
-  const id=editP?editP.id:newId(body.name,"p-");
+  const id=editP&&editP.id?editP.id:newId(body.name,"p-");
   const err=await write("PUT","api/ballistics/profiles/"+encodeURIComponent(id),body);
   if(err)return msg("pMsg",err);
-  {const lk=editP&&U.lock&&U.lock[editP.id];         // the lock follows its slot when slots were renumbered
-   if(lk&&lk in REMAP){U.lock[editP.id]=REMAP[lk]??"";saveUI()}}
-  if(body.gun_id){D.settings=Object.assign({},D.settings);D.settings.by_gun=Object.assign({},D.settings.by_gun,{[body.gun_id]:{sight_height_mm:body.sight_height_mm,twist_mm:body.twist_mm,twist_dir:body.twist_dir}})}
+  {const from=COPY_FROM||(editP&&editP.id),lk=from&&U.lock&&U.lock[from];  // a copy starts locked like its original;
+   if(lk!=null){U.lock=Object.assign({},U.lock,{[id]:lk in REMAP?REMAP[lk]??"":lk});saveUI()}}   // the lock follows renumbered slots
+  if(COPY_FROM){const st=D.settings||{},card=st.by_profile&&st.by_profile[COPY_FROM];   // and with its range card
+    if(card)write("PUT","api/ballistics/settings",Object.assign({profile_id:id},card));}
+  if(body.gun_id){D.settings=Object.assign({},D.settings);D.settings.by_gun=Object.assign({},D.settings.by_gun,{[body.gun_id]:{twist_mm:body.twist_mm,twist_dir:body.twist_dir}})}
   U.profile=id;closeSheet($("pSheet"));render();
 });
 $("pDel").addEventListener("click",async()=>{
