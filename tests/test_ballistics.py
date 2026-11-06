@@ -77,8 +77,8 @@ def test_profile_resolves_scope_zero_and_bullet(client):
     assert [p["id"] for p in data["profiles"]] == ["p-1"]
     assert data["pickers"]["scopes"][0]["zeros"][0]["id"] == "z-1"
     assert data["settings"]["card_step"] == 50
-    assert data["settings"]["by_gun"] == {"g-ab10": {"sight_height_mm": 55, "twist_mm": 254, "twist_dir": "R"}}, \
-        "the gun keeps the sight height and twist for its next profile"
+    assert data["settings"]["by_gun"] == {"g-ab10": {"twist_mm": 254, "twist_dir": "R"}}, \
+        "the gun keeps its twist for its next profile (sight height goes with the scope: only suggested)"
 
 
 def test_missing_bullet_and_velocity_are_warnings_not_errors(client):

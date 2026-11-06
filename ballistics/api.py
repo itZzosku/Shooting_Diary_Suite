@@ -67,8 +67,8 @@ DIAL_MODES = ("each", "first_hold_rest", "one")
 SETTINGS_KEY = "bal_settings"
 RANGES_KEY = "bal_ranges"            # saved shooting ranges: [{id, name, lat, lon, alt_m}]
 DEFAULT_SETTINGS = {"card_start": 100, "card_step": 50, "card_end": 1000, "by_profile": {},
-                    "by_gun": {}}       # gun id → {sight_height_mm, twist_mm, twist_dir}: a new profile's start
-GUN_FIELDS = ("sight_height_mm", "twist_mm", "twist_dir")
+                    "by_gun": {}}       # gun id → {twist_mm, twist_dir}: a new profile's start (the barrel's)
+GUN_FIELDS = ("twist_mm", "twist_dir")      # sight height belongs to the scope on it: only suggested (page)
 
 
 # The server's Python code is loaded once; pages are read from disk on every request. After a git pull without a
@@ -732,7 +732,7 @@ def api_bal_put_profile(pid):
         return res
     conn = db()
     p = dict(conn.execute("SELECT * FROM bal_profiles WHERE id=?", (pid,)).fetchone())
-    if p.get("gun_id"):                     # the gun keeps the last sight height and twist set for it
+    if p.get("gun_id"):                     # the gun keeps the last twist set for it
         s = settings(conn)
         s["by_gun"] = dict(s.get("by_gun") or {}, **{p["gun_id"]: {k: p[k] for k in GUN_FIELDS}})
         kv_set(SETTINGS_KEY, json.dumps(s))

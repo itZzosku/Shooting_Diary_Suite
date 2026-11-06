@@ -547,7 +547,8 @@ details summary{cursor:pointer;list-style:revert}
     <div class="g3"><label class="f">Sight height mm<input type="text" inputmode="decimal" id="fSight" required placeholder="50"></label>
       <label class="f">Twist mm / turn<input type="text" inputmode="decimal" id="fTwist" placeholder="203"></label>
       <label class="f">Twist<select id="fTwistDir"><option value="R">Right</option><option value="L">Left</option></select></label></div>
-    <p class="hint" style="margin:0" id="fGunH">Sight height and twist are kept with the gun: a new profile for it starts with them.</p>
+    <div class="chips" id="fSightSug" hidden></div>
+    <p class="hint" style="margin:0" id="fGunH"></p>
     <h2 class="fsec">Ammunition</h2>
     <label class="f">Load<select id="fLoad"></select></label>
     <div class="prow"><label class="f">Bullet<select id="fBullet"></select></label><button class="ghost" type="button" id="fBulEdit">Edit</button><button class="ghost" type="button" id="fBulNew">New</button></div>
@@ -1692,20 +1693,38 @@ function fillBullets(sel){$("fBullet").innerHTML=opt("","– none –")+D.bullet
 // Sight height and twist are kept per gun (settings.by_gun, set by each profile save; else the gun's newest
 // profile): a new profile, or picking a gun for one, starts from them.
 function gunDefaults(gid){
-  if(!gid)return null;const s=((D.settings||{}).by_gun||{})[gid];if(s)return s;
-  const ps=D.profiles.filter(p=>p.gun_id===gid),p=ps[ps.length-1];
-  return p?{sight_height_mm:p.sight_height_mm,twist_mm:p.twist_mm,twist_dir:p.twist_dir}:null;
+  if(!gid)return null;const s=((D.settings||{}).by_gun||{})[gid];if(s&&s.twist_mm)return{twist_mm:s.twist_mm,twist_dir:s.twist_dir};
+  const ps=D.profiles.filter(p=>p.gun_id===gid&&p.twist_mm),p=ps[ps.length-1];
+  return p?{twist_mm:p.twist_mm,twist_dir:p.twist_dir}:null;
 }
-function applyGun(d){if(!d)return;setv("fSight",d.sight_height_mm);setv("fTwist",d.twist_mm);$("fTwistDir").value=d.twist_dir||"R"}
+function applyGun(d){if(!d)return;setv("fTwist",d.twist_mm);$("fTwistDir").value=d.twist_dir||"R"}
+/** Sight heights used on this gun's other profiles, with what sits on it there; the same scope (or iron sight
+    type) first. Tapping one fills it in: one gun can carry scopes at different heights. */
+function sightSuggestions(){
+  const gid=$("fGun").value,sc=$("fScope").value,st=$("fSightType").value,by=new Map();
+  if(gid)D.profiles.filter(p=>p.gun_id===gid&&(!editP||p.id!==editP.id)&&p.sight_height_mm!=null).forEach(p=>{
+    let g=null;try{g=p.sight?(typeof p.sight==="string"?JSON.parse(p.sight):p.sight):null}catch(e){}
+    const what=g?(g.type==="notch"?"notch sight":"diopter"):((D.pickers.scopes||[]).find(s=>s.id===p.scope_id)||{}).name||"no scope";
+    const same=g?g.type===st:(!st&&p.scope_id&&p.scope_id===sc);
+    const k=+p.sight_height_mm,o=by.get(k)||{h:k,what:new Set(),same:false};o.what.add(what);o.same=o.same||same;by.set(k,o);
+  });
+  const list=[...by.values()].sort((a,b)=>b.same-a.same||a.h-b.h);
+  $("fSightSug").hidden=!list.length;
+  $("fSightSug").innerHTML=list.length?`<span class="hint" style="align-self:center">Used on this gun:</span>`+list.map(o=>`<button type="button" class="chip" data-sh="${o.h}">${o.h} mm · ${esc([...o.what].join(", "))}</button>`).join(""):"";
+}
+$("fSightSug").addEventListener("click",e=>{const b=e.target.closest("[data-sh]");if(b)setv("fSight",b.dataset.sh)});
 function gunHint(){
   const d=gunDefaults($("fGun").value);
-  $("fGunH").textContent=!$("fGun").value?"Sight height and twist are kept with the gun: a new profile for it starts with them."
-    :d?`Kept with this gun (${[d.sight_height_mm!=null&&d.sight_height_mm+" mm sight height",d.twist_mm&&"1 turn in "+d.twist_mm+" mm "+(d.twist_dir==="L"?"left":"right")].filter(Boolean).join(", ")}); saving updates them.`
-    :"Saved with this gun for its next profiles.";
+  $("fGunH").textContent=!$("fGun").value?"The twist is kept with the gun; sight heights used on it are offered."
+    :d?`Twist kept with this gun (1 turn in ${d.twist_mm} mm ${d.twist_dir==="L"?"left":"right"}); saving updates it.`
+    :"The twist is saved with this gun for its next profiles.";
+  sightSuggestions();
 }
 function openProfile(p,gunId){
   editP=p;$("pTitle").textContent=p?"Edit profile":"New profile";$("pDel").hidden=!p;$("pExport").hidden=!p;
-  const P=D.pickers,x=p||Object.assign({sight_height_mm:50,zero_range_m:100,twist_dir:"R",gun_id:gunId||null},gunDefaults(gunId)||{});
+  // a new profile: the gun's twist; its sight height only when the gun has none to suggest (else picked from them)
+  const used=gunId&&D.profiles.some(q=>q.gun_id===gunId&&q.sight_height_mm!=null);
+  const P=D.pickers,x=p||Object.assign({sight_height_mm:used?null:50,zero_range_m:100,twist_dir:"R",gun_id:gunId||null},gunDefaults(gunId)||{});
   $("fGun").innerHTML=opt("","– none –")+P.guns.filter(g=>!g.archived||g.id===x.gun_id).map(g=>opt(g.id,g.name+(g.cal?" · "+g.cal:""),g.id===x.gun_id)).join("");
   $("fLoad").innerHTML=opt("","– none –")+P.loads.filter(l=>!l.archived||l.id===x.load_id).map(l=>opt(l.id,l.name,l.id===x.load_id)).join("");
   $("fScope").innerHTML=opt("","– none –")+P.scopes.filter(s=>!s.archived||s.id===x.scope_id).map(s=>opt(s.id,`${s.name} · ${+s.click} ${s.unit}`,s.id===x.scope_id)).join("");
@@ -1736,7 +1755,7 @@ function chronoHint(p){
     +` · temp. sensitivity ${ch.temp_sens!=null?"<b>"+ch.temp_sens+"</b> m/s/°C over "+ch.days+" days":"needs ≥ 3 days spanning 10 °C"}`;
 }
 for(const id of ["fMvSrc","fTsSrc","fGun","fLoad"])$(id).addEventListener("change",()=>chronoHint(editP));
-$("fScope").addEventListener("change",()=>fillScopeZero($("fScope").value,null));
+$("fScope").addEventListener("change",()=>{fillScopeZero($("fScope").value,null);sightSuggestions()});
 $("fZero").addEventListener("change",()=>{       // a scope zero knows its rifle and distance
   const sc=D.pickers.scopes.find(s=>s.id===$("fScope").value),z=sc&&sc.zeros.find(z=>z.id===$("fZero").value);
   if(!z)return;if(z.distance_m)$("fZr").value=z.distance_m;if(z.gun_id&&!$("fGun").value)$("fGun").value=z.gun_id;if(z.load_id&&!$("fLoad").value)$("fLoad").value=z.load_id;
@@ -2042,7 +2061,7 @@ function sightState(){
     :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. Groups (with this load) put it right: one group shifts every setting by that angle; groups on several settings correct each setting, in between interpolated, and a group's side error is held off on that setting. Calibrate leaf measures the notch rise per setting (with the sight); groups on several settings scale it. Wind is a hold in cm and post widths.":"";
   if(t)$("fIrHint").textContent+=" Eye to rear sight: from your eye in your shooting position to the rear "+(t==="diopter"?"aperture":"notch")+"; with the "+(t==="diopter"?"aperture":"notch width")+" it sizes the sight picture, and post-width holds then count the post as your eye sees it.";
 }
-$("fSightType").addEventListener("change",()=>{sightState();calSummary()});
+$("fSightType").addEventListener("change",()=>{sightState();calSummary();sightSuggestions()});
 $("fIrPre").addEventListener("click",e=>{
   const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(!pr)return;
   // this profile's groups stay, on the slot with the same marking (none there: dropped)
