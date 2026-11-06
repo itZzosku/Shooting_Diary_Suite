@@ -258,6 +258,11 @@ header.top{padding-top:6px!important}
 .otbl tr[data-oedit]{cursor:pointer}
 .otbl td small{display:block;font-family:var(--f-body);font-size:.72rem;color:var(--muted)}
 .cklist{display:flex;flex-direction:column;gap:8px}
+.calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.7rem}
+.calt input{width:4.4em;font:inherit;text-align:right;padding:6px 5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit}
+.calt td,.calt th{padding:4px 3px}.calt td.warn{color:var(--accent);font-weight:700}
+.calt th{white-space:normal}
 .ckrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) 34px;gap:6px;align-items:end}
 .lockrow{display:grid;grid-template-columns:minmax(0,13rem) minmax(0,1fr);gap:10px;align-items:end;margin-top:10px}
 .ironbox{display:flex;flex-direction:column;gap:10px;padding:10px 0 4px;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
@@ -543,6 +548,7 @@ details summary{cursor:pointer;list-style:revert}
       <div class="grid2" data-dio><label class="f">Elevation click<input type="text" inputmode="decimal" id="fIrE"></label><label class="f">Windage click<input type="text" inputmode="decimal" id="fIrW"></label></div>
       <label class="f" data-notch>Leaf marks (setting = range m)<input type="text" id="fIrMarks" placeholder="1=100, 2=200, 3=300"></label>
       <div class="grid2"><label class="f">Sight radius mm<input type="text" inputmode="decimal" id="fIrRad"></label><label class="f">Front post width mm<input type="text" inputmode="decimal" id="fIrPost"></label></div>
+      <div class="calrow"><button class="ghost" type="button" id="fIrCal">Calibrate</button><span class="hint" id="fIrCalS"></span></div>
       <label class="check" id="fIrKeepL"><input type="checkbox" id="fIrKeep">Save this sight for other profiles</label>
       <div class="lbl" data-notch>This rifle and load: where groups landed</div>
       <div data-notch id="fIrChecks" class="cklist"></div>
@@ -654,6 +660,21 @@ details summary{cursor:pointer;list-style:revert}
     <div class="actions"><button class="primary" type="submit">Save</button><button class="danger" type="button" id="obDel" hidden>Delete</button></div>
   </form>
 </div>
+<!-- iron sight calibration: leaf settings or diopter clicks, measured -->
+<div class="sheet" id="cSheet" hidden role="dialog" aria-modal="true" aria-labelledby="cTitle">
+  <form class="sheet-in" id="cForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="cTitle">Calibrate</h2><button class="ghost" type="button" data-close>Close</button></div>
+    <p class="hint" style="margin:0" id="cIntro"></p>
+    <div class="grid2"><label class="f">Shot at m<input type="text" inputmode="numeric" id="cDist" placeholder="100"></label>
+      <label class="f" data-cn>Sight radius mm<input type="text" inputmode="decimal" id="cRad"></label></div>
+    <div data-cn style="overflow-x:auto"><table class="tbl calt" id="cTbl"></table></div>
+    <div data-cd id="cLadder" class="cklist"></div>
+    <div class="actions" data-cd style="margin:0"><button class="ghost" type="button" id="cLadAdd">+ Group</button></div>
+    <label class="check" data-cn id="cFitL"><input type="checkbox" id="cFit" checked>Scale the caliper values to the shots</label>
+    <div class="src" id="cOut"></div>
+    <div class="actions"><button class="primary" type="button" id="cDone">Done</button><button class="ghost" type="button" id="cUse" data-cd hidden>Use as elevation click</button></div>
+  </form>
+</div>
 <!-- reticle library and builder -->
 <div class="sheet" id="rbSheet" hidden role="dialog" aria-modal="true" aria-labelledby="rbTitle">
   <form class="sheet-in" id="rbForm" autocomplete="off">
@@ -737,6 +758,7 @@ details summary{cursor:pointer;list-style:revert}
 <script src="static/ballistics/solver.js"></script>
 <script src="static/ballistics/reticle.js"></script>
 <script src="static/ballistics/truing.js"></script>
+<script src="static/ballistics/ironcal.js"></script>
 <script>
 (function(){
 "use strict";
@@ -858,12 +880,21 @@ const MARKS=new Map();
 /** The notch sight's marks with the angle each gives (mil from the zero): this load's elevation at the mark's
     range in the zero conditions, no wind. Cached per profile state. */
 function notchMarks(p){
-  const g=ironOf(p),i=p.inputs,key=JSON.stringify([p.id,g.marks,g.checks,i.mv,i.mvScale,i.dragScale,i.zeroRangeM,i.sightHeightMm,i.bullet,i.zeroAtmo]);
+  const g=ironOf(p),i=p.inputs,key=JSON.stringify([p.id,g.marks,g.checks,g.radius_mm,g.cal_dist_m,g.cal_fit,i.mv,i.mvScale,i.dragScale,i.zeroRangeM,i.sightHeightMm,i.bullet,i.zeroAtmo]);
   if(MARKS.has(key))return MARKS.get(key);
   const za=clean(i.zeroAtmo||{});let rows=[];
   try{rows=B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
     {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),g.marks.map(m=>m.range_m)).rows}catch(e){}
   let out=g.marks.map((m,k)=>({label:m.label,range:m.range_m,mil:rows[k]&&rows[k].reached?rows[k].elevMrad:null})).filter(m=>m.mil!=null);
+  // Calibrated leaf (caliper and/or a 100 m ladder): each setting is setting 1's angle plus its measured rise above
+  // it; settings not measured take the measured ones' difference to the nominal leaf, interpolated by range.
+  const cal=window.IronCal?IronCal.leafCal(g.marks,{radius_mm:g.radius_mm,dist_m:g.cal_dist_m,fit:g.cal_fit!==false}):null;
+  if(cal&&cal.any&&out.length&&out[0].label===cal.labels[0]){
+    const pts=[];out.forEach(m=>{const j=cal.labels.indexOf(m.label);if(j>=0&&cal.rel[j]!=null)pts.push({range:m.range,off:cal.rel[j]-(m.mil-out[0].mil)})});
+    const dAt=x=>{if(x<=pts[0].range)return pts[0].off;const L=pts[pts.length-1];if(x>=L.range)return L.off;
+      const k=pts.findIndex(q=>q.range>=x),a=pts[k-1],b=pts[k];return a.off+(b.off-a.off)*(x-a.range)/(b.range-a.range)};
+    out=out.map(m=>{const j=cal.labels.indexOf(m.label);return Object.assign({},m,{mil:m.mil+dAt(m.range),cal:j>=0?cal.src[j]:null})});
+  }
   // The checks: on setting S at range R a group landed C cm above the aim → that setting gives
   // (C / R·10) − (setting's angle − what R needs) more than the leaf says. Several checks on one setting are
   // averaged; settings between checked ones are interpolated (by the marks' ranges), the rest keep the nearest.
@@ -881,8 +912,24 @@ function notchMarks(p){
       out=out.map(m=>Object.assign({},m,{mil:m.mil+offAt(m.range),off:offAt(m.range)}));
     }
   }
+  if((cal&&cal.any)||cks.length){const inv=milToRange(p,Math.max(...g.marks.map(m=>m.range_m)));out=out.map(m=>Object.assign({},m,{eff:inv(m.mil)}))}
   MARKS.set(key,out);return out;
 }
+// This load's elevation over range in the zero conditions, and its inverse: the range a sight angle (mil) is
+// right for (null outside what was solved). Used for each leaf setting's true range.
+function zeroRows(p,ranges){
+  const za=clean(p.inputs.zeroAtmo||{});
+  try{return B.solve(Object.assign(solverInput(p,{tempC:za.tempC,hpa:za.hpa,rh:za.rh,powder:za.tempC,ms:0,clock:9,angle:0}),
+    {spinDrift:false,coriolis:false,aeroJump:false,mainOnly:true}),ranges).rows}catch(e){return[]}
+}
+function milToRange(p,maxR){
+  const top=Math.min(3000,Math.max(300,Math.ceil(maxR*1.6/10)*10)),rs=[];for(let r=10;r<=top;r+=10)rs.push(r);
+  const rows=zeroRows(p,rs).filter(r=>r.reached);
+  let lo=0;rows.forEach((r,k)=>{if(r.elevMrad<rows[lo].elevMrad)lo=k});      // past the low point elevation only grows
+  return mil=>{for(let k=Math.max(lo,1);k<rows.length;k++){const a=rows[k-1],b=rows[k];
+    if(k-1>=lo&&mil>=a.elevMrad&&mil<=b.elevMrad)return a.range+(b.range-a.range)*(mil-a.elevMrad)/((b.elevMrad-a.elevMrad)||1)}return null};
+}
+const effTxt=m=>m.eff!=null?`≈${Math.round(m.eff/5)*5} m`:`${m.range} m`;
 // The sight can be locked (U.lock[profile]): a notch at one setting, a diopter at a number of clicks from the
 // zero. Then nothing is chosen per range: the rest is a hold, "aim N cm high / low".
 function lockOf(p){
@@ -894,7 +941,7 @@ function fillLock(p){
   const g=ironOf(p);$("lockRow").hidden=!g;if(!g)return;
   const cur=(U.lock||{})[p.id]??"";
   let o=`<option value="">Auto – ${g.type==="notch"?"nearest setting":"dial each range"}</option>`;
-  if(g.type==="notch")o+=g.marks.map(m=>`<option value="${esc(m.label)}">Locked at ${esc(m.label)} (${m.range_m} m)</option>`).join("");
+  if(g.type==="notch"){const nm=notchMarks(p);o+=g.marks.map(m=>{const x=nm.find(q=>q.label===m.label);return`<option value="${esc(m.label)}">Locked at ${esc(m.label)} (${x?effTxt(x):m.range_m+" m"})</option>`}).join("")}
   else for(let n=-10;n<=40;n++)o+=`<option value="${n}">Locked at ${n?Math.abs(n)+" click"+(Math.abs(n)>1?"s":"")+(n>0?" up":" down"):"the zero"}</option>`;
   $("sLock").innerHTML=o;$("sLock").value=[...$("sLock").options].some(x=>x.value===String(cur))?String(cur):"";
   const lk=lockOf(p);
@@ -960,8 +1007,10 @@ function renderProfiles(){
   if(g&&g.type==="diopter")parts.push(`${esc(s.name)} · diopter ${+g.elev_click}/${+g.wind_click} ${g.unit==="MOA"?"MOA":"mil"} clicks`);
   else if(g&&g.checks&&g.checks.length)parts.push(`${esc(s.name)} · notch ${esc(g.marks.length>4?`${g.marks[0].label}–${g.marks[g.marks.length-1].label}`:g.marks.map(m=>m.label).join(" "))} · checked: ${g.checks.map(c=>`${Math.round(Math.abs(c.cm))} cm ${c.cm>=0?"high":"low"} at ${c.range_m} m on ${esc(c.setting)}`).join(", ")}`);
   else if(g)parts.push(`${esc(s.name)} · notch ${esc(g.marks.length>4?`${g.marks[0].label}–${g.marks[g.marks.length-1].label} (${g.marks[0].range_m}–${g.marks[g.marks.length-1].range_m} m)`:g.marks.map(m=>m.label+"="+m.range_m).join(" "))}`);
-  else if(s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
-  else parts.push("no scope linked: 0.1 mil clicks");
+  if(g&&g.type==="notch"&&g.marks.some(m=>m.rise_mm!=null||m.poi_cm!=null))parts.push("leaf calibrated");
+  else if(g&&g.type==="diopter"&&g.ladder&&g.ladder.length)parts.push("clicks measured");
+  if(!g&&s)parts.push(`${esc(s.name)} · ${+s.click} ${s.unit}${i.zero&&(i.zero.elev||i.zero.wind)?` · zero dial ${i.zero.elev}/${i.zero.wind}`:""}`);
+  else if(!g)parts.push("no scope linked: 0.1 mil clicks");
   $("pInfo").innerHTML=parts.join(" · ");
 }
 /** The readout for a notch sight: the setting and the hold in cm; wind as a hold in cm and post widths */
@@ -1634,7 +1683,106 @@ function fillIron(g){
   setv("fIrName",g.name);$("fIrUnit").value=g.unit||"MOA";setv("fIrE",g.elev_click);setv("fIrW",g.wind_click);
   setv("fIrMarks",marksText(g.marks));setv("fIrRad",g.radius_mm);setv("fIrPost",g.post_mm);
   drawChecks(g.checks||(g.check?[g.check]:[]));
+  IRCAL={dist_m:g.cal_dist_m??null,fit:g.cal_fit!==false,rise:{},poi:{},ladder:(g.ladder||[]).map(x=>Object.assign({},x))};
+  (g.marks||[]).forEach(m=>{if(m.rise_mm!=null)IRCAL.rise[m.label]=m.rise_mm;if(m.poi_cm!=null)IRCAL.poi[m.label]=m.poi_cm});
+  calSummary();
 }
+/* ---- calibration (sheet #cSheet): kept in IRCAL while the profile form is open, saved with the sight ---- */
+let IRCAL={dist_m:null,fit:true,rise:{},poi:{},ladder:[]};
+const calDist=()=>IRCAL.dist_m||100;
+const sortedMarks=()=>parseMarks($("fIrMarks").value).filter(m=>m.label&&m.range_m).sort((a,b)=>a.range_m-b.range_m);
+function calMarks(){return sortedMarks().map(m=>Object.assign(m,IRCAL.rise[m.label]!=null?{rise_mm:IRCAL.rise[m.label]}:{},IRCAL.poi[m.label]!=null?{poi_cm:IRCAL.poi[m.label]}:{}))}
+function calSummary(){
+  const t=$("fSightType").value;let txt="";
+  if(t==="notch"){const ms=calMarks(),nr=ms.filter(m=>m.rise_mm!=null).length,np=ms.filter(m=>m.poi_cm!=null).length;
+    txt=nr||np?[nr?`${nr} setting${nr>1?"s":""} measured`:"",np?`${np} shot at ${calDist()} m`:""].filter(Boolean).join(" · "):"Measure the notch rise or shoot each setting at 100 m.";}
+  else if(t==="diopter"){const c=IronCal.clickCal(IRCAL.ladder,calDist());
+    txt=c?`Measured click ${fmtClick(c.milPerClick)} from ${c.n} groups`:"Shoot groups at a few click settings at 100 m to measure the true click.";}
+  $("fIrCal").textContent=t==="diopter"?"Calibrate clicks":"Calibrate leaf";$("fIrCalS").textContent=txt;
+}
+const fmtClick=mil=>$("fIrUnit").value==="MOA"?`${(mil*B.toUnit(1,"MOA")).toFixed(3)} MOA`:`${mil.toFixed(3)} mil`;
+function calProfile(withCal,noChecks){            // the profile being edited with the sight as it stands in the form
+  if(!editP||!editP.inputs)return null;
+  const g=readIron();if(!g||g.type!=="notch"||!g.marks.length)return null;
+  g.marks.sort((a,b)=>a.range_m-b.range_m);
+  if(!withCal){g.marks=g.marks.map(m=>({label:m.label,range_m:m.range_m}))}
+  if(noChecks)delete g.checks;
+  return Object.assign({},editP,{inputs:Object.assign({},editP.inputs,{sight:g})});
+}
+function openCal(){
+  const t=$("fSightType").value;if(!t)return;
+  $("cTitle").textContent=t==="diopter"?"Calibrate clicks":"Calibrate leaf";
+  $("cIntro").textContent=t==="diopter"
+    ?"Shoot a group at a few click settings (e.g. 0, +10, +20 up from the zero) at one distance, all from the same aim mark, and enter how high each group's centre is above the aim (− below). The slope is the sight's true click."
+    :"Either or both, for each setting: the rear notch's height with a caliper from a fixed point (leaf base), pressed down the same way each time; and/or the group centre's height above the aim at one distance, every setting from the same aim mark. Setting 1 is the reference for both. Settings left empty are interpolated.";
+  setv("cDist",IRCAL.dist_m);setv("cRad",$("fIrRad").value);$("cFit").checked=IRCAL.fit;
+  $("cForm").querySelectorAll("[data-cn]").forEach(e=>e.hidden=t!=="notch");$("cForm").querySelectorAll("[data-cd]").forEach(e=>e.hidden=t!=="diopter");
+  if(t==="notch")drawCalTable();else drawLadder();
+  calCompute();openSheet("cSheet");
+}
+function drawCalTable(){
+  const ms=calMarks();
+  $("cTbl").innerHTML=ms.length?`<thead><tr><th>Set</th><th>Rise mm</th><th>Group cm</th><th>Angle mil</th><th>Leaf says</th><th>Expect cm</th><th>True m</th></tr></thead><tbody>`
+    +ms.map((m,k)=>`<tr data-cl="${esc(m.label)}"><td>${esc(m.label)}<small>${m.range_m}</small></td>`
+      +`<td><input type="text" inputmode="decimal" data-ck="rise" value="${esc(m.rise_mm??"")}" aria-label="Rise mm, setting ${esc(m.label)}"></td>`
+      +`<td><input type="text" inputmode="decimal" data-ck="poi" value="${esc(m.poi_cm??"")}" aria-label="Group cm above aim, setting ${esc(m.label)}"></td>`
+      +`<td data-o="ang">–</td><td data-o="nom" class="dim">–</td><td data-o="exp" class="dim">–</td><td data-o="eff">–</td></tr>`).join("")+`</tbody>`
+    :`<tbody><tr><td>Enter the leaf marks first.</td></tr></tbody>`;
+}
+function ladderRow(x){return`<div class="ckrow" data-lad style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px"><label class="f">Clicks up from zero<input type="text" inputmode="numeric" data-k="clicks" value="${esc(x.clicks??"")}" placeholder="0"></label>
+  <label class="f">Group cm above aim<input type="text" inputmode="decimal" data-k="poi_cm" value="${esc(x.poi_cm??"")}" placeholder="0"></label><button type="button" class="rm" data-ladrm aria-label="Remove group">✕</button></div>`}
+function drawLadder(){$("cLadder").innerHTML=(IRCAL.ladder.length?IRCAL.ladder:[{clicks:0},{clicks:10},{clicks:20}]).map(ladderRow).join("")}
+function readCal(){                       // the sheet's fields → IRCAL
+  IRCAL.dist_m=num($("cDist").value);IRCAL.fit=$("cFit").checked;
+  if($("fSightType").value==="notch"){
+    IRCAL.rise={};IRCAL.poi={};
+    $("cTbl").querySelectorAll("[data-cl]").forEach(tr=>{const l=tr.dataset.cl,r=num(tr.querySelector('[data-ck="rise"]').value),q=num(tr.querySelector('[data-ck="poi"]').value);
+      if(r!=null)IRCAL.rise[l]=r;if(q!=null)IRCAL.poi[l]=q});
+  }else IRCAL.ladder=[...$("cLadder").querySelectorAll("[data-lad]")].map(r=>({clicks:num(r.querySelector('[data-k="clicks"]').value),poi_cm:num(r.querySelector('[data-k="poi_cm"]').value)})).filter(x=>x.clicks!=null&&x.poi_cm!=null);
+}
+const CAL_WARN={rise_needs_lowest:"Measure the lowest setting's rise too: the others are measured from it.",rise_needs_radius:"Enter the sight radius for the caliper values.",
+  poi_needs_lowest:"Shoot the lowest setting too: the other groups are measured from it.",fit_far:"Caliper and shots differ by more than 15 %: check the sight radius and the measurements."};
+function calCompute(){
+  if(num($("cRad").value)!=null||$("cRad").value==="")$("fIrRad").value=$("cRad").value;
+  readCal();const t=$("fSightType").value,d=calDist();
+  if(t==="diopter"){
+    const c=IronCal.clickCal(IRCAL.ladder,d);$("cUse").hidden=!c;
+    $("cOut").innerHTML=c?`True click <b>${fmtClick(c.milPerClick)}</b> (the sight says ${esc($("fIrE").value||"–")} ${$("fIrUnit").value==="MOA"?"MOA":"mil"}) · groups off the line ±${c.rms.toFixed(1)} cm`:"Needs groups at two or more click settings.";
+    calSummary();return;
+  }
+  const ms=calMarks(),cal=IronCal.leafCal(ms,{radius_mm:num($("cRad").value),dist_m:d,fit:IRCAL.fit});
+  const p0=calProfile(false),p1=calProfile(true);
+  const pl=calProfile(false,true),bare=pl?notchMarks(pl):[],nom=p0?notchMarks(p0):[],fin=p1?notchMarks(p1):[];
+  const need=p0?(zeroRows(p0,[d])[0]||{}):{};
+  ms.forEach((m,k)=>{
+    const tr=$("cTbl").querySelector(`[data-cl="${CSS.escape(m.label)}"]`);if(!tr)return;
+    const o=n=>tr.querySelector(`[data-o="${n}"]`),f=x=>x==null?"–":x.toFixed(2);
+    const sh=cal.shot[k],me=cal.mech[k]!=null?cal.mech[k]*cal.k:null;
+    o("ang").innerHTML=k===0&&cal.any?"0":sh!=null&&me!=null?`${f(sh)}<small>${f(me)}</small>`:sh!=null?f(sh):me!=null?f(me):cal.rel[k]!=null?f(cal.rel[k]):"–";
+    o("ang").className=cal.flags[k]?"warn":"";o("ang").title=cal.flags[k]?"Shots and caliper disagree":"";
+    const n=nom.find(x=>x.label===m.label),b=bare.find(x=>x.label===m.label);
+    o("nom").textContent=b&&bare[0]?f(b.mil-bare[0].mil):"–";
+    o("exp").textContent=n&&need.reached?sgn(Math.round((n.mil-need.elevMrad)*d/10),0):"–";
+    const e=fin.find(x=>x.label===m.label);o("eff").textContent=e&&e.eff!=null&&cal.any?`≈${Math.round(e.eff/5)*5}`:"–";
+  });
+  const out=[];
+  if(cal.kFit!=null)out.push(`Angle: from the shots, the caliper's below when both. Caliper × <b>${cal.kFit.toFixed(3)}</b> fits the shots${cal.rms!=null?` (±${cal.rms.toFixed(2)} mil)`:""}${IRCAL.fit?"":" – not applied"}.`);
+  if(cal.flags.some(Boolean))out.push(`<b>Check</b> the settings in orange: shots and caliper differ by more than ${IronCal.FLAG_MIL} mil.`);
+  cal.warnings.forEach(w=>out.push(esc(CAL_WARN[w]||w)));
+  if(!p0)out.push("Expected groups and true ranges show once the profile is saved with this load.");
+  else out.push(`Leaf says: the angle each setting needs for this load if the stamped ranges were right. Expect cm: where each group should land at ${d} m going by those and your checks. True range: what each setting is right for with this load once calibrated.`);
+  $("cOut").innerHTML=out.join("<br>");$("cFitL").hidden=cal.kFit==null;
+  calSummary();
+}
+$("fIrCal").addEventListener("click",openCal);
+$("cForm").addEventListener("input",e=>{if(e.target.id!=="cFit")calCompute()});
+$("cFit").addEventListener("change",calCompute);
+$("cLadAdd").addEventListener("click",()=>{$("cLadder").insertAdjacentHTML("beforeend",ladderRow({}));});
+$("cLadder").addEventListener("click",e=>{const b=e.target.closest("[data-ladrm]");if(!b)return;b.closest("[data-lad]").remove();calCompute()});
+$("cUse").addEventListener("click",()=>{const c=IronCal.clickCal(IRCAL.ladder,calDist());if(!c)return;
+  $("fIrE").value=(($("fIrUnit").value==="MOA"?c.milPerClick*B.toUnit(1,"MOA"):c.milPerClick)).toFixed(3);calCompute();toast("Elevation click set – save the profile to keep it.")});
+$("cDone").addEventListener("click",()=>{calCompute();closeSheet($("cSheet"))});
+$("fIrMarks").addEventListener("change",calSummary);$("fIrUnit").addEventListener("change",calSummary);
 // Saved sights (pickers.sights): a sight is made once and picked in any profile. Editing a saved sight's fields
 // here and saving the profile updates it for every profile using it; the zero check stays with the profile.
 const savedSights=t=>(D.pickers.sights||[]).filter(x=>x.data.type===t&&(!x.archived||x.id===(editP&&editP.sight_id)));
@@ -1658,18 +1806,20 @@ function sightState(){
   $("fIron").querySelectorAll("[data-dio]").forEach(e=>e.hidden=t!=="diopter");$("fIron").querySelectorAll("[data-notch]").forEach(e=>e.hidden=t!=="notch");
   $("fIrPre").innerHTML=(IRON_PRESETS[t]||[]).map(([n],k)=>`<button type="button" class="chip" data-irpre="${k}">${esc(n)}</button>`).join("");
   $("fIrHint").textContent=t==="diopter"?"Clicks up/down and left/right from the zero, like a scope. Set the sight height to the sight line over the bore (about 65 mm on an AR-15)."
-    :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. If it shoots high or low on a setting (an M39 on its lowest setting often does), add a check: one check shifts every setting by that angle; checks on several settings correct each setting, in between interpolated. Check the same setting at two ranges and they are averaged. Wind is a hold in cm and post widths.":"";
+    :t==="notch"?"Each setting is taken as true for this load at its range in the zero conditions; the calculator gives the nearest setting and the rest as a hold in cm. If it shoots high or low on a setting (an M39 on its lowest setting often does), add a check: one check shifts every setting by that angle; checks on several settings correct each setting, in between interpolated. Check the same setting at two ranges and they are averaged. Calibrate leaf measures what each setting really does (caliper or a 100 m ladder); the checks then work on top of that. Wind is a hold in cm and post widths.":"";
 }
-$("fSightType").addEventListener("change",sightState);
+$("fSightType").addEventListener("change",()=>{sightState();calSummary()});
 $("fIrPre").addEventListener("click",e=>{const b=e.target.closest("[data-irpre]");if(!b)return;const t=$("fSightType").value,pr=IRON_PRESETS[t][+b.dataset.irpre];if(pr)fillIron(pr[1])});
 function readIron(){
   const t=$("fSightType").value;if(!t)return null;
   const g={type:t,name:$("fIrName").value.trim()||null,radius_mm:num($("fIrRad").value),post_mm:num($("fIrPost").value)};
   if(t==="diopter")Object.assign(g,{unit:$("fIrUnit").value,elev_click:num($("fIrE").value),wind_click:num($("fIrW").value)});
   else{
-    g.marks=parseMarks($("fIrMarks").value);
+    g.marks=calMarks();
     const cks=readChecks();if(cks.length)g.checks=cks;
+    if(g.marks.some(m=>m.rise_mm!=null||m.poi_cm!=null)){g.cal_dist_m=calDist();if(!IRCAL.fit)g.cal_fit=false}
   }
+  if(t==="diopter"&&IRCAL.ladder.length){g.ladder=IRCAL.ladder;g.cal_dist_m=calDist()}
   return g;
 }
 function spinState(){const on=$("fSpin").checked;$("fSpinSL").hidden=$("fSpinH").hidden=!on}

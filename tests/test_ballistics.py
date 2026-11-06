@@ -359,6 +359,27 @@ def test_saved_sights(client):
     assert client.put("/diary/api/ballistics/sights/s-bad", json={"name": "x", "data": {"type": "notch", "marks": []}}).status_code == 400
 
 
+def test_sight_calibration_kept_with_the_sight(client):
+    leaf = {"type": "notch", "name": "M39 cal", "radius_mm": 620,
+            "marks": [{"label": "1", "range_m": 100, "rise_mm": 3.1, "poi_cm": 15},
+                      {"label": "2", "range_m": 200, "rise_mm": 3.72, "poi_cm": ""}],
+            "cal_dist_m": 100, "cal_fit": False}
+    assert client.put("/diary/api/ballistics/sights/s-cal", json={"name": "M39 cal", "data": leaf}).status_code == 200
+    data = next(x for x in _all(client)["pickers"]["sights"] if x["id"] == "s-cal")["data"]
+    assert data["marks"][0] == {"label": "1", "range_m": 100, "rise_mm": 3.1, "poi_cm": 15}
+    assert "poi_cm" not in data["marks"][1] and data["cal_dist_m"] == 100 and data["cal_fit"] is False
+    bad = dict(leaf, marks=[{"label": "1", "range_m": 100, "rise_mm": 500}])
+    assert client.put("/diary/api/ballistics/sights/s-cal", json={"name": "x", "data": bad}).status_code == 400
+    dio = {"type": "diopter", "unit": "MOA", "elev_click": 0.5, "wind_click": 0.5,
+           "ladder": [{"clicks": 0, "poi_cm": 1}, {"clicks": 10, "poi_cm": 14.5}], "cal_dist_m": 100}
+    assert client.put("/diary/api/ballistics/sights/s-dio", json={"name": "A2", "data": dio}).status_code == 200
+    data = next(x for x in _all(client)["pickers"]["sights"] if x["id"] == "s-dio")["data"]
+    assert data["ladder"][1] == {"clicks": 10, "poi_cm": 14.5} and data["cal_dist_m"] == 100
+    plain = {"type": "notch", "marks": [{"label": "1", "range_m": 100}], "cal_dist_m": 100}
+    assert client.put("/diary/api/ballistics/sights/s-pl", json={"name": "P", "data": plain}).status_code == 200
+    assert "cal_dist_m" not in next(x for x in _all(client)["pickers"]["sights"] if x["id"] == "s-pl")["data"]
+
+
 def test_horizontal_offset(client):
     base = {"name": "Off", "sight_height_mm": 50, "zero_range_m": 100, "poi_x_cm": -4, "poi_x_range_m": 100}
     assert client.put("/diary/api/ballistics/profiles/p-off", json=base).status_code == 200

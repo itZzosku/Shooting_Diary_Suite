@@ -248,7 +248,11 @@ def _sight(v, name):
         setting at a range (cm above the aim, − below). One check shifts every setting by its angle (the front post
         shooting high or low, as M39s often do on their lowest setting); with checks on several settings each
         setting's shift is interpolated between the checked ones.
-    radius_mm (sight radius) and post_mm (front post width) size the sight picture and the post-width holds."""
+    radius_mm (sight radius) and post_mm (front post width) size the sight picture and the post-width holds.
+    Calibration (with the sight, not the load): a mark may carry "rise_mm" (rear notch height measured from a fixed
+    point) and "poi_cm" (group height above the aim, all settings shot at "cal_dist_m" from the same aim mark);
+    "cal_fit": false keeps the caliper values unscaled. A diopter may carry "ladder": [{"clicks", "poi_cm"}] at
+    "cal_dist_m" to measure its true click (see static/ironcal.js)."""
     if v in (None, "", {}):
         return None
     if isinstance(v, str):
@@ -265,6 +269,12 @@ def _sight(v, name):
         out.update(unit=_choice(("MOA", "MRAD"), "MOA")(v.get("unit"), f"{name}_unit"),
                    elev_click=num("elev_click", 0.01, 10, True), wind_click=num("wind_click", 0.01, 10, True),
                    aperture_mm=num("aperture_mm", 0.3, 10))
+        ladder = v.get("ladder")
+        if ladder:
+            if not isinstance(ladder, list) or len(ladder) > 20 or not all(isinstance(x, dict) for x in ladder):
+                raise ValueError(f"bad_{name}_ladder")
+            out["ladder"] = [{"clicks": _num(-200, 200, True)(x.get("clicks"), f"{name}_ladder_clicks"),
+                              "poi_cm": _num(-500, 500, True)(x.get("poi_cm"), f"{name}_ladder_cm")} for x in ladder]
     else:
         marks = v.get("marks")
         if not isinstance(marks, list) or not 1 <= len(marks) <= 40:
@@ -274,7 +284,12 @@ def _sight(v, name):
             if not isinstance(m, dict):
                 raise ValueError(f"bad_{name}_marks")
             label = _text(8, True)(m.get("label"), f"{name}_mark_label")
-            clean_marks.append({"label": label, "range_m": _num(10, 3000, True)(m.get("range_m"), f"{name}_mark_range")})
+            cm = {"label": label, "range_m": _num(10, 3000, True)(m.get("range_m"), f"{name}_mark_range")}
+            for k, lo, hi in (("rise_mm", -10, 80), ("poi_cm", -500, 500)):
+                x = _num(lo, hi)(m.get(k), f"{name}_mark_{k}")
+                if x is not None:
+                    cm[k] = x
+            clean_marks.append(cm)
         clean_marks.sort(key=lambda m: m["range_m"])
         out.update(marks=clean_marks, notch_mm=num("notch_mm", 0.3, 10))
         checks = v.get("checks")
@@ -295,6 +310,10 @@ def _sight(v, name):
                                       "range_m": _num(10, 3000, True)(chk.get("range_m"), f"{name}_check_range"),
                                       "cm": _num(-300, 300, True)(chk.get("cm"), f"{name}_check_cm")})
             out["checks"].sort(key=lambda c: c["range_m"])
+    if out.get("ladder") or any("poi_cm" in m or "rise_mm" in m for m in out.get("marks") or []):
+        out["cal_dist_m"] = num("cal_dist_m", 10, 300)
+        if v.get("cal_fit") is False:
+            out["cal_fit"] = False
     return json.dumps({k: x for k, x in out.items() if x is not None})
 
 
