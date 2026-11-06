@@ -260,11 +260,11 @@ header.top{padding-top:6px!important}
 .cklist{display:flex;flex-direction:column;gap:8px}
 .fsec{font-size:1.05rem;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 .calrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.7rem}
-.calt input.cl{width:3em;text-align:center}.calt tr.btw input.cl{border-style:dashed;color:var(--muted)}.calt input[readonly]{border-style:dashed;color:var(--muted);background:transparent}
-.calt .rowb{display:flex;flex-direction:column;gap:6px;align-items:center}.calt input.cr{width:4.2em;margin-top:4px}
-.calt input{width:4.4em;font:inherit;text-align:right;padding:6px 5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit}
-.calt td,.calt th{padding:4px 3px}.calt td.warn{color:var(--accent);font-weight:700}
+.calt{font-size:.8rem}.calt td small{display:block;color:var(--muted);font-size:.62rem}
+.calt input.cl{width:2.6em;text-align:center}.calt tr.btw input.cl{border-style:dashed;color:var(--muted)}.calt input[readonly]{border-style:dashed;color:var(--muted);background:transparent}
+.calt .rowb{display:flex;flex-direction:column;gap:6px;align-items:center}@media (max-width:400px){.calt th:nth-child(6),.calt td:nth-child(6){display:none}}.calt input.cr{width:3.6em}
+.calt input{width:3.6em;font:inherit;text-align:right;padding:6px 4px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit}
+.calt td,.calt th{padding:4px 2px}.calt th{font-size:.62rem}.calt td.warn{color:var(--accent);font-weight:700}
 .calt th{white-space:normal}
 .ckrow2{display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .ckl{display:grid;gap:6px;align-items:end}.ckl1{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px}.ckl2{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
@@ -1877,13 +1877,13 @@ function openCal(){
 }
 function drawCalTable(){
   const ms=calMarks();
-  $("cTbl").innerHTML=`<thead><tr><th>Set</th><th>Marking · m</th><th>Rise mm</th><th>Angle mil</th><th>Leaf says</th><th>True m</th><th></th></tr></thead><tbody>`
+  $("cTbl").innerHTML=`<thead><tr><th>Set</th><th>Mark</th><th>m</th><th>Rise mm</th><th>Angle mil</th><th>Leaf says</th><th>True m</th><th></th></tr></thead><tbody>`
     +(ms.length?ms:[{label:"1",mark:"1",range_m:100}]).map(calRow).join("")+`</tbody>`;
   slotFix();
 }
 let UID=0;
 function calRow(m){
-  return`<tr data-cl data-lab="${esc(m.label)}"${m.mark?"":' class="btw"'}><td data-o="set">${esc(m.label)}</td><td><input class="cl" type="text" data-ck="mark" value="${esc(m.mark??"")}" placeholder="–" aria-label="Marking"><br><input class="cr" type="text" inputmode="numeric" data-ck="range" value="${esc(m.range_m??"")}" placeholder="m" aria-label="Stamped range m"></td>`
+  return`<tr data-cl data-lab="${esc(m.label)}"${m.mark?"":' class="btw"'}><td data-o="set">${esc(m.label)}</td><td><input class="cl" type="text" data-ck="mark" value="${esc(m.mark??"")}" placeholder="–" aria-label="Marking"></td><td><input class="cr" type="text" inputmode="numeric" data-ck="range" value="${esc(m.range_m??"")}" placeholder="m" aria-label="Stamped range m"></td>`
     +`<td><input type="text" inputmode="decimal" data-ck="rise" value="${esc(m.rise_mm??"")}" aria-label="Rise mm"></td>`
     +`<td data-o="ang">–</td><td data-o="nom" class="dim">–</td><td data-o="eff">–</td><td><div class="rowb"><button type="button" class="rm" data-calins aria-label="Add a slot after this one" title="Slot after this one">＋</button><button type="button" class="rm" data-calrm aria-label="Remove setting">✕</button></div></td></tr>`;
 }
