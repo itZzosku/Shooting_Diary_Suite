@@ -359,6 +359,9 @@ header.top{padding-top:6px!important}
 
 .inbtn{display:flex;gap:4px}
 .inbtn input{flex:1 1 auto}
+.inbtn input{min-width:0}
+#wMs{text-align:center}
+@media (max-width:560px){.wspan{grid-column:1/-1}}
 .inbtn button{flex:0 0 44px;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;font-size:1.1rem}
 details summary{cursor:pointer;list-style:revert}
 #rChips{min-height:38px;flex-wrap:nowrap;overflow-x:auto}
@@ -438,7 +441,7 @@ details summary{cursor:pointer;list-style:revert}
       </div>
     </div>
     <div class="g3">
-      <label class="f">Wind m/s<input type="text" inputmode="decimal" id="wMs" placeholder="0"></label>
+      <label class="f wspan">Wind m/s<span class="inbtn"><button type="button" id="wMinus" aria-label="1 m/s less">−</button><input type="text" inputmode="decimal" id="wMs" placeholder="0"><button type="button" id="wPlus" aria-label="1 m/s more">+</button></span></label>
       <label class="f">From o'clock<select id="wClock"></select></label>
       <label class="f">Angle °<span class="inbtn"><input type="text" inputmode="decimal" id="aAng" placeholder="0"><button type="button" id="aTilt" title="Hold the phone flat along the barrel" aria-label="Measure angle with the phone">∠</button></span></label>
     </div>
@@ -1366,6 +1369,9 @@ document.querySelectorAll("#aT,#aP,#aRH").forEach(el=>el.addEventListener("input
 $("wClock").addEventListener("change",changed);
 $("rIn").addEventListener("change",()=>{recent();renderChips()});
 const stepR=d=>{const v=(num($("rIn").value)||0)+d;$("rIn").value=Math.max(10,Math.round(v));recent();renderChips();changed()};
+// wind ± 1 m/s a tap (decimals kept: 2.5 → 3.5), never below 0
+const stepW=d=>{const v=num($("wMs").value)||0,n=Math.max(0,Math.round((v+d)*10)/10);$("wMs").value=n?String(n):"0";$("wMs").dispatchEvent(new Event("input",{bubbles:true}))};
+$("wMinus").addEventListener("click",()=>stepW(-1));$("wPlus").addEventListener("click",()=>stepW(1));
 $("rMinus").addEventListener("click",()=>stepR(-10));$("rPlus").addEventListener("click",()=>stepR(10));
 $("rChips").addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b){$("rIn").value=b.dataset.r;changed()}});
 $("aStd").addEventListener("click",()=>{$("aT").value=15;$("aP").value=1013;$("aRH").value=0;$("aPow").value="";WX_STAMP=null;$("aSrc").innerHTML="";changed()});
