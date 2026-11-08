@@ -274,7 +274,9 @@ header.top{padding-top:6px!important}
 .ckrow2{display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .ckl{display:grid;gap:6px;align-items:end}.ckl1{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px}.ckl2{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
 .ckrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) 34px;gap:6px;align-items:end}
-.lockrow{display:grid;grid-template-columns:minmax(0,13rem) minmax(0,1fr);gap:10px;align-items:end;margin-top:10px}
+.lockrow{display:grid;grid-template-columns:minmax(0,13rem) minmax(0,7.5rem) minmax(0,1fr);gap:10px;align-items:end;margin-top:10px}
+.lockrow label[hidden]{display:none}
+@media (max-width:560px){.lockrow{grid-template-columns:minmax(0,1fr) 6.2rem}.lockrow .hint{grid-column:1/-1}}
 .ironbox{display:flex;flex-direction:column;gap:10px;padding:10px 0 4px;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
 .spinrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5rem;gap:10px;align-items:center;min-height:3.2rem}
 .stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
@@ -383,7 +385,7 @@ details summary{cursor:pointer;list-style:revert}
       <span class="u">metres · slant range</span>
     </div>
     <div class="chips" id="rChips"></div>
-    <div class="lockrow" id="lockRow" hidden><label class="f">Sight set<select id="sLock"></select></label><span class="hint" id="lockHint"></span></div>
+    <div class="lockrow" id="lockRow"><label class="f" id="sLockL">Sight set<select id="sLock"></select></label><label class="f">Aim vs hit cm<input type="text" id="oAimOff" placeholder="0" title="Where you aim against where the bullet should land: −10 = aim 10 cm below the target's centre (6 o'clock hold), +10 = 10 cm above"></label><span class="hint" id="lockHint"></span></div>
     <div class="sol" aria-live="polite">
       <div><small>Elevation</small><b id="oE">–</b><span id="oEs"></span></div>
       <div><small>Windage</small><b id="oW">–</b><span id="oWs"></span></div>
@@ -1020,7 +1022,7 @@ function lockOf(p){
   const n=parseInt(v,10);return isFinite(n)?{clicks:n,mil:n*(+g.elev_click)/(g.unit==="MOA"?B.toUnit(1,"MOA"):1)}:null;
 }
 function fillLock(p){
-  const g=ironOf(p);$("lockRow").hidden=!g;if(!g)return;
+  const g=ironOf(p);$("sLockL").hidden=!g;if(!g){$("lockHint").textContent="";return}
   const cur=lockVal(p,g)??"";
   let o=`<option value="">Auto – ${g.type==="notch"?"nearest setting":"dial each range"}</option>`;
   if(g.type==="notch"){const nm=notchMarks(p);o+=g.marks.map(m=>{const x=nm.find(q=>q.label===m.label),sn=slotName(g,m.label);return`<option value="${esc(m.label)}">Locked at ${esc(settingName(g,m.label))} (${x?effTxt(x):m.range_m+" m"})</option>`}).join("")}
@@ -1333,7 +1335,7 @@ function render(){
   $("staleNote").hidden=!D.stale_code;
   renderProfiles();
   if(CARD_FOR!==U.profile){CARD_FOR=U.profile;fillCard()}
-  fillLock(prof());
+  fillLock(prof());fillAimOff();
   renderSolution();renderCard();renderMatch();if(!$("mm").hidden)renderMM();if(U.tab==="ret")renderReticle();if(U.tab==="true")renderTrue();
   saveUI();
 }
@@ -2685,9 +2687,12 @@ function tgtFields(){const k=$("vTgt").value;$("vTgtDL").hidden=k!=="circle";$("
 const aimNote=p=>{const o=aimOffCm(p);return o?`Aiming ${Math.abs(o)} cm ${o<0?"below":"above"} the target's centre${o<0?" (6 o'clock hold)":""}: the setting and holds are for hitting the centre from there (Reticle → Aim vs hit).`:""};
 const aimOffCm=p=>{const v=p&&U.aimOff&&U.aimOff[p.id];return v?+v:0};
 const aimOffU=(p,R,ret)=>R>0?RT.convert(aimOffCm(p)/100/R*1000,"MRAD",ret.unit):0;
-function fillAimOff(force){const p=prof(),f=$("vAimOff"),id=p?p.id:"";
-  if(!force&&f.dataset.pid===id&&document.activeElement===f)return;      // don't overwrite while typing
-  f.dataset.pid=id;setv("vAimOff",p&&aimOffCm(p)?String(aimOffCm(p)):"")}
+// the same value in two fields: by the sight set (readout) and in the reticle view
+function fillAimOff(force){const p=prof(),id=p?p.id:"",v=p&&aimOffCm(p)?String(aimOffCm(p)):"";
+  for(const f of[$("vAimOff"),$("oAimOff")]){
+    if(!force&&f.dataset.pid===id&&document.activeElement===f)continue;   // don't overwrite while typing
+    f.dataset.pid=id;f.value=v;
+  }}
 /** The chosen target in cm: {parts, name} (null: none) */
 function targetCm(t){
   if(t.kind==="circle"&&t.d>0)return{parts:[{t:"circle",r:t.d/2,fill:STEEL}],name:`circle Ø ${t.d} cm`,w:t.d,h:t.d};
@@ -2710,8 +2715,8 @@ function targetShape(R,ret,given){
   return{shape:{parts},info:`Target: ${cm.name}${sz} at ${R} m.`};
 }
 $("vTgt").addEventListener("change",()=>{U.tgt=Object.assign(tgtState(),{kind:$("vTgt").value});saveUI();tgtFields();renderReticle()});
-$("vAimOff").addEventListener("input",()=>{
-  const p=prof();if(!p)return;const t=$("vAimOff").value.trim().replace("−","-").replace(",","."),v=t===""?0:+t;
+for(const id of["vAimOff","oAimOff"])$(id).addEventListener("input",()=>{
+  const p=prof();if(!p)return;const t=$(id).value.trim().replace("−","-").replace(",","."),v=t===""?0:+t;
   if(!isFinite(v)||Math.abs(v)>300)return;U.aimOff=Object.assign({},U.aimOff,{[p.id]:v});saveUI();render();
 });
 for(const [id,k] of [["vTgtD","d"],["vTgtW","w"],["vTgtH","h"]])$(id).addEventListener("input",()=>{const v=num($(id).value);if(v>0&&v<=1000){U.tgt=Object.assign(tgtState(),{[k]:v});saveUI();renderReticle()}});
