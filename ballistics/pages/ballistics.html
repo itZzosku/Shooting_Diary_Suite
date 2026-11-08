@@ -360,7 +360,8 @@ header.top{padding-top:6px!important}
 .inbtn{display:flex;gap:4px}
 .inbtn input{flex:1 1 auto}
 .inbtn input{min-width:0}
-#wMs{text-align:center}
+#wMs,#wDeg{text-align:center}
+.wdh{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:.8rem;margin-top:3px}
 @media (max-width:560px){.wspan{grid-column:1/-1}}
 .inbtn button{flex:0 0 44px;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;font-size:1.1rem}
 details summary{cursor:pointer;list-style:revert}
@@ -442,7 +443,7 @@ details summary{cursor:pointer;list-style:revert}
     </div>
     <div class="g3">
       <label class="f wspan">Wind m/s<span class="inbtn"><button type="button" id="wMinus" aria-label="1 m/s less">−</button><input type="text" inputmode="decimal" id="wMs" placeholder="0"><button type="button" id="wPlus" aria-label="1 m/s more">+</button></span></label>
-      <label class="f">From o'clock<select id="wClock"></select></label>
+      <label class="f wspan">Wind from °<span class="inbtn"><input type="text" inputmode="numeric" id="wDeg" placeholder="270" aria-describedby="wDegH"><button type="button" id="wDial" aria-label="Pick the wind direction on a clock" title="Pick on a clock"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 10V5M10 10l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><button type="button" id="w90" title="Full value from the right">90°</button></span><small class="wdh" id="wDegH"></small><input type="hidden" id="wClock"></label>
       <label class="f">Angle °<span class="inbtn"><input type="text" inputmode="decimal" id="aAng" placeholder="0"><button type="button" id="aTilt" title="Hold the phone flat along the barrel" aria-label="Measure angle with the phone">∠</button></span></label>
     </div>
   </section>
@@ -723,6 +724,17 @@ details summary{cursor:pointer;list-style:revert}
     <div class="actions"><button class="primary" type="button" id="gDone">Done – back to the profile</button></div>
   </form>
 </div>
+<!-- wind direction on a clock -->
+<div class="sheet" id="wdSheet" hidden role="dialog" aria-modal="true" aria-labelledby="wdTitle">
+  <div class="sheet-in">
+    <div class="sheet-bar"><h2 id="wdTitle">Wind from</h2><button class="ghost" type="button" data-close>Close</button></div>
+    <p class="hint" style="margin:0">Tap or drag to where the wind comes from; you shoot up the face (12 = head wind, 3 = from the right, 9 = from the left).</p>
+    <svg id="wdSvg" viewBox="0 0 240 240" style="width:min(100%,320px);margin:0 auto;display:block;touch-action:none;cursor:pointer" role="img" aria-label="Wind direction clock"></svg>
+    <div class="src" id="wdOut" style="text-align:center"></div>
+    <label class="check"><input type="checkbox" id="wdFine">Any degree (else 15° steps, half o'clocks)</label>
+    <div class="actions"><button class="primary" type="button" id="wdDone">Done</button></div>
+  </div>
+</div>
 <!-- reticle library and builder -->
 <div class="sheet" id="rbSheet" hidden role="dialog" aria-modal="true" aria-labelledby="rbTitle">
   <form class="sheet-in" id="rbForm" autocomplete="off">
@@ -833,7 +845,7 @@ const ERR={bad_poi_x_cm:"The sideways offset must be within ±300 cm.",bad_poi_x
   bad_length_mm:"Length must be 3–80 mm.",in_use:"A profile uses this bullet – change the profile first.",bad_targets:"Each target needs a range (1–3000 m); up to 30 targets.",
   bad_range:"Each target needs a range (1–3000 m).",bad_wind_ms:"Wind must be 0–30 m/s.",bad_date:"Check the date."};
 const CLOCK=[[12,"12 head"],[1,"1"],[2,"2"],[3,"3 right"],[4,"4"],[5,"5"],[6,"6 tail"],[7,"7"],[8,"8"],[9,"9 left"],[10,"10"],[11,"11"]];
-for(const id of ["wClock","sWclock","obWclock"])$(id).innerHTML=CLOCK.map(([v,t])=>`<option value="${v}">${t}</option>`).join("");
+for(const id of ["sWclock","obWclock"])$(id).innerHTML=CLOCK.map(([v,t])=>`<option value="${v}">${t}</option>`).join("");
 
 let D=ls.get(CACHE)||{profiles:[],bullets:[],matches:[],stages:[],settings:{card_start:100,card_step:50,card_end:1000},pickers:{guns:[],loads:[],scopes:[]}};
 const U=Object.assign({profile:null,match:null,tab:"card"},ls.get(UI)||{});
@@ -1347,7 +1359,7 @@ function render(){
 function loadCond(){
   const c=ls.get(COND+(U.profile||""))||{};
   $("aT").value=c.t??"";$("aP").value=c.p??"";$("aRH").value=c.rh??"";$("aPow").value=c.pow??"";
-  $("wMs").value=c.ms??"";$("wClock").value=c.clock??9;$("aAng").value=c.ang??"";
+  $("wMs").value=c.ms??"";setWindDeg((c.clock??9)*30);$("aAng").value=c.ang??"";
   $("aLat").value=c.lat??"";$("aLon").value=c.lon??"";$("aAlt").value=c.alt??"";$("aAz").value=c.az??"";
   $("aSrc").innerHTML=c.src||"";renderPlaces(c.place);WX_STAMP=c.stamp||null;wxSummary();
   if(c.range)$("rIn").value=c.range;
@@ -1367,6 +1379,45 @@ function changed(){saveCond();renderSolution();clearTimeout(tmr);tmr=setTimeout(
 document.querySelectorAll("#aT,#aP,#aRH,#aPow,#wMs,#wClock,#aAng,#rIn,#aLat,#aLon,#aAlt,#aAz").forEach(el=>el.addEventListener("input",changed));
 document.querySelectorAll("#aT,#aP,#aRH").forEach(el=>el.addEventListener("input",()=>{if(WX_STAMP){WX_STAMP=null;$("aSrc").innerHTML="";saveCond()}}));
 $("wClock").addEventListener("change",changed);
+/* Wind direction in degrees, where it blows FROM against the shot: 0 head wind, 90 from the right, 180 tail,
+   270 from the left (the solver's clock × 30°). Typed, picked on the clock, or 90° in one tap. */
+function windWords(d){
+  let c=d/30,h=Math.floor(c),m=Math.round((c-h)*60);if(m===60){h++;m=0}h=h%12||12;
+  const side=d===0?"head wind":d===90?"full value from the right":d===180?"tail wind":d===270?"full value from the left":d<180?"from the right":"from the left";
+  return`${h}${m?":"+String(m).padStart(2,"0"):""} o'clock · ${side}`}
+function setWindDeg(d,fire){
+  d=((Math.round(+d||0)%360)+360)%360;$("wDeg").value=String(d);$("wClock").value=String(d/30);$("wDegH").textContent=windWords(d);
+  if(fire)changed();
+}
+$("wDeg").addEventListener("input",()=>{const t=$("wDeg").value.trim();if(t==="")return;const v=+t.replace(",",".");
+  if(isFinite(v)&&v>=0&&v<=360){$("wClock").value=String((v%360)/30);$("wDegH").textContent=windWords(Math.round(v)%360);changed()}});
+$("wDeg").addEventListener("change",()=>setWindDeg(num($("wDeg").value)??270));
+$("w90").addEventListener("click",()=>setWindDeg(90,true));
+// the clock: tap or drag where the wind comes from; the shot goes up the face
+function drawWindDial(d){
+  const C=120,R=100,a=d*Math.PI/180,px=C+R*Math.sin(a),py=C-R*Math.cos(a);
+  let g=`<circle cx="${C}" cy="${C}" r="${R+12}" fill="var(--surface-2)" stroke="var(--line)"/>`;
+  for(let h=0;h<12;h++){const t=h*Math.PI/6,x1=C+(R+4)*Math.sin(t),y1=C-(R+4)*Math.cos(t),x2=C+(R-6)*Math.sin(t),y2=C-(R-6)*Math.cos(t);
+    g+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="2"/><text x="${C+(R-20)*Math.sin(t)}" y="${C-(R-20)*Math.cos(t)+5}" text-anchor="middle" font-size="14" fill="var(--fg)">${h||12}</text>`}
+  g+=`<path d="M${C} ${C+26}V${C-30}" stroke="var(--muted)" stroke-width="3"/><path d="M${C-7} ${C-22}L${C} ${C-34}L${C+7} ${C-22}Z" fill="var(--muted)"/>`;
+  // the wind: from the rim towards the shooter
+  const ix=C+38*Math.sin(a),iy=C-38*Math.cos(a),hx=C+(R-30)*Math.sin(a),hy=C-(R-30)*Math.cos(a);
+  g+=`<line x1="${hx}" y1="${hy}" x2="${ix}" y2="${iy}" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>`
+    +`<path d="M${ix} ${iy}l${-9*Math.sin(a)+6*Math.cos(a)} ${9*Math.cos(a)+6*Math.sin(a)}l${-12*Math.cos(a)} ${-12*Math.sin(a)}Z" fill="var(--accent)"/>`
+    +`<circle cx="${px}" cy="${py}" r="11" fill="var(--accent)"/>`;
+  $("wdSvg").innerHTML=g;$("wdOut").innerHTML=`<b>${d}°</b> · ${esc(windWords(d))}`;
+}
+let WD=270;
+function dialAt(e){const b=$("wdSvg").getBoundingClientRect(),x=(e.clientX-b.left)/b.width*240-120,y=(e.clientY-b.top)/b.height*240-120;
+  if(Math.hypot(x,y)<15)return;let d=Math.atan2(x,-y)*180/Math.PI;d=(d+360)%360;
+  WD=Math.round(d/($("wdFine").checked?1:15))*($("wdFine").checked?1:15)%360;drawWindDial(WD)}
+$("wDial").addEventListener("click",()=>{WD=num($("wDeg").value)??270;drawWindDial(WD);openSheet("wdSheet")});
+let WDRAG=false;
+$("wdSvg").addEventListener("pointerdown",e=>{WDRAG=true;$("wdSvg").setPointerCapture(e.pointerId);dialAt(e)});
+$("wdSvg").addEventListener("pointermove",e=>{if(WDRAG)dialAt(e)});
+$("wdSvg").addEventListener("pointerup",()=>{WDRAG=false});
+$("wdFine").addEventListener("change",()=>drawWindDial(WD));
+$("wdDone").addEventListener("click",()=>{setWindDeg(WD,true);closeSheet($("wdSheet"))});
 $("rIn").addEventListener("change",()=>{recent();renderChips()});
 const stepR=d=>{const v=(num($("rIn").value)||0)+d;$("rIn").value=Math.max(10,Math.round(v));recent();renderChips();changed()};
 // wind ± 1 m/s a tap (decimals kept: 2.5 → 3.5), never below 0
