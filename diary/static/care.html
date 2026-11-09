@@ -178,6 +178,11 @@ function txt(r,u){const un=u==="as"?r.unit:u,lo=fmt(conv(r.lo,r.unit,un),un),hi=
   return(r.max?"≤ ":"")+(hi&&hi!==lo?lo+"–"+hi:lo)+" "+un}
 const unit=()=>{try{return localStorage.getItem("tqUnit")||"Nm"}catch(e){return"Nm"}};
 let GUNS=null;
+// which cards are open, kept on this device: they open the same way next time
+const OPEN_KEY="careOpen:"+decodeURIComponent((document.cookie.match(/(?:^|; )diary_user=([^;]*)/)||[])[1]||"");
+const OPEN=new Set((()=>{try{return JSON.parse(localStorage.getItem(OPEN_KEY)||"[]")}catch(e){return[]}})());
+document.addEventListener("toggle",e=>{const d=e.target;if(!(d instanceof HTMLDetailsElement)||!d.dataset.k)return;
+  if(d.open)OPEN.add(d.dataset.k);else OPEN.delete(d.dataset.k);try{localStorage.setItem(OPEN_KEY,JSON.stringify([...OPEN]))}catch(x){}},true);
 function rowsHtml(rows,u,tag){
   const parts=[...new Set(rows.map(r=>r.part||""))];
   return parts.map(pt=>`<span class="lbl">${esc(pt||"Gun")}</span>`+rows.map((r,i)=>[r,i]).filter(([r])=>(r.part||"")===pt).map(([r,i])=>
@@ -189,14 +194,14 @@ let OPT=null,OED=null;      // the optics card as saved; the copy being edited
 function opticsHtml(u){
   const rows=OPT.torque||[],care=(OPT.care||"").trim(),n=[...new Set(rows.map(r=>r.part||""))].filter(Boolean).length;
   const what=rows.length?[`${n||1} mount${n===1?"":"s"}`,`${rows.length} spec${rows.length>1?"s":""}`,care?"procedures":""].filter(Boolean).join(" · "):"none yet – scopes, red dots, rings and mounts";
-  return`<details class="gun"><summary><div class="ghead"><span class="chev" aria-hidden="true">▸</span><span class="gt"><h2>Optics &amp; mounts</h2><span class="sub">${esc(what)}</span></span><button class="ghost" type="button" id="oxEdit">Edit</button></div></summary>`
+  return`<details class="gun" data-k="optics"${OPEN.has("optics")?" open":""}><summary><div class="ghead"><span class="chev" aria-hidden="true">▸</span><span class="gt"><h2>Optics &amp; mounts</h2><span class="sub">${esc(what)}</span></span><button class="ghost" type="button" id="oxEdit">Edit</button></div></summary>`
     +(rows.length?rowsHtml(rows,u,"div"):`<div class="empty">No specs yet – Edit to add them or import a file.</div>`)+(care?`<div class="care">${esc(care)}</div>`:"")+`</details>`;
 }
 function gunHtml(g,u){
   const rows=g.torque||[],parts=[...new Set(rows.map(r=>r.part||""))],care=(g.care||"").trim();
   // closed by default: the name, calibre and what's inside; open for the specs and procedures
   const what=[rows.length?`${rows.length} spec${rows.length>1?"s":""}`:"no specs",care?"procedures":""].filter(Boolean).join(" · ");
-  return`<details class="gun"><summary><div class="ghead"><span class="chev" aria-hidden="true">▸</span><span class="gt"><h2>${esc(g.name)}</h2>`
+  return`<details class="gun" data-k="${esc(g.id)}"${OPEN.has(g.id)?" open":""}><summary><div class="ghead"><span class="chev" aria-hidden="true">▸</span><span class="gt"><h2>${esc(g.name)}</h2>`
     +`<span class="sub">${esc([g.cal,what].filter(Boolean).join(" · "))}</span></span><a class="ghost" href="log?gun=${encodeURIComponent(g.id)}&tq=1">Edit</a></div></summary>`
     +(rows.length?rowsHtml(rows,u,"div"):`<div class="empty">No torque specs yet.</div>`)
     +(care?`<div class="care">${esc(care)}</div>`:"")+`</details>`;
@@ -204,7 +209,7 @@ function gunHtml(g,u){
 function render(){
   const u=unit();
   $("units").innerHTML=[["Nm","Nm"],["in-lb","in-lb"],["ft-lb","ft-lb"],["as","As written"]].map(([v,t])=>`<button type="button" class="chip" data-u="${v}" aria-pressed="${u===v}">${t}</button>`).join("");
-  if(OPT){const was=$("optics").querySelector("details");const open=was&&was.open;$("optics").innerHTML=opticsHtml(u);if(open)$("optics").querySelector("details").open=true}
+  if(OPT)$("optics").innerHTML=opticsHtml(u);
   if(!GUNS)return;
   const ord=g=>g.order??99,act=GUNS.filter(g=>!g.archived).sort((a,b)=>ord(a)-ord(b)),hid=GUNS.filter(g=>g.archived);
   const has=g=>(g.torque||[]).length||(g.care||"").trim();
