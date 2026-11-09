@@ -2537,6 +2537,19 @@ function rangeMarks(p,ret,dialled,k,pxPer,halo){
   const sp=ret.spec||{},lows=[];
   if(sp.tree&&sp.tree.rows&&sp.tree.rows.to>0)lows.push(+sp.tree.rows.to);
   for(const h of sp.hashes||[])if((h.arms||[]).includes("down")&&h.to>0)lows.push(+h.to);
+  // No graduated scale below the centre (a dot reticle with drop dots or bars: marks drawn as extras): label
+  // just those marks – dots on the vertical line under the centre – not a ladder down the empty field.
+  if(!lows.length&&!(sp.stadia&&sp.stadia.down)){
+    const holds=[];
+    for(const e of retElements(ret)||[])if(e.t==="dot"&&Math.abs(e.x)<0.3*(moa?3.5:1)&&e.y>small*0.5)holds.push(e.y);
+    const uniq=[...new Set(holds.map(v=>+v.toFixed(3)))].sort((a,b)=>a-b);
+    for(const r of RT.rangesForHolds(rows,uniq.map(v=>v*k)))
+      texts.push({x:-(moa?1.6:0.45)*k,y:r.value+11/pxPer*0.35,text:String(Math.round(r.range)),color:RED,size:11,weight:600,anchor:"end",halo});
+    const zs=RT.rangesForHolds(rows,[0]).map(z=>Math.round(z.range));
+    if(zs[0]!=null)texts.push({x:-4/pxPer,y:-5/pxPer,text:String(zs[0]),color:RED,size:10,anchor:"end",weight:600,halo});
+    if(zs[1]!=null)texts.push({x:4/pxPer,y:-5/pxPer,text:String(zs[1]),color:RED,size:10,anchor:"start",weight:600,halo});
+    return texts;
+  }
   const top=Math.min(field,lows.length?Math.max(...lows):field);
   const tl=ret.spec&&ret.spec.tree&&ret.spec.tree.labels;
   const bigX=(tl&&tl.x!=null?+tl.x+(moa?1.8:0.45):(moa?2:0.6))*k;
