@@ -153,6 +153,13 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:.72rem;text-transfo
 .signed{display:inline-block;font-size:.68rem;border:1px solid var(--accent);color:var(--accent);border-radius:4px;padding:0 5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 input[type=text],input[type=date],input[type=time],input[type=number],select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:1rem;color:var(--fg);font-weight:400;text-transform:none;letter-spacing:0;min-width:0}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
+.tqin{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tqlist{display:flex;flex-direction:column;gap:4px}
+.tqlist .lbl{margin-top:10px}
+.tqr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+.tqr .j{font-weight:600}.tqr .v{font-weight:700;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.tqr .m,.tqr .o{color:var(--muted);font-size:.82rem}.tqr .o{text-align:right;white-space:nowrap}.tqr .n{grid-column:1/-1;color:var(--muted);font-size:.82rem;white-space:pre-wrap}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
 .chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.9rem}
 .chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .chip.add{border-style:dashed}
@@ -343,6 +350,7 @@ header.top{padding-top:6px!important}
       <label class="f">Shots before the diary<input type="number" id="gStart" inputmode="numeric" min="0" placeholder="0"></label>
     </div>
     <label class="check"><input type="checkbox" id="gArch">Hide from pickers (sold or not in use)</label>
+    <div class="tqin"><button class="ghost" type="button" id="gTq">Torque &amp; care</button><span class="hint" id="gTqS"></span></div>
     <div class="hint" id="gStats"></div>
     <div class="msg" id="gMsg" hidden></div>
     <div class="actions">
@@ -351,6 +359,44 @@ header.top{padding-top:6px!important}
     </div>
   </form>
 </div>
+
+<!-- torque specs and care notes of the gun being edited (saved with the gun) -->
+<div class="sheet" id="tqSheet" hidden role="dialog" aria-modal="true" aria-labelledby="tqTitle" style="z-index:12">
+  <div class="sheet-in">
+    <div class="sheet-bar"><h2 id="tqTitle">Torque &amp; care</h2><button class="ghost" type="button" id="tqClose">Close</button></div>
+    <p class="hint" id="tqFor" style="margin:0"></p>
+    <div class="chips" id="tqUnits" role="group" aria-label="Show torque in"></div>
+    <div id="tqList" class="tqlist"></div>
+    <div class="chips"><button class="ghost" type="button" id="tqAdd">+ Spec</button><button class="ghost" type="button" id="tqImp">Import</button><button class="ghost" type="button" id="tqExp">Export</button><input type="file" id="tqImpF" accept=".json,application/json" hidden></div>
+    <label class="f">Procedures and notes<textarea id="tqCare" rows="8" placeholder="e.g. gas block install steps, ring method, bedding order"></textarea></label>
+    <div class="actions"><button class="primary" type="button" id="tqDone">Done – back to the gun</button></div>
+  </div>
+</div>
+<div class="sheet" id="trSheet" hidden role="dialog" aria-modal="true" aria-labelledby="trTitle" style="z-index:13">
+  <form class="sheet-in" id="trForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="trTitle">Torque spec</h2><button class="ghost" type="button" id="trClose">Close</button></div>
+    <div class="grid2">
+      <label class="f">Part<input type="text" id="trPart" list="dlTqPart" placeholder="e.g. PA GLx mount"></label>
+      <label class="f">Joint<input type="text" id="trJoint" placeholder="e.g. Ring caps" required></label>
+    </div>
+    <div class="grid3">
+      <label class="f">Torque<input type="text" inputmode="decimal" id="trLo" placeholder="25" required></label>
+      <label class="f">to (range)<input type="text" inputmode="decimal" id="trHi" placeholder="–"></label>
+      <label class="f">Unit<select id="trUnit"><option>Nm</option><option>in-lb</option><option>ft-lb</option></select></label>
+    </div>
+    <label class="check"><input type="checkbox" id="trMax">A maximum – don't go over</label>
+    <div class="grid2">
+      <label class="f">Tool / bit<input type="text" id="trTool" placeholder="T15"></label>
+      <label class="f">Lube / threadlocker<input type="text" id="trLube" list="dlTqLube" placeholder="Loctite 243"></label>
+    </div>
+    <label class="f">Notes<textarea id="trNotes" rows="3" placeholder="e.g. crisscross evenly, level the scope first"></textarea></label>
+    <div class="hint" id="trConv"></div>
+    <div class="msg" id="trMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save spec</button><button class="danger" type="button" id="trDel" hidden>Delete</button></div>
+  </form>
+</div>
+<datalist id="dlTqPart"></datalist>
+<datalist id="dlTqLube"><option value="Dry"><option value="Moly grease"><option value="Loctite 243 (blue)"><option value="Loctite 222 (purple)"><option value="Anti-seize"><option value="Oil"></datalist>
 
 <div class="sheet" id="pvSheet" hidden role="dialog" aria-modal="true" aria-labelledby="pvTitle" style="z-index:12">
   <div class="sheet-in">
@@ -720,7 +766,7 @@ function openForm(id){
   const dn=$("form").querySelector(".draftnote");if(dn)dn.hidden=true;
   if(restored)Draft.note($("form"),drT,()=>{Draft.clear("visit",id);lsDel(DRAFT_KEY);openForm(id)});
 }
-function closeSheets(){["gSheet","sheet","pSheet","xSheet","pvSheet","sigFull"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null;
+function closeSheets(){["gSheet","tqSheet","trSheet","sheet","pSheet","xSheet","pvSheet","sigFull"].forEach(id=>$(id).hidden=true);document.body.style.overflow="";S.editId=null;
   $("xHetu").value="";PV.out=null}   // the henkilötunnus and a previewed PDF never outlive the export
 function presets(){
   const c=new Map();
@@ -949,11 +995,13 @@ function openGun(id){
   const t=g&&gunTotals()[g.id];
   $("gStats").innerHTML=t?`In the diary: <b>${fmt(t.r)}</b> shots · <b>${t.d.size}</b> visits`:"";
   $("gDel").hidden=!g||!!t;$("gDel").textContent="Delete";$("gMsg").hidden=true;
+  S.tq=JSON.parse(JSON.stringify(g&&g.torque||[]));S.care=g&&g.care||"";tqSummary();
   $("gSheet").hidden=false;document.body.style.overflow="hidden";
   Draft.open($("gForm"),id||"new");$("gName").focus();
 }
 $("addGunBtn").addEventListener("click",()=>openGun(null));
-Draft.form($("gForm"),"gun",{reopen:()=>openGun(S.editGun)});
+Draft.form($("gForm"),"gun",{reopen:()=>openGun(S.editGun),extra:()=>({tq:S.tq||[],care:S.care||""}),
+  apply:x=>{S.tq=x.tq||[];S.care=x.care||"";tqSummary()}});
 Draft.form($("pForm"),"profile",{reopen:()=>$("profBtn").click()});
 $("guns").addEventListener("click",e=>{const b=e.target.closest("[data-gun]");if(b)openGun(b.dataset.gun)});
 $("gClose").addEventListener("click",closeSheets);
@@ -963,12 +1011,99 @@ $("gForm").addEventListener("submit",async e=>{e.preventDefault();
   const cal=$("gCal").value.trim(),seen=new Set([cal.toLowerCase()]);
   const cals=$("gCals").value.split(/[,;]/).map(x=>x.trim()).filter(x=>x&&!seen.has(x.toLowerCase())&&seen.add(x.toLowerCase()));
   const d={name,type:$("gType").value,cal,cals,mode:mFi($("gMode").value),
-    startCount:Math.max(0,parseInt($("gStart").value)||0),acquired:$("gAcq").value||"",archived:$("gArch").checked,order:old?(old.order??99):S.guns.length+1};
+    startCount:Math.max(0,parseInt($("gStart").value)||0),acquired:$("gAcq").value||"",archived:$("gArch").checked,order:old?(old.order??99):S.guns.length+1,
+    torque:S.tq||[],care:S.care||""};
   await S.store.saveGun(S.editGun||newGunId(),d);Draft.done($("gForm"));closeSheets();toast("Gun saved");
 });
 $("gDel").addEventListener("click",async()=>{
   if(!S.gDelArm){S.gDelArm=true;$("gDel").textContent="Confirm delete";return}
   await S.store.delGun(S.editGun);Draft.done($("gForm"));closeSheets();toast("Gun deleted");
+});
+
+/* ---------- torque specs and care notes (per gun, saved with it) ----------
+   Each spec: part (what it belongs to: the gun, a mount, a scope ring), joint, lo (the value, or a range's low end),
+   hi (a range's top), unit as written, max (a limit), tool, lube, notes. Shown in any unit. */
+const TQ_NM={"Nm":1,"in-lb":0.112985,"ft-lb":1.355818};
+const tqIn=(v,from,to)=>v*TQ_NM[from]/TQ_NM[to];
+const tqFmt=(v,u)=>u==="in-lb"?String(Math.round(v)):(v<10?(Math.round(v*10)/10).toFixed(1):String(Math.round(v)));
+function tqText(r,u){
+  const unit=u==="as"?r.unit:u,lo=tqFmt(tqIn(r.lo,r.unit,unit),unit),hi=r.hi!=null?tqFmt(tqIn(r.hi,r.unit,unit),unit):null;
+  return(r.max?"≤ ":"")+(hi&&hi!==lo?`${lo}–${hi}`:lo)+" "+unit;
+}
+const tqUnit=()=>{try{return localStorage.getItem("tqUnit")||"Nm"}catch(e){return"Nm"}};
+function tqSummary(){
+  const n=(S.tq||[]).length,c=(S.care||"").trim();
+  $("gTqS").textContent=n||c?[n?`${n} spec${n>1?"s":""}`:"",c?"notes":""].filter(Boolean).join(" · "):"Torque specs, lube and procedures for this gun and its mounts";
+}
+function renderTq(){
+  const u=tqUnit();
+  $("tqUnits").innerHTML=[["Nm","Nm"],["in-lb","in-lb"],["ft-lb","ft-lb"],["as","As written"]].map(([v,t])=>`<button type="button" class="chip" data-u="${v}" aria-pressed="${u===v}">${t}</button>`).join("");
+  const rows=S.tq||[],parts=[...new Set(rows.map(r=>r.part||""))];
+  $("tqList").innerHTML=rows.length?parts.map(pt=>`<div class="lbl">${esc(pt||"Gun")}</div>`+rows.map((r,i)=>[r,i]).filter(([r])=>(r.part||"")===pt).map(([r,i])=>
+    `<button type="button" class="tqr" data-i="${i}"><span class="j">${esc(r.joint)}</span><span class="v">${esc(tqText(r,u))}</span>`
+    +`<span class="m">${esc([r.tool,r.lube].filter(Boolean).join(" · "))}</span><span class="o">${u!=="as"&&u!==r.unit?esc(tqText(r,"as")):""}</span>`
+    +(r.notes?`<span class="n">${esc(r.notes)}</span>`:"")+`</button>`).join("")).join("")
+    :`<div class="hint">No specs yet – + Spec, or Import a file exported from another gun.</div>`;
+  $("dlTqPart").innerHTML=parts.filter(Boolean).map(x=>`<option value="${esc(x)}">`).join("");
+}
+function tqChanged(){tqSummary();renderTq();Draft.save($("gForm"))}
+$("gTq").addEventListener("click",()=>{$("tqFor").textContent=($("gName").value.trim()||"This gun")+" – saved with the gun.";$("tqCare").value=S.care||"";renderTq();$("tqSheet").hidden=false});
+$("tqUnits").addEventListener("click",e=>{const b=e.target.closest("[data-u]");if(!b)return;try{localStorage.setItem("tqUnit",b.dataset.u)}catch(x){}renderTq()});
+$("tqCare").addEventListener("input",()=>{S.care=$("tqCare").value;tqSummary();Draft.save($("gForm"))});
+const tqBack=()=>{$("tqSheet").hidden=true};
+$("tqClose").addEventListener("click",tqBack);
+$("tqDone").addEventListener("click",()=>{tqBack();toast("Specs updated – press Save gun to keep them.")});
+let TQ_EDIT=null;
+function openTqRow(i){
+  const r=i!=null?S.tq[i]:{part:"",unit:"Nm"};TQ_EDIT=i;
+  $("trTitle").textContent=i!=null?"Edit spec":"New spec";
+  $("trPart").value=r.part||"";$("trJoint").value=r.joint||"";$("trLo").value=r.lo??"";$("trHi").value=r.hi??"";
+  $("trUnit").value=r.unit||"Nm";$("trMax").checked=!!r.max;$("trTool").value=r.tool||"";$("trLube").value=r.lube||"";$("trNotes").value=r.notes||"";
+  $("trDel").hidden=i==null;$("trDel").textContent="Delete";$("trMsg").hidden=true;trConv();
+  $("trSheet").hidden=false;(i==null?$("trPart"):$("trLo")).focus();
+}
+const tqNum=v=>{const t=String(v||"").trim().replace(",",".");return t===""?null:+t};
+function trConv(){
+  const lo=tqNum($("trLo").value),hi=tqNum($("trHi").value),u=$("trUnit").value;
+  $("trConv").textContent=lo>0?["Nm","in-lb","ft-lb"].filter(x=>x!==u).map(x=>tqText({lo,hi:hi>0?hi:null,unit:u,max:$("trMax").checked},x)).join(" · "):"";
+}
+["trLo","trHi","trUnit","trMax"].forEach(id=>$(id).addEventListener("input",trConv));$("trUnit").addEventListener("change",trConv);
+$("tqAdd").addEventListener("click",()=>openTqRow(null));
+$("tqList").addEventListener("click",e=>{const b=e.target.closest("[data-i]");if(b)openTqRow(+b.dataset.i)});
+$("trClose").addEventListener("click",()=>{$("trSheet").hidden=true});
+$("trForm").addEventListener("submit",e=>{e.preventDefault();
+  const lo=tqNum($("trLo").value),hi=tqNum($("trHi").value),joint=$("trJoint").value.trim();
+  const bad=t=>{$("trMsg").textContent=t;$("trMsg").hidden=false};
+  if(!joint)return bad("Name the joint, e.g. Ring caps.");
+  if(!(lo>0&&lo<=5000))return bad("Give the torque as a number.");
+  if(hi!=null&&!(hi>=lo))return bad("The range's top must be at least its bottom.");
+  const r={part:$("trPart").value.trim(),joint,lo,unit:$("trUnit").value};
+  if(hi!=null&&hi!==lo)r.hi=hi;if($("trMax").checked)r.max=true;
+  for(const[k,id]of[["tool","trTool"],["lube","trLube"],["notes","trNotes"]]){const v=$(id).value.trim();if(v)r[k]=v}
+  S.tq=S.tq||[];
+  if(TQ_EDIT!=null)S.tq[TQ_EDIT]=r;
+  else{let at=-1;S.tq.forEach((x,k)=>{if((x.part||"")===r.part)at=k});if(at<0)S.tq.push(r);else S.tq.splice(at+1,0,r)}   // next to its part
+  $("trSheet").hidden=true;tqChanged();
+});
+$("trDel").addEventListener("click",()=>{
+  if($("trDel").textContent==="Delete"){$("trDel").textContent="Confirm delete";return}
+  S.tq.splice(TQ_EDIT,1);$("trSheet").hidden=true;tqChanged();
+});
+$("tqExp").addEventListener("click",()=>{
+  const name=($("gName").value.trim()||"gun").replace(/[^\w.-]+/g,"-").replace(/^-|-$/g,"").toLowerCase();
+  saveFile(`${name}-torque.json`,JSON.stringify({kind:"shooting-diary-torque",torque:S.tq||[],care:S.care||""},null,1),"application/json");
+});
+$("tqImp").addEventListener("click",()=>$("tqImpF").click());
+$("tqImpF").addEventListener("change",async()=>{
+  const f=$("tqImpF").files[0];$("tqImpF").value="";if(!f)return;
+  let j;try{j=JSON.parse(await f.text())}catch(e){toast("Not a torque file.");return}
+  const rows=(Array.isArray(j)?j:j.torque||[]).filter(r=>r&&r.joint&&+r.lo>0&&TQ_NM[r.unit]).map(r=>{
+    const o={part:String(r.part||""),joint:String(r.joint),lo:+r.lo,unit:r.unit};
+    if(r.hi!=null&&+r.hi>o.lo)o.hi=+r.hi;if(r.max)o.max=true;for(const k of["tool","lube","notes"])if(r[k])o[k]=String(r[k]);return o});
+  if(!rows.length&&!j.care){toast("No specs in that file.");return}
+  S.tq=(S.tq||[]).concat(rows);
+  if(j.care&&String(j.care).trim()){S.care=(S.care||"").trim()?S.care.trim()+"\n\n"+j.care:String(j.care);$("tqCare").value=S.care}
+  tqChanged();toast(`${rows.length} spec${rows.length===1?"":"s"} added – press Save gun to keep them.`);
 });
 
 /* ---------- profile ---------- */

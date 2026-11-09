@@ -425,6 +425,24 @@ def test_gun_with_two_calibres(two):
     o.delete("/diary/api/guns/g-sw19", headers=H)
 
 
+def test_gun_torque_specs(two):
+    app, o, m = two
+    rows = [{"part": "Upper", "joint": "Barrel nut", "lo": 68, "hi": 81, "unit": "Nm", "lube": "Moly", "notes": "2–3 cycles"},
+            {"part": "", "joint": "Action screws (plastic bottom metal)", "lo": 44, "unit": "in-lb", "max": True, "tool": "T25"},
+            {"joint": "Gas block clamp", "lo": "30", "hi": "30", "unit": "in-lb", "lube": "Dry"}]
+    body = {"name": "Test AR", "torque": rows, "care": "Gas block: 0.6 mm gap.\nDo not fire with the screw closed."}
+    assert o.put("/diary/api/guns/g-tq", json=body).status_code == 200
+    g = [x for x in o.get("/diary/api/guns").get_json() if x["id"] == "g-tq"][0]
+    assert g["torque"][0] == {"part": "Upper", "joint": "Barrel nut", "lo": 68.0, "hi": 81.0, "unit": "Nm", "lube": "Moly", "notes": "2–3 cycles"}
+    assert g["torque"][1]["max"] is True and "hi" not in g["torque"][2], "a range with equal ends is one value"
+    assert g["care"].startswith("Gas block")
+    assert m.get("/diary/api/guns").get_json() == [] or all(x["id"] != "g-tq" for x in m.get("/diary/api/guns").get_json())
+    for bad in ([{"joint": "x", "lo": 5, "unit": "kg"}], [{"joint": "x", "lo": 0, "unit": "Nm"}],
+                [{"joint": "", "lo": 5, "unit": "Nm"}], [{"joint": "x", "lo": 9, "hi": 5, "unit": "Nm"}], "nope"):
+        assert o.put("/diary/api/guns/g-tq", json=dict(body, torque=bad)).status_code == 400
+    o.delete("/diary/api/guns/g-tq", headers=H)
+
+
 def test_lockout_ends_when_admin_resets_password(two, monkeypatch):
     """5 wrong passwords lock the address for 15 min – unless an admin gives that account a new password."""
     app, o, _m = two

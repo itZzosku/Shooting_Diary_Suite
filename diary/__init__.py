@@ -653,8 +653,45 @@ def _cal_list(v):
     return [str(x).strip()[:40] for x in v if str(x).strip()][:5]
 
 
+TORQUE_UNITS = ("Nm", "in-lb", "ft-lb")
+
+
+def _torque_list(v):
+    """A gun's torque specs: [{part, joint, lo, hi?, unit, max?, tool?, lube?, notes?}] – lo alone is the value,
+    lo–hi a range, max: lo is a limit not to pass. Up to 80 rows."""
+    if not isinstance(v, list) or len(v) > 80:
+        raise ValueError("torque")
+    out = []
+    for r in v:
+        if not isinstance(r, dict):
+            raise ValueError("torque")
+        txt = lambda k, n: str(r.get(k) or "").strip()[:n]
+        lo = float(r.get("lo"))
+        hi = r.get("hi")
+        hi = None if hi in (None, "") else float(hi)
+        if not (0 < lo <= 5000) or (hi is not None and not (lo <= hi <= 5000)) or r.get("unit") not in TORQUE_UNITS:
+            raise ValueError("torque")
+        if not txt("joint", 80):
+            raise ValueError("torque")
+        row = {"part": txt("part", 60), "joint": txt("joint", 80), "lo": lo, "unit": r["unit"]}
+        if hi is not None and hi != lo:
+            row["hi"] = hi
+        if r.get("max"):
+            row["max"] = True
+        for k, n in (("tool", 30), ("lube", 40), ("notes", 300)):
+            if txt(k, n):
+                row[k] = txt(k, n)
+        out.append(row)
+    return out
+
+
+def _care_text(v):
+    """Free text with a gun's service procedures (gas block install, ring method …)."""
+    return str(v or "")[:4000]
+
+
 GUN_KEYS = {"name": str, "type": str, "cal": str, "cals": _cal_list, "mode": str, "startCount": int,
-            "archived": bool, "order": int, "acquired": str}
+            "archived": bool, "order": int, "acquired": str, "torque": _torque_list, "care": _care_text}
 
 
 @bp.get("/api/guns")
