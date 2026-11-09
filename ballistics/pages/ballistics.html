@@ -478,6 +478,7 @@ details summary{cursor:pointer;list-style:revert}
       <label class="f" id="vTgtDL">Ø cm<input type="text" inputmode="decimal" id="vTgtD" placeholder="30"></label>
       <label class="f" id="vTgtWL">Width cm<input type="text" inputmode="decimal" id="vTgtW" placeholder="30"></label>
       <label class="f" id="vTgtHL">Height cm<input type="text" inputmode="decimal" id="vTgtH" placeholder="45"></label>
+      <label class="f">Reticle colour<select id="vInk"><option value="">Black</option><option value="red">Red</option><option value="green">Green</option></select></label>
       <label class="f" id="vAimL">Aim vs hit cm<input type="text" id="vAimOff" placeholder="0" title="Where you aim against where the bullet lands: −10 = aim 10 cm below the hit (6 o'clock hold), +5 = 5 cm above"></label>
     </div>
     <div class="rview">
@@ -2465,7 +2466,7 @@ const toRet=(v,fromUnit,ret)=>RT.convert(v,fromUnit==="MOA"?"MOA":"MRAD",ret.uni
 const fieldOf=ret=>(ret&&ret.spec&&ret.spec.field)||(ret&&ret.unit==="MOA"?30:10);
 const VZ={user:false,cx:0,cy:0,half:10};              // the tab's view
 const RV={user:false,cx:0,cy:0,half:12,night:false};  // the full-screen view
-const RED="#d61f1f",BLUE="#2f6fd6",MAGENTA="#d01fd0";
+const RED="#d61f1f",BLUE="#2f6fd6",MAGENTA="#d01fd0",RED_LBL=RED;
 
 /** What to draw for the current profile, reticle and mode (this shot / a stage): holds, targets, dialled value. */
 function retScene(p,ret){
@@ -2521,7 +2522,8 @@ function retScene(p,ret){
 /** Red distances on the holdover marks (like Strelok): the range each mark is good for with what is dialled.
     pxPer: screen pixels per reticle unit at the current zoom. Cached: pinch zoom redraws often. */
 let rangeCache={key:null,rows:null};
-function rangeMarks(p,ret,dialled,k,pxPer,halo){
+function rangeMarks(p,ret,dialled,k,pxPer,halo,labelColor){
+  const RED=labelColor||RED_LBL;            // range numbers in blue on a red reticle, so they stay apart
   const s=scopeOf(p),inp=solverInput(p,cond(),{wind:{ms:0,clock:12}});
   const key=JSON.stringify([inp,dialled,ret.id,ret.rev,s.unit,aimOffCm(p)]);
   if(rangeCache.key!==key){
@@ -2588,15 +2590,19 @@ function retElements(ret){
   try{const spec=typeof ret.spec==="string"?JSON.parse(ret.spec):ret.spec;if(spec){const r=RT.compile(spec);if(r.elements&&r.elements.length)els=r.elements}}catch(e){}
   RET_ELS.set(key,els);return els;
 }
+// The reticle's colour, per profile on this device (a red dot drawn red); night view: red unless chosen otherwise
+const INKS={red:"#e0201b",green:"#1f9d3a"};
+const inkOf=p=>(p&&U.retInk&&U.retInk[p.id])||"";
 function viewSvg(box,Z,full){
   const p=prof(),ret=retOf(p);if(!ret)return null;
   const sc=retScene(p,ret),k=RT.sfpFactor(ret,num($("vMag").value)),field=fieldOf(ret);
   const W=box.clientWidth||320,pxPer=W/(2*Z.half);
   const night=full&&RV.night;
-  const marks=ready(p)&&!ret.iron?rangeMarks(p,ret,sc.dialled,k,pxPer,night?"#0b0d0b":"#fff"):[];
+  const ink=INKS[inkOf(p)]||(night?"#ff4a3a":"#111");
+  const marks=ready(p)&&!ret.iron?rangeMarks(p,ret,sc.dialled,k,pxPer,night?"#0b0d0b":"#fff",inkOf(p)==="red"||night?"#1565c0":null):[];
   const size=full&&sc.mode==="shot"&&!ret.iron?sizeMarker(ret,sc.R,k):{lines:[],texts:[]};
   const svg=RT.svg(retElements(ret),{half:Z.half,cx:Z.cx,cy:Z.cy,px:1/pxPer,k,holds:sc.holds,targets:sc.targets,
-    texts:marks.concat(size.texts),lines:size.lines,accent:"#e2590f",ink:night?"#ff4a3a":"#111",
+    texts:marks.concat(size.texts),lines:size.lines,accent:"#e2590f",ink,
     scope:{r:field*1.04,fill:night?"#0b0d0b":"#fff",outside:"#000"}});
   return{svg,sc,ret,k};
 }
@@ -2759,11 +2765,13 @@ const aimNote=p=>{const o=aimOffCm(p);return o?`Aiming ${Math.abs(o)} cm ${o<0?"
 const aimOffCm=p=>{const v=p&&U.aimOff&&U.aimOff[p.id];return v?+v:0};
 const aimOffU=(p,R,ret)=>R>0?RT.convert(aimOffCm(p)/100/R*1000,"MRAD",ret.unit):0;
 // the same value in two fields: by the sight set (readout) and in the reticle view
+$("vInk").addEventListener("change",()=>{const p=prof();if(!p)return;U.retInk=Object.assign({},U.retInk,{[p.id]:$("vInk").value});saveUI();renderReticle();if(!$("rv").hidden)renderRV()});
 function fillAimOff(force){const p=prof(),id=p?p.id:"",v=p&&aimOffCm(p)?String(aimOffCm(p)):"";
   for(const f of[$("vAimOff"),$("oAimOff")]){
     if(!force&&f.dataset.pid===id&&document.activeElement===f)continue;   // don't overwrite while typing
     f.dataset.pid=id;f.value=v;
-  }}
+  }
+  $("vInk").value=inkOf(prof());}
 /** The chosen target in cm: {parts, name} (null: none) */
 function targetCm(t){
   if(t.kind==="circle"&&t.d>0)return{parts:[{t:"circle",r:t.d/2,fill:STEEL}],name:`circle Ø ${t.d} cm`,w:t.d,h:t.d};
