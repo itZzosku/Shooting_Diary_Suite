@@ -75,7 +75,11 @@ header.top{padding-top:6px!important}
 a.ghost{text-decoration:none;flex:0 0 auto}
 .gun{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px}
 .gun h2{font-family:var(--f-display);font-weight:700;font-size:1.45rem;margin:0;text-transform:uppercase;letter-spacing:.01em}
-.ghead{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ghead{display:flex;align-items:center;gap:10px}
+.ghead .gt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.gun summary{list-style:none;cursor:pointer}.gun summary::-webkit-details-marker{display:none}
+.chev{color:var(--muted);transition:transform .15s;flex:0 0 auto}.gun[open] .chev{transform:rotate(90deg)}
+.gun:not([open]){gap:0}
 .gun .sub{color:var(--muted);font-size:.85rem}
 .lbl{display:block;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-top:10px}
 .tqr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 12px;padding:8px 0;border-top:1px solid var(--line)}
@@ -113,13 +117,15 @@ const unit=()=>{try{return localStorage.getItem("tqUnit")||"Nm"}catch(e){return"
 let GUNS=null;
 function gunHtml(g,u){
   const rows=g.torque||[],parts=[...new Set(rows.map(r=>r.part||""))],care=(g.care||"").trim();
-  return`<section class="gun"><div class="ghead"><h2>${esc(g.name)}</h2><a class="ghost" href="log?gun=${encodeURIComponent(g.id)}&tq=1">Edit</a></div>`
-    +(g.cal?`<div class="sub">${esc(g.cal)}</div>`:"")
+  // closed by default: the name, calibre and what's inside; open for the specs and procedures
+  const what=[rows.length?`${rows.length} spec${rows.length>1?"s":""}`:"no specs",care?"procedures":""].filter(Boolean).join(" · ");
+  return`<details class="gun"><summary><div class="ghead"><span class="chev" aria-hidden="true">▸</span><span class="gt"><h2>${esc(g.name)}</h2>`
+    +`<span class="sub">${esc([g.cal,what].filter(Boolean).join(" · "))}</span></span><a class="ghost" href="log?gun=${encodeURIComponent(g.id)}&tq=1">Edit</a></div></summary>`
     +(rows.length?parts.map(pt=>`<span class="lbl">${esc(pt||"Gun")}</span>`+rows.filter(r=>(r.part||"")===pt).map(r=>
       `<div class="tqr"><span class="j">${esc(r.joint)}</span><span class="v">${esc(txt(r,u))}</span>`
       +`<span class="m">${esc([r.tool,r.lube].filter(Boolean).join(" · "))}</span><span class="o">${u!=="as"&&u!==r.unit?esc(txt(r,"as")):""}</span>`
       +(r.notes?`<span class="n">${esc(r.notes)}</span>`:"")+`</div>`).join("")).join(""):`<div class="empty">No torque specs yet.</div>`)
-    +(care?`<div class="care">${esc(care)}</div>`:"")+`</section>`;
+    +(care?`<div class="care">${esc(care)}</div>`:"")+`</details>`;
 }
 function render(){
   const u=unit();
