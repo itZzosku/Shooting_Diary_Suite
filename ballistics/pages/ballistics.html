@@ -2539,7 +2539,7 @@ function retScene(p,ret){
     pxPer: screen pixels per reticle unit at the current zoom. Cached: pinch zoom redraws often. */
 let rangeCache={key:null,rows:null};
 function rangeMarks(p,ret,dialled,k,pxPer,halo,labelColor){
-  const RED=labelColor||RED_LBL;            // range numbers in blue on a red reticle, so they stay apart
+  const RED=labelColor||RED_LBL;            // range numbers black (night: light grey) on a red reticle, so they stay apart
   const s=scopeOf(p),inp=solverInput(p,cond(),{wind:{ms:0,clock:12}});
   const key=JSON.stringify([inp,dialled,ret.id,ret.rev,s.unit,aimOffCm(p)]);
   if(rangeCache.key!==key){
@@ -2615,7 +2615,7 @@ function viewSvg(box,Z,full){
   const W=box.clientWidth||320,pxPer=W/(2*Z.half);
   const night=full&&RV.night;
   const ink=INKS[inkOf(p)]||(night?"#ff4a3a":"#111");
-  const marks=ready(p)&&!ret.iron?rangeMarks(p,ret,sc.dialled,k,pxPer,night?"#0b0d0b":"#fff",inkOf(p)==="red"||night?"#1565c0":null):[];
+  const marks=ready(p)&&!ret.iron?rangeMarks(p,ret,sc.dialled,k,pxPer,night?"#0b0d0b":"#fff",inkOf(p)==="red"||night?(night?"#e6e6e6":"#111"):null):[];
   const size=full&&sc.mode==="shot"&&!ret.iron?sizeMarker(ret,sc.R,k):{lines:[],texts:[]};
   const svg=RT.svg(retElements(ret),{half:Z.half,cx:Z.cx,cy:Z.cy,px:1/pxPer,k,holds:sc.holds,targets:sc.targets,
     texts:marks.concat(size.texts),lines:size.lines,accent:"#e2590f",ink,
