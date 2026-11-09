@@ -422,6 +422,12 @@ def page_loans():
     return static_page("loans.html")
 
 
+@bp.get("/care")
+@login_required
+def page_care():
+    return static_page("care.html")
+
+
 @bp.get("/calculator")
 @login_required
 def page_calc():
@@ -606,7 +612,7 @@ def put_password():
     return jsonify(ok=True)
 
 
-NAV_FEATURES = ("log", "velocity", "zeroes", "ballistics", "loans", "calculator", "ammo")
+NAV_FEATURES = ("log", "velocity", "zeroes", "ballistics", "loans", "calculator", "care", "ammo")
 NAV_DEFAULT = ["log", "velocity", "zeroes"]
 
 

@@ -10,6 +10,7 @@
     {id: "ballistics", label: "Ballistics", name: "Ballistic calculator"},
     {id: "loans", label: "Loans", name: "Guns loaned"},
     {id: "calculator", label: "Clicks", name: "Click calculator"},
+    {id: "care", label: "Care", name: "Torque & care"},
     {id: "ammo", label: "Ammo", name: "Club ammo", href: "/ammo/"},
   ];
   const DEFAULT = ["log", "velocity", "zeroes"];

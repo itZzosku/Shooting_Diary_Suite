@@ -1315,10 +1315,16 @@ if("serviceWorker" in navigator){
 }
 
 /* ---------- boot ---------- */
+// a link from Torque & care: log?gun=<id>&tq=1 opens the gun (and its specs) once the guns are in
+function openFromLink(){
+  const q=new URLSearchParams(location.search),id=q.get("gun");if(!id||!S.guns.some(g=>g.id===id))return;
+  try{history.replaceState(null,"",location.pathname)}catch(e){}
+  openGun(id);if(q.get("tq"))$("gTq").click();
+}
 async function boot(){
   S.year=lsGet(YEAR_KEY);
   S.store=apiStore();
-  S.store.sub(list=>{S.sessions=sortSessions(list.filter(s=>s.date));S.ready=true;render()},p=>{S.profile=p||{};render()},g=>{S.guns=g||[]},
+  S.store.sub(list=>{S.sessions=sortSessions(list.filter(s=>s.date));S.ready=true;render()},p=>{S.profile=p||{};render()},g=>{S.guns=g||[];openFromLink()},
     l=>{S.loans=(l||[]).filter(x=>x.date).sort((a,b)=>b.date.localeCompare(a.date))},p=>{S.prices=p||{}});
 }
 boot();
