@@ -106,7 +106,8 @@ a.ghost{text-decoration:none;flex:0 0 auto}
 .chev{color:var(--muted);transition:transform .15s;flex:0 0 auto}.gun[open] .chev{transform:rotate(90deg)}
 .gun:not([open]){gap:0}
 .gun .sub{color:var(--muted);font-size:.85rem}
-.lbl{display:block;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-top:10px}
+/* the part a spec belongs to (an optic, a mount, the upper): a heading of its own */
+.lbl{display:block;font-family:var(--f-display);color:var(--accent);font-size:1.15rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.15;margin-top:16px;padding-bottom:4px;border-bottom:2px solid var(--accent-soft)}
 .tqr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 12px;padding:8px 0;border-top:1px solid var(--line)}
 .lbl+.tqr{border-top:0}
 .tqr .j{font-weight:600}.tqr .v{font-family:var(--f-mono);font-weight:600;text-align:right;white-space:nowrap}
