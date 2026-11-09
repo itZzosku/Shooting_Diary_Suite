@@ -1033,13 +1033,23 @@ const effTxt=m=>m.eff!=null?`≈${Math.round(m.eff/5)*5} m`:`${m.range} m`;
 // zero. Then nothing is chosen per range: the rest is a hold, "aim N cm high / low".
 // A diopter starts locked at its zero (aperture sights are mostly shot with holds); "Auto" is then an explicit "".
 const lockVal=(p,g)=>{const v=U.lock&&U.lock[p.id];return v==null&&g&&g.type==="diopter"?"0":v};
+// Scopes, red dots and LPVOs can be locked at their zero too: nothing dialled, every range held with the reticle.
+const unitName=s=>s&&s.unit==="MOA"?"MOA":"mil";
 function lockOf(p){
-  const g=ironOf(p),v=p&&lockVal(p,g);if(!g||v==null||v==="")return null;
+  const g=ironOf(p),v=p&&lockVal(p,g);
+  if(!g)return p&&v==="0"&&!isNotch(p)?{clicks:0,mil:0,hold:true}:null;
+  if(v==null||v==="")return null;
   if(g.type==="notch")return g.marks.some(m=>m.label===v)?{notch:v}:null;
   const n=parseInt(v,10);return isFinite(n)?{clicks:n,mil:n*(+g.elev_click)/(g.unit==="MOA"?B.toUnit(1,"MOA"):1)}:null;
 }
 function fillLock(p){
-  const g=ironOf(p);$("sLockL").hidden=!g;if(!g){$("lockHint").textContent="";return}
+  const g=ironOf(p);$("sLockL").hidden=!p;
+  if(!p){$("lockHint").textContent="";return}
+  if(!g){                                   // a scope / red dot: dial each range, or hold from the zero
+    $("sLock").innerHTML=`<option value="">Dial each range</option><option value="0">Locked at the zero – hold</option>`;
+    $("sLock").value=lockVal(p,null)==="0"?"0":"";
+    $("lockHint").textContent=lockOf(p)?"Nothing dialled: every range is a hold with the reticle.":"";return;
+  }
   const cur=lockVal(p,g)??"";
   let o=`<option value="">Auto – ${g.type==="notch"?"nearest setting":"dial each range"}</option>`;
   if(g.type==="notch"){const nm=notchMarks(p);o+=g.marks.map(m=>{const x=nm.find(q=>q.label===m.label),sn=slotName(g,m.label);return`<option value="${esc(m.label)}">Locked at ${esc(settingName(g,m.label))} (${x?effTxt(x):m.range_m+" m"})</option>`}).join("")}
@@ -1147,11 +1157,17 @@ function renderSolution(){
   if(isNotch(p)){renderNotchSolution(p,res,r,c);return}
   const lk=lockOf(p);
   if(lk){                                // a diopter locked at some clicks: the rest is a hold
-    const h=r.elevMrad-lk.mil,hc=h*R/10,w=fmtHold(r.windMrad,windScope(s),"R","L");
+    const h=r.elevMrad-lk.mil,hc=h*R/10,w=fmtHold(r.windMrad,windScope(s),"R","L"),un=unitName(s),hu=Math.abs(B.toUnit(h,s.unit));
     $("oE").innerHTML=Math.abs(hc)<1?`0<em>cm</em>`:`${hc>0?"↑":"↓"}${Math.round(Math.abs(hc))}<em>cm</em>`;
-    $("oEs").textContent=`${aimCm(hc)}${Math.abs(hc)>=1?` (${Math.abs(h).toFixed(2)} mil)`:""}\nsight locked at ${lk.clicks?Math.abs(lk.clicks)+" clicks "+(lk.clicks>0?"up":"down"):"the zero"}`;
+    $("oEs").textContent=`${aimCm(hc)}${Math.abs(hc)>=1?` (${hu.toFixed(un==="MOA"?1:2)} ${un})`:""}\n${lk.hold?"held: nothing dialled":"sight locked at "+(lk.clicks?Math.abs(lk.clicks)+" clicks "+(lk.clicks>0?"up":"down"):"the zero")}`;
+    if(lk.hold){                            // nothing dialled on a red dot or LPVO: the wind is a hold too
+      const wc=r.windMrad*R/10,wu=Math.abs(B.toUnit(r.windMrad,s.unit));
+      $("oW").innerHTML=Math.abs(wc)<1?`0<em>cm</em>`:`${Math.round(Math.abs(wc))}<em>cm ${wc<0?"L":"R"}</em>`;
+      $("oWs").textContent=(Math.abs(wc)>=1?`aim ${sideCm(wc)} (${wu.toFixed(un==="MOA"?1:2)} ${un})\n`:"")+`${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)} ${un} per 1 m/s`;
+    }else{
     $("oW").innerHTML=w.clicks?`${w.val}<em>${w.unit} ${w.dir}</em>`:`0<em>${w.unit}</em>`;
     $("oWs").textContent=(w.clicks?`${w.clicks} click${w.clicks===1?"":"s"} ${w.dir==="R"?"right":"left"} · or aim ${sideCm(r.windMrad*R/10)}\n`:"")+`${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)} per 1 m/s`;
+    }
     $("oMore").innerHTML=`<span>TOF <b>${r.tof.toFixed(2)}</b> s</span><span><b>${Math.round(r.v)}</b> m/s</span><span>Mach <b>${r.mach.toFixed(2)}</b></span>`
       +(r.energyJ?`<span><b>${Math.round(r.energyJ)}</b> J</span>`:"")+`<span>MV <b>${Math.round(res.mv)}</b> m/s</span><span>drop <b>${(-r.dropM*100).toFixed(0)}</b> cm</span>`;
     $("oWarn").innerHTML="";return;
@@ -1208,11 +1224,11 @@ function renderCard(){
   }
   const lk=lockOf(p);
   if(lk){
-    $("cTable").innerHTML=`<tr><th>m</th><th>Aim</th><th>Hold mil</th><th>Drop cm</th><th>Wind ${u}</th><th>/1 m/s</th><th>m/s</th><th>TOF</th></tr>`+res.rows.map(r=>{
+    $("cTable").innerHTML=`<tr><th>m</th><th>Aim</th><th>Hold ${unitName(s)}</th><th>Drop cm</th><th>Wind ${u}</th><th>/1 m/s</th><th>m/s</th><th>TOF</th></tr>`+res.rows.map(r=>{
       if(!r.reached)return`<tr><td>${r.range}</td><td colspan="7" class="dim">not reached</td></tr>`;
       const h=r.elevMrad-lk.mil,hc=h*r.range/10,w=fmtHold(r.windMrad,windScope(s),"R","L");
       const cls=[r.subsonic?"ss":r.transonic?"ts":"",r.range===R?"cur":""].join(" ").trim();
-      return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${Math.abs(hc)<1?"0":(hc>0?"↑":"↓")+Math.round(Math.abs(hc))+" cm"}</td><td>${sgn(h,2)}</td><td>${dropCm(r)}</td><td>${w.clicks?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
+      return`<tr${cls?` class="${cls}"`:""}><td>${r.range}</td><td>${Math.abs(hc)<1?"0":(hc>0?"↑":"↓")+Math.round(Math.abs(hc))+" cm"}</td><td>${sgn(B.toUnit(h,s.unit),s.unit==="MOA"?1:2)}</td><td>${dropCm(r)}</td><td>${w.clicks?w.val+" "+w.dir:"0"}</td><td>${B.toUnit(r.windPer1Mrad,s.unit).toFixed(2)}</td><td>${Math.round(r.v)}</td><td>${r.tof.toFixed(2)}</td></tr>`;
     }).join("");
     return;
   }
@@ -2489,8 +2505,8 @@ function retScene(p,ret){
       }
     }else if(r&&r.reached){
       const e=B.toUnit(r.elevMrad,s.unit),w=B.toUnit(r.windMrad,s.unit),click=s.click||0.1;
-      const lk=ret.iron?lockOf(p):null;     // a locked diopter stays where it is: everything else is held
-      out.dialled=lk?B.toUnit(lk.mil,s.unit):$("vDial").checked?Math.round(e/click)*click:0;
+      const lk=lockOf(p);                    // a locked sight stays where it is: everything else is held
+      out.dialled=lk?B.toUnit(lk.mil,s.unit):dialOf(p)?Math.round(e/click)*click:0;
       const y=toRet(e-out.dialled,s.unit,ret),x=-toRet(w,s.unit,ret),tg=targetShape(R,ret);
       const yh=y+aimOffU(p,R,ret);   // the hit, off the aim point by the aim offset
       out.holds.push({x,y:yh,main:true,ring:!!ret.iron});  // the range is on the readout; a tag would cover marks
@@ -2622,7 +2638,7 @@ function renderReticle(){
   const keep=$("vMode").value;
   $("vMode").innerHTML=`<option value="shot">This shot</option>`+sts.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
   $("vMode").value=[...$("vMode").options].some(o=>o.value===keep)?keep:"shot";
-  $("vDialL").hidden=$("vMode").value!=="shot";$("vFull").disabled=!ret;
+  $("vDialL").hidden=$("vMode").value!=="shot"||!!lockOf(prof());$("vDial").checked=dialOf(prof());$("vFull").disabled=!ret;
   if(!ret){
     $("vBox").innerHTML="";$("vMagL").hidden=true;
     $("vInfo").innerHTML=p?`No reticle on this profile. Pick one under <b>Edit</b> → Reticle${(D.reticles||[]).length?"":" – the library is empty; an admin adds reticles under <b>Reticles</b>"}.`:"";
@@ -2652,6 +2668,9 @@ function renderReticle(){
   }
   if(!$("rv").hidden)renderRV();
 }
+// 'Elevation dialled' (reticle view) per profile on this device; default on
+const dialOf=p=>!(p&&U.dial&&U.dial[p.id]===false);
+$("vDial").addEventListener("change",()=>{const p=prof();if(p){U.dial=Object.assign({},U.dial,{[p.id]:$("vDial").checked});saveUI()}});
 ["vMode","vDial","vMag","vZoom"].forEach(id=>$(id).addEventListener(id==="vMag"?"input":"change",()=>{if(id==="vZoom"||id==="vMode")VZ.user=false;renderReticle()}));
 
 
@@ -2815,8 +2834,8 @@ function renderRV(){
   const zoomed=RV.user&&RV.half<fieldOf(ret)*0.7;          // zoomed in: the texts would cover marks
   $("rvWind").hidden=$("rvTarget").hidden=zoomed;
   $("rvName").textContent=`${ret.name}${ret.maker?", "+ret.maker:""} · ${ret.focal_plane}`;
-  $("rvDial").textContent=$("vMode").value==="shot"?($("vDial").checked?"Dialled":"Holding"):"Stage dial";
-  $("rvDial").disabled=$("vMode").value!=="shot";
+  $("rvDial").textContent=$("vMode").value==="shot"?(lockOf(prof())?"Locked":dialOf(prof())?"Dialled":"Holding"):"Stage dial";
+  $("rvDial").disabled=$("vMode").value!=="shot"||!!lockOf(prof());
   $("rvNight").setAttribute("aria-pressed",RV.night);
 }
 let rvWake=null;
@@ -2826,8 +2845,9 @@ async function openRV(){
 }
 function closeRV(fromBack){if(fromBack!==true)dropLayer($("rv"));$("rv").hidden=true;if($("mm").hidden&&[...document.querySelectorAll(".sheet")].every(s=>s.hidden))document.body.style.overflow="";try{rvWake&&rvWake.release()}catch(e){}rvWake=null}
 $("vFull").addEventListener("click",openRV);$("rvClose").addEventListener("click",closeRV);
-$("rvDial").addEventListener("click",()=>{$("vDial").checked=!$("vDial").checked;renderReticle()});
-$("rvTurret").addEventListener("click",()=>{if($("vMode").value==="shot"){$("vDial").checked=!$("vDial").checked;renderReticle()}});
+const flipDial=()=>{const p=prof();if(!p||lockOf(p))return;U.dial=Object.assign({},U.dial,{[p.id]:!dialOf(p)});saveUI();renderReticle()};
+$("rvDial").addEventListener("click",flipDial);
+$("rvTurret").addEventListener("click",()=>{if($("vMode").value==="shot")flipDial()});
 $("rvNight").addEventListener("click",()=>{RV.night=!RV.night;renderRV()});
 $("rvReset").addEventListener("click",()=>{RV.user=false;renderRV()});
 $("rvPng").addEventListener("click",()=>{
@@ -3107,10 +3127,10 @@ $("pdfDope").addEventListener("click",()=>withPdf($("pdfDope"),async()=>{
     doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(70);
     const cl=doc.splitTextToSize(PT(condLine(p,c)),colW);doc.text(cl,x0,M+24);doc.setTextColor(0);
     doc.autoTable({startY:M+26+cl.length*8,margin:{left:x0,right:W-x0-colW},tableWidth:colW,theme:"grid",
-      head:isNotch(p)?[["m","Setting","Aim cm","Drop cm","Wind/1m/s cm","TOF"]]:lockOf(p)?[["m","Aim cm","Hold mil","Drop cm",`Wind/1m/s`,"TOF"]]:[["m",`Elev ${u}`,"Clicks","Drop cm",`Wind/1m/s`,"TOF"]],
+      head:isNotch(p)?[["m","Setting","Aim cm","Drop cm","Wind/1m/s cm","TOF"]]:lockOf(p)?[["m","Aim cm",`Hold ${unitName(s)}`,"Drop cm",`Wind/1m/s`,"TOF"]]:[["m",`Elev ${u}`,"Clicks","Drop cm",`Wind/1m/s`,"TOF"]],
       body:rows.map(r=>{
         const lk=lockOf(p);
-        if(lk&&!isNotch(p)){const h=r.elevMrad-lk.mil,hc=h*r.range/10;return[r.range,Math.abs(hc)<1?"0":(hc>0?"+":"-")+Math.round(Math.abs(hc)),(h>=0?"+":"-")+Math.abs(h).toFixed(2),dropCm(r).replace("−","-"),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}
+        if(lk&&!isNotch(p)){const h=r.elevMrad-lk.mil,hc=h*r.range/10;return[r.range,Math.abs(hc)<1?"0":(hc>0?"+":"-")+Math.round(Math.abs(hc)),(h>=0?"+":"-")+Math.abs(B.toUnit(h,s.unit)).toFixed(s.unit==="MOA"?1:2),dropCm(r).replace("−","-"),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}
         if(isNotch(p)){const n=notchFor(p,r);return[r.range,n?n.label:"-",n?(Math.abs(n.holdCm)<1?"0":(n.holdCm>0?"+":"-")+Math.round(Math.abs(n.holdCm))):"-",dropCm(r).replace("−","-"),(r.windPer1Mrad*r.range/10).toFixed(1),r.tof.toFixed(2)]}
         const e=fmtHold(r.elevMrad,s,"U","D");return[r.range,(e.signed<0?"-":"")+e.val,e.clicks+(e.dir?" "+e.dir:""),dropCm(r).replace("−","-"),B.toUnit(r.windPer1Mrad,s.unit).toFixed(2),r.tof.toFixed(2)]}),
       styles:{font:"helvetica",fontSize:fs,cellPadding:2,halign:"right",lineColor:[170,170,170],lineWidth:.3},headStyles:{fillColor:[225,228,222],textColor:20,fontStyle:"bold"},
