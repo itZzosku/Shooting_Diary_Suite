@@ -731,6 +731,30 @@ def put_gun(gid):
     return jsonify(ok=True)
 
 
+@bp.get("/api/care")
+@login_required
+def get_care():
+    """Torque specs and procedures that aren't a gun's: optics and mounts that move between guns."""
+    try:
+        optics = json.loads(kv_get("care_optics") or "null") or {}
+    except ValueError:
+        optics = {}
+    return jsonify(optics={"torque": optics.get("torque") or [], "care": optics.get("care") or ""})
+
+
+@bp.put("/api/care/optics")
+@login_required
+def put_care_optics():
+    body = _json_body()
+    try:
+        optics = {"torque": _torque_list(body.get("torque") or []), "care": _care_text(body.get("care"))}
+    except (TypeError, ValueError):
+        return jsonify(error="bad_torque"), 400
+    kv_set("care_optics", json.dumps(optics, ensure_ascii=False))
+    db().commit()
+    return jsonify(ok=True, optics=optics)
+
+
 @bp.delete("/api/guns/<gid>")
 @login_required
 def delete_gun(gid):

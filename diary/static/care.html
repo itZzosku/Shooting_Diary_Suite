@@ -67,6 +67,31 @@ h1 span{color:var(--accent)}
 @media (max-width:360px){.pnav a .t{display:none}}
 header.top{padding-top:6px!important}
 
+.sheet{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet-in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.sheet-bar{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);padding-block:12px;z-index:1;border-bottom:1px solid var(--line)}
+.sheet-bar .bar-btns{display:flex;gap:8px;align-items:center}
+.sheet-bar .primary.sm{padding:9px 18px;font-size:.92rem;flex:0 0 auto}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;min-width:0}
+.field{display:flex;flex-direction:column;gap:6px}
+input[type=text],input[type=date],input[type=time],input[type=number],select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:1rem;color:var(--fg);font-weight:400;text-transform:none;letter-spacing:0;min-width:0}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:14px 22px;font-weight:600;font-size:1rem;flex:1 1 auto}
+.danger{background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:13px 16px}
+.msg{font-size:.88rem;color:var(--danger)}
+.hint{font-size:.85rem;color:var(--muted)}
+.check{display:flex;gap:10px;align-items:center;font-size:.95rem;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:1rem;color:var(--fg);font-weight:400;text-transform:none;letter-spacing:0;resize:vertical}
+.sheet-bar h2{font-family:var(--f-display);font-weight:700;font-size:1.4rem;margin:0;text-transform:uppercase}
+.edlist{display:flex;flex-direction:column;gap:4px}
+.edlist .tqr{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left;width:100%;cursor:pointer}
+button.tqr{font:inherit;color:inherit}
+@media (max-width:560px){.grid3{grid-template-columns:1fr 1fr}.grid3>:first-child{grid-column:1/-1}}
 /* Torque & care: every gun's specs and procedures, read here, edited on the gun in the diary */
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:.9rem}
@@ -99,10 +124,48 @@ details.hid summary{cursor:pointer;color:var(--muted);font-weight:600}
   <header class="top">
     <h1>Torque <span>&amp; care</span></h1>
   </header>
-  <p class="lead">Torque specs, lube and procedures for each gun and its mounts. Edit them on the gun (Diary → Guns → Torque &amp; care).</p>
+  <p class="lead">Torque specs, lube and procedures. Optics &amp; mounts that move between guns are edited here; a gun's own on the gun (its Edit).</p>
   <div class="chips" id="units" role="group" aria-label="Show torque in"></div>
+  <div id="optics"></div>
   <div id="list" style="display:flex;flex-direction:column;gap:14px"><div class="empty">Loading…</div></div>
 </div>
+<div class="sheet" id="oxSheet" hidden role="dialog" aria-modal="true" aria-labelledby="oxTitle">
+  <div class="sheet-in">
+    <div class="sheet-bar"><h2 id="oxTitle">Optics &amp; mounts</h2><button class="ghost" type="button" id="oxClose">Close</button></div>
+    <p class="hint" style="margin:0">Scopes, red dots, rings and mounts that move between guns – kept here once. Part is the mount or optic.</p>
+    <div class="edlist" id="oxList"></div>
+    <div class="chips"><button class="ghost" type="button" id="oxAdd">+ Spec</button><button class="ghost" type="button" id="oxImp">Import</button><button class="ghost" type="button" id="oxExp">Export</button><input type="file" id="oxImpF" accept=".json,application/json" hidden></div>
+    <label class="f">Procedures and notes<textarea id="oxCare" rows="6" placeholder="e.g. ring method, witness marks"></textarea></label>
+    <div class="msg" id="oxMsg" hidden></div>
+    <div class="actions"><button class="primary" type="button" id="oxSave">Save</button></div>
+  </div>
+</div>
+<div class="sheet" id="trSheet" hidden role="dialog" aria-modal="true" aria-labelledby="trTitle" style="z-index:12">
+  <form class="sheet-in" id="trForm" autocomplete="off">
+    <div class="sheet-bar"><h2 id="trTitle">Torque spec</h2><button class="ghost" type="button" id="trClose">Close</button></div>
+    <div class="grid2">
+      <label class="f">Part<input type="text" id="trPart" list="dlTqPart" placeholder="e.g. PA GLx mount"></label>
+      <label class="f">Joint<input type="text" id="trJoint" placeholder="e.g. Ring caps" required></label>
+    </div>
+    <div class="grid3">
+      <label class="f">Torque<input type="text" inputmode="decimal" id="trLo" placeholder="25" required></label>
+      <label class="f">to (range)<input type="text" inputmode="decimal" id="trHi" placeholder="–"></label>
+      <label class="f">Unit<select id="trUnit"><option>Nm</option><option>in-lb</option><option>ft-lb</option></select></label>
+    </div>
+    <label class="check"><input type="checkbox" id="trMax">A maximum – don't go over</label>
+    <div class="grid2">
+      <label class="f">Tool / bit<input type="text" id="trTool" placeholder="T15"></label>
+      <label class="f">Lube / threadlocker<input type="text" id="trLube" list="dlTqLube" placeholder="Loctite 243"></label>
+    </div>
+    <label class="f">Notes<textarea id="trNotes" rows="3"></textarea></label>
+    <div class="hint" id="trConv"></div>
+    <div class="msg" id="trMsg" hidden></div>
+    <div class="actions"><button class="primary" type="submit">Save spec</button><button class="danger" type="button" id="trDel" hidden>Delete</button></div>
+  </form>
+</div>
+<datalist id="dlTqPart"></datalist>
+<datalist id="dlTqLube"><option value="Dry"><option value="Moly grease"><option value="Loctite 243 (blue)"><option value="Loctite 222 (purple)"><option value="Anti-seize"><option value="Oil"></datalist>
+<script src="static/drafts.js"></script>
 <div class="toast" id="toast" hidden></div>
 <script>
 (function(){"use strict";
@@ -115,21 +178,33 @@ function txt(r,u){const un=u==="as"?r.unit:u,lo=fmt(conv(r.lo,r.unit,un),un),hi=
   return(r.max?"≤ ":"")+(hi&&hi!==lo?lo+"–"+hi:lo)+" "+un}
 const unit=()=>{try{return localStorage.getItem("tqUnit")||"Nm"}catch(e){return"Nm"}};
 let GUNS=null;
+function rowsHtml(rows,u,tag){
+  const parts=[...new Set(rows.map(r=>r.part||""))];
+  return parts.map(pt=>`<span class="lbl">${esc(pt||"Gun")}</span>`+rows.map((r,i)=>[r,i]).filter(([r])=>(r.part||"")===pt).map(([r,i])=>
+    `<${tag} class="tqr"${tag==="button"?` type="button" data-i="${i}"`:""}><span class="j">${esc(r.joint)}</span><span class="v">${esc(txt(r,u))}</span>`
+    +`<span class="m">${esc([r.tool,r.lube].filter(Boolean).join(" · "))}</span><span class="o">${u!=="as"&&u!==r.unit?esc(txt(r,"as")):""}</span>`
+    +(r.notes?`<span class="n">${esc(r.notes)}</span>`:"")+`</${tag}>`).join("")).join("");
+}
+let OPT=null,OED=null;      // the optics card as saved; the copy being edited
+function opticsHtml(u){
+  const rows=OPT.torque||[],care=(OPT.care||"").trim(),n=[...new Set(rows.map(r=>r.part||""))].filter(Boolean).length;
+  const what=rows.length?[`${n||1} mount${n===1?"":"s"}`,`${rows.length} spec${rows.length>1?"s":""}`,care?"procedures":""].filter(Boolean).join(" · "):"none yet – scopes, red dots, rings and mounts";
+  return`<details class="gun"><summary><div class="ghead"><span class="chev" aria-hidden="true">▸</span><span class="gt"><h2>Optics &amp; mounts</h2><span class="sub">${esc(what)}</span></span><button class="ghost" type="button" id="oxEdit">Edit</button></div></summary>`
+    +(rows.length?rowsHtml(rows,u,"div"):`<div class="empty">No specs yet – Edit to add them or import a file.</div>`)+(care?`<div class="care">${esc(care)}</div>`:"")+`</details>`;
+}
 function gunHtml(g,u){
   const rows=g.torque||[],parts=[...new Set(rows.map(r=>r.part||""))],care=(g.care||"").trim();
   // closed by default: the name, calibre and what's inside; open for the specs and procedures
   const what=[rows.length?`${rows.length} spec${rows.length>1?"s":""}`:"no specs",care?"procedures":""].filter(Boolean).join(" · ");
   return`<details class="gun"><summary><div class="ghead"><span class="chev" aria-hidden="true">▸</span><span class="gt"><h2>${esc(g.name)}</h2>`
     +`<span class="sub">${esc([g.cal,what].filter(Boolean).join(" · "))}</span></span><a class="ghost" href="log?gun=${encodeURIComponent(g.id)}&tq=1">Edit</a></div></summary>`
-    +(rows.length?parts.map(pt=>`<span class="lbl">${esc(pt||"Gun")}</span>`+rows.filter(r=>(r.part||"")===pt).map(r=>
-      `<div class="tqr"><span class="j">${esc(r.joint)}</span><span class="v">${esc(txt(r,u))}</span>`
-      +`<span class="m">${esc([r.tool,r.lube].filter(Boolean).join(" · "))}</span><span class="o">${u!=="as"&&u!==r.unit?esc(txt(r,"as")):""}</span>`
-      +(r.notes?`<span class="n">${esc(r.notes)}</span>`:"")+`</div>`).join("")).join(""):`<div class="empty">No torque specs yet.</div>`)
+    +(rows.length?rowsHtml(rows,u,"div"):`<div class="empty">No torque specs yet.</div>`)
     +(care?`<div class="care">${esc(care)}</div>`:"")+`</details>`;
 }
 function render(){
   const u=unit();
   $("units").innerHTML=[["Nm","Nm"],["in-lb","in-lb"],["ft-lb","ft-lb"],["as","As written"]].map(([v,t])=>`<button type="button" class="chip" data-u="${v}" aria-pressed="${u===v}">${t}</button>`).join("");
+  if(OPT){const was=$("optics").querySelector("details");const open=was&&was.open;$("optics").innerHTML=opticsHtml(u);if(open)$("optics").querySelector("details").open=true}
   if(!GUNS)return;
   const ord=g=>g.order??99,act=GUNS.filter(g=>!g.archived).sort((a,b)=>ord(a)-ord(b)),hid=GUNS.filter(g=>g.archived);
   const has=g=>(g.torque||[]).length||(g.care||"").trim();
@@ -139,7 +214,68 @@ function render(){
     +(hid.some(has)?`<details class="hid"><summary>Hidden guns</summary><div style="display:flex;flex-direction:column;gap:14px;margin-top:10px">${hid.filter(has).map(g=>gunHtml(g,u)).join("")}</div></details>`:"");
 }
 $("units").addEventListener("click",e=>{const b=e.target.closest("[data-u]");if(!b)return;try{localStorage.setItem("tqUnit",b.dataset.u)}catch(x){}render()});
+/* ---- Optics & mounts: edited here, saved to the account (api/care/optics) ---- */
+const num=v=>{const t=String(v??"").trim().replace(",",".");return t===""?null:+t};
+function renderEd(){
+  const rows=OED.torque;
+  $("oxList").innerHTML=rows.length?rowsHtml(rows,unit(),"button"):`<div class="hint">No specs yet – + Spec, or Import a file (e.g. one exported from a gun).</div>`;
+  $("dlTqPart").innerHTML=[...new Set(rows.map(r=>r.part).filter(Boolean))].map(x=>`<option value="${esc(x)}">`).join("");
+}
+$("optics").addEventListener("click",e=>{if(!e.target.closest("#oxEdit"))return;e.preventDefault();
+  OED={torque:JSON.parse(JSON.stringify(OPT.torque||[])),care:OPT.care||""};$("oxCare").value=OED.care;$("oxMsg").hidden=true;renderEd();$("oxSheet").hidden=false});
+$("oxClose").addEventListener("click",()=>{$("oxSheet").hidden=true});
+$("oxCare").addEventListener("input",()=>{OED.care=$("oxCare").value});
+$("oxSave").addEventListener("click",async()=>{
+  let r;try{r=await fetch("api/care/optics",{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json","X-Requested-With":"fetch"},body:JSON.stringify(OED)})}catch(e){r=null}
+  if(!r||!r.ok){$("oxMsg").textContent=r?"Couldn't save – check the specs.":"No connection – try again when online.";$("oxMsg").hidden=false;return}
+  OPT=(await r.json()).optics;$("oxSheet").hidden=true;render();toast("Optics & mounts saved");
+});
+let ED_I=null;
+function openRow(i){
+  const r=i!=null?OED.torque[i]:{part:"",unit:"Nm"};ED_I=i;
+  $("trTitle").textContent=i!=null?"Edit spec":"New spec";
+  $("trPart").value=r.part||"";$("trJoint").value=r.joint||"";$("trLo").value=r.lo??"";$("trHi").value=r.hi??"";$("trUnit").value=r.unit||"Nm";
+  $("trMax").checked=!!r.max;$("trTool").value=r.tool||"";$("trLube").value=r.lube||"";$("trNotes").value=r.notes||"";
+  $("trDel").hidden=i==null;$("trDel").textContent="Delete";$("trMsg").hidden=true;trConv();$("trSheet").hidden=false;
+}
+function trConv(){const lo=num($("trLo").value),hi=num($("trHi").value),u=$("trUnit").value;
+  $("trConv").textContent=lo>0?["Nm","in-lb","ft-lb"].filter(x=>x!==u).map(x=>txt({lo,hi:hi>0?hi:null,unit:u,max:$("trMax").checked},x)).join(" · "):""}
+["trLo","trHi","trMax"].forEach(id=>$(id).addEventListener("input",trConv));$("trUnit").addEventListener("change",trConv);
+$("oxAdd").addEventListener("click",()=>openRow(null));
+$("oxList").addEventListener("click",e=>{const b=e.target.closest("[data-i]");if(b)openRow(+b.dataset.i)});
+$("trClose").addEventListener("click",()=>{$("trSheet").hidden=true});
+$("trForm").addEventListener("submit",e=>{e.preventDefault();
+  const lo=num($("trLo").value),hi=num($("trHi").value),joint=$("trJoint").value.trim(),bad=t=>{$("trMsg").textContent=t;$("trMsg").hidden=false};
+  if(!joint)return bad("Name the joint, e.g. Ring caps.");
+  if(!(lo>0&&lo<=5000))return bad("Give the torque as a number.");
+  if(hi!=null&&!(hi>=lo))return bad("The range's top must be at least its bottom.");
+  const r={part:$("trPart").value.trim(),joint,lo,unit:$("trUnit").value};
+  if(hi!=null&&hi!==lo)r.hi=hi;if($("trMax").checked)r.max=true;
+  for(const[k,id]of[["tool","trTool"],["lube","trLube"],["notes","trNotes"]]){const v=$(id).value.trim();if(v)r[k]=v}
+  if(ED_I!=null)OED.torque[ED_I]=r;
+  else{let at=-1;OED.torque.forEach((x,k)=>{if((x.part||"")===r.part)at=k});if(at<0)OED.torque.push(r);else OED.torque.splice(at+1,0,r)}
+  $("trSheet").hidden=true;renderEd();
+});
+$("trDel").addEventListener("click",()=>{if($("trDel").textContent==="Delete"){$("trDel").textContent="Confirm delete";return}
+  OED.torque.splice(ED_I,1);$("trSheet").hidden=true;renderEd()});
+$("oxExp").addEventListener("click",()=>{
+  const url=URL.createObjectURL(new Blob([JSON.stringify({kind:"shooting-diary-torque",torque:OED.torque,care:OED.care},null,1)],{type:"application/json"}));
+  const a=document.createElement("a");a.href=url;a.download="optics-mounts-torque.json";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1000);
+});
+$("oxImp").addEventListener("click",()=>$("oxImpF").click());
+$("oxImpF").addEventListener("change",async()=>{
+  const f=$("oxImpF").files[0];$("oxImpF").value="";if(!f)return;
+  let j;try{j=JSON.parse(await f.text())}catch(e){toast("Not a torque file.");return}
+  const rows=(Array.isArray(j)?j:j.torque||[]).filter(r=>r&&r.joint&&+r.lo>0&&NM[r.unit]).map(r=>{
+    const o={part:String(r.part||""),joint:String(r.joint),lo:+r.lo,unit:r.unit};if(r.hi!=null&&+r.hi>o.lo)o.hi=+r.hi;if(r.max)o.max=true;
+    for(const k of["tool","lube","notes"])if(r[k])o[k]=String(r[k]);return o});
+  OED.torque=OED.torque.concat(rows);
+  if(j.care&&String(j.care).trim()){OED.care=OED.care.trim()?OED.care.trim()+"\n\n"+j.care:String(j.care);$("oxCare").value=OED.care}
+  renderEd();toast(`${rows.length} spec${rows.length===1?"":"s"} added – Save to keep them.`);
+});
+function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,2400)}
 render();
+fetch("api/care",{credentials:"same-origin",headers:{"X-Requested-With":"fetch"}}).then(r=>r.ok?r.json():null).then(j=>{OPT=(j&&j.optics)||{torque:[],care:""};render()}).catch(()=>{});
 fetch("api/guns",{credentials:"same-origin",headers:{"X-Requested-With":"fetch"}}).then(r=>r.ok?r.json():Promise.reject(r.status))
   .then(g=>{GUNS=Array.isArray(g)?g:[];render()})
   .catch(()=>{$("list").innerHTML=`<div class="empty">Couldn't load the guns – offline? Open this page once online and it works offline after.</div>`});

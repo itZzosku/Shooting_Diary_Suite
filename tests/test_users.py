@@ -443,6 +443,17 @@ def test_gun_torque_specs(two):
     o.delete("/diary/api/guns/g-tq", headers=H)
 
 
+def test_care_optics_per_account(two):
+    app, o, m = two
+    assert o.get("/diary/api/care").get_json() == {"optics": {"torque": [], "care": ""}}
+    rows = [{"part": "PA GLx", "joint": "Ring caps", "lo": 15, "hi": 25, "unit": "in-lb", "tool": "T15"}]
+    assert o.put("/diary/api/care/optics", json={"torque": rows, "care": "Level the scope first."}).status_code == 200
+    got = o.get("/diary/api/care").get_json()["optics"]
+    assert got["torque"][0]["hi"] == 25 and got["care"] == "Level the scope first."
+    assert m.get("/diary/api/care").get_json()["optics"]["torque"] == [], "each account its own"
+    assert o.put("/diary/api/care/optics", json={"torque": [{"joint": "x", "lo": 1, "unit": "kg"}]}).status_code == 400
+
+
 def test_lockout_ends_when_admin_resets_password(two, monkeypatch):
     """5 wrong passwords lock the address for 15 min – unless an admin gives that account a new password."""
     app, o, _m = two
