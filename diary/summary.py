@@ -67,6 +67,9 @@ def api_home():
     return jsonify(name=name, username=me["username"], is_admin=bool(me["is_admin"]), pending=pending, demo=bool(me.get("demo")), diary=diary_summary(conn), lent=lent, velocity=vel, zeroes=zero_summary(conn))
 
 
+ACCOUNT_KV = ("nav", "care_optics")
+
+
 def export_data(conn):
     """Everything in one account's file, in the backup / import format (python -m diary import …)."""
     from . import chrono, zero
@@ -74,6 +77,10 @@ def export_data(conn):
                 for r in conn.execute("SELECT id, data FROM sessions ORDER BY date, id")]
     guns = [dict(json.loads(r["data"]), id=r["id"]) for r in conn.execute("SELECT id, data FROM guns ORDER BY id")]
     out = {"profile": json.loads(kv_get("profile", conn) or "{}"), "guns": guns, "sessions": sessions}
+    for k in ACCOUNT_KV:                      # account settings kept in kv: the top bar, the optics torque card
+        v = kv_get(k, conn)
+        if v is not None:
+            out[k] = json.loads(v)
     from . import loans
     out.update(chrono.export_rows(conn))
     out.update(loans.export_rows(conn))

@@ -400,3 +400,50 @@ def test_stale_server_code_is_reported(client, monkeypatch):
     assert _all(client)["stale_code"] is False
     monkeypatch.setattr(api, "_STARTED_CODE", api._code_mtime() - 60)     # as if a .py changed after start
     assert _all(client)["stale_code"] is True
+
+
+def test_backup_covers_every_table_and_setting(client, tmp_path):
+    """Backup completeness: every table in an account's file is in its JSON, every account setting (kv) comes back
+    on import, and the accounts file is copied. A new table or kv key that the backup misses fails here."""
+    import json, sqlite3, subprocess, sys
+    from diary.summary import export_data
+    client.put("/diary/api/ballistics/bullets/b-1", json=BULLET)
+    assert client.put("/diary/api/nav", json={"nav": ["log", "care", "ballistics"]}).status_code == 200
+    assert client.put("/diary/api/care/optics", json={"torque": [], "care": "Level the scope first."}).status_code == 200
+    conn = diary.connect()
+    data = export_data(conn)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
+    kv = dict(conn.execute("SELECT key, value FROM kv").fetchall())
+    conn.close()
+    alias = {"gun_loans": "loans"}                     # tables exported under another name
+    missing = {t for t in tables - {"kv"} if alias.get(t, t) not in data}
+    assert not missing, f"tables missing from the backup: {missing}"
+    # kv: each key the code writes is somewhere in the JSON (password_hash is the old single-user login)
+    inside = {"chrono_gun_aliases": "chrono_settings", "chrono_powders": "chrono_settings"}
+    for k in kv:
+        if k == "password_hash":
+            continue
+        assert k in data or k in (data.get("bal_kv") or {}) or inside.get(k) in data, f"kv {k} missing from the backup"
+    # round trip into a fresh account: the settings come back
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    f = tmp_path / "x.json"
+    f.write_text(json.dumps(data))
+    users.ensure("fresh", "test-password-2")
+    r = subprocess.run([sys.executable, "-m", "diary", "import", "--user", "fresh", str(f)], capture_output=True, text=True, cwd=root)
+    assert r.returncode == 0, r.stderr
+    c2 = sqlite3.connect(users.db_path(users.by_name("fresh")))
+    kv2 = dict(c2.execute("SELECT key, value FROM kv").fetchall())
+    c2.close()
+    assert json.loads(kv2["nav"]) == ["log", "care", "ballistics"]
+    assert json.loads(kv2["care_optics"])["care"] == "Level the scope first."
+    # the accounts file goes into the backup directory too
+    r = subprocess.run([sys.executable, "-m", "diary", "backup", str(tmp_path / "b")], capture_output=True, text=True, cwd=root)
+    assert r.returncode == 0, r.stderr
+    names = os.listdir(tmp_path / "b")
+    assert any(n.startswith("users-") and n.endswith(".db") for n in names), names
+    assert any(n.startswith("diary-osku-") and n.endswith(".json") for n in names), names
+    conn = diary.connect()                             # leave the shared test account as it was
+    conn.execute("DELETE FROM kv WHERE key IN ('nav','care_optics')")
+    conn.commit()
+    conn.close()
+    users.delete("fresh")

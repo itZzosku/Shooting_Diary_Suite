@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Weekly shooting-diary backup: dated JSON + SQLite copy in diary_backups/, JSON emailed to you.
+# Weekly backup into diary_backups/: every account (JSON + SQLite copy, the JSON emailed to you), the accounts
+# file (users-DATE.db), the club ammo database and the shared reticle library.
 # Needs DIARY_SMTP_USER and DIARY_SMTP_PASSWORD (Gmail app password) in the repo's .env.
 # Cron (Sundays 03:17):  17 3 * * 0  /root/Shooting_Diary_Suite/scripts/diary_backup.sh >> /var/log/diary_backup.log 2>&1
 set -euo pipefail

@@ -126,6 +126,10 @@ def import_json(path, replace):
         g += 1
     if data.get("profile"):
         kv_set("profile", json.dumps(data["profile"], ensure_ascii=False), conn)
+    from .summary import ACCOUNT_KV
+    for k in ACCOUNT_KV:
+        if data.get(k) is not None:
+            kv_set(k, json.dumps(data[k], ensure_ascii=False), conn)
     c = chrono.import_rows(conn, data, replace)
     z = zero.import_rows(conn, data, replace)
     from . import loans
@@ -184,6 +188,18 @@ def backup(directory, keep):
                 os.remove(p)
         print(f"Backup {name}: {base}.json + .db (keeping the newest {keep})")
         done.append((name, base + ".json"))
+    # The accounts themselves (names, password hashes, which file is whose): without this a restore would have
+    # to recreate every account by hand before importing its data
+    if os.path.exists(users.users_db_path()):
+        upath = os.path.join(directory, f"users-{stamp}.db")
+        src, dst = sqlite3.connect(users.users_db_path()), sqlite3.connect(upath)
+        with dst:
+            src.backup(dst)
+        src.close()
+        dst.close()
+        for p in sorted(glob.glob(os.path.join(directory, "users-[0-9]*.db")))[:-keep]:
+            os.remove(p)
+        print(f"Backup accounts: {upath}")
     # Deleted accounts: their final copy and their backups go after DELETED_DAYS (as the privacy page says)
     live = {u["username"] for u in users.all_users()} | {"diary"}
     cutoff = time.time() - users.DELETED_DAYS * 86400
