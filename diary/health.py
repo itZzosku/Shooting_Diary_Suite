@@ -8,6 +8,8 @@ Only check results are shown – no account names, counts or paths.
   DIARY_BACKUP_DIR        where the weekly backups go (default: diary_backups next to the code)
   DIARY_BACKUP_MAX_DAYS   newest backup older than this → degraded (default 8; 0 = don't check)
   DIARY_DISK_MIN_MB       free space below this → degraded (default 1024)
+  DIARY_PULL_MAX_DAYS     once another machine pulls backups (scripts/backup_stream.sh), its last pull older than
+                          this → degraded (default 2; 0 = don't check)
 """
 import glob
 import os
@@ -56,6 +58,12 @@ def _backup_age_days():
     return None if not files else round((time.time() - max(os.path.getmtime(f) for f in files)) / 86400, 1)
 
 
+def _pull_age_days():
+    d = os.getenv("DIARY_BACKUP_DIR") or os.path.join(os.path.dirname(HERE), "diary_backups")
+    p = os.path.join(d, ".last-pull")
+    return round((time.time() - os.path.getmtime(p)) / 86400, 1) if os.path.exists(p) else None
+
+
 @bp.get("/health")
 def health():
     checks = {"database": "ok" if _db_ok() else "fail"}
@@ -68,8 +76,11 @@ def health():
     age = _backup_age_days()
     if max_days > 0:
         checks["backup"] = "none" if age is None else ("ok" if age <= max_days else "stale")
+    pull, pull_max = _pull_age_days(), float(os.getenv("DIARY_PULL_MAX_DAYS", "2"))
+    if pull is not None and pull_max > 0:              # only once a machine has started pulling
+        checks["pull"] = "ok" if pull <= pull_max else "stale"
     status = "down" if checks["database"] != "ok" else ("ok" if all(v == "ok" for v in checks.values()) else "degraded")
-    body = {"status": status, "checks": checks, "backup_age_days": age, "disk_free_mb": free_mb,
+    body = {"status": status, "checks": checks, "backup_age_days": age, "pull_age_days": pull, "disk_free_mb": free_mb,
             "version": VERSION, "uptime_s": int(time.time() - STARTED)}
     resp = jsonify(body)
     resp.status_code = 503 if status == "down" else 200

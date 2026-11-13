@@ -1,6 +1,7 @@
 """Accounts: every account has its own database file, so one user can never see or change another's data.
 Synthetic data only."""
 import os
+import time
 import sqlite3
 
 import pytest
@@ -407,6 +408,12 @@ def test_health_endpoint(two, tmp_path, monkeypatch):
     assert anon.get("/diary/health").get_json()["checks"]["backup"] == "stale"
     monkeypatch.setenv("DIARY_BACKUP_MAX_DAYS", "0")
     assert "backup" not in anon.get("/diary/health").get_json()["checks"]
+    # a machine pulling backups (scripts/backup_stream.sh): checked once it has pulled, stale after 2 days
+    (tmp_path / ".last-pull").write_text("x")
+    assert anon.get("/diary/health").get_json()["checks"]["pull"] == "ok"
+    os.utime(tmp_path / ".last-pull", (time.time() - 3 * 86400,) * 2)
+    j = anon.get("/diary/health").get_json()
+    assert j["checks"]["pull"] == "stale" and j["status"] == "degraded"
     body = anon.get("/diary/health").get_data(as_text=True)
     assert "osku" not in body and "mikko" not in body                # no account names
     from diary import health
