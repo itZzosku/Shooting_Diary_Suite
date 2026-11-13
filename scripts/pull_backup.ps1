@@ -1,6 +1,6 @@
 # Pulls a fresh backup of the shooting diary from the server onto this Windows PC (run daily by Task Scheduler).
 # Each run: one dated folder under $Dest with every account's JSON + .db, users.db, clubs.db and library.db;
-# folders older than $KeepDays are removed. The server side is scripts/backup_stream.sh.
+# older ones are thinned out by prune_backup.ps1 (14 daily, 8 weekly, 12 monthly). The server side is scripts/backup_stream.sh.
 #
 # One-time setup (PowerShell):
 #   1. ssh-keygen -t ed25519 -N '""' -C diary-backup-pull -f $env:USERPROFILE\.ssh\diary_backup
@@ -16,7 +16,7 @@ param(
   [string]$Server = "root@10.30.2.2",
   [string]$Key = "$env:USERPROFILE\.ssh\diary_backup",
   [string]$Dest = "$env:USERPROFILE\Backups\ShootingDiary",
-  [int]$KeepDays = 60
+  [int]$Daily = 14, [int]$Weekly = 8, [int]$Monthly = 12   # kept: see prune_backup.ps1
 )
 $ErrorActionPreference = "Stop"
 $stamp = Get-Date -Format "yyyy-MM-dd_HHmm"
@@ -41,9 +41,9 @@ try {
   Remove-Item $tar, "$tar.err" -Force
   $mb = "{0:N1}" -f ((Get-ChildItem $out -Recurse | Measure-Object Length -Sum).Sum / 1MB)
   Log "OK $stamp ($mb MB, $((Get-ChildItem $out).Count) files)"
-  # keep the newest: dated folders older than $KeepDays go (never the one just made)
-  Get-ChildItem $Dest -Directory | Where-Object { $_.Name -match '^\d{4}-\d{2}-\d{2}_\d{4}$' -and $_.FullName -ne $out -and
-    $_.CreationTime -lt (Get-Date).AddDays(-$KeepDays) } | Remove-Item -Recurse -Force
+  # thin out older pulls (only after a good one): see prune_backup.ps1
+  & (Join-Path $PSScriptRoot "prune_backup.ps1") -Dest $Dest -Daily $Daily -Weekly $Weekly -Monthly $Monthly |
+    ForEach-Object { Log $_ }
 } catch {
   Log "FAILED: $_"
   if (Test-Path $out) { Remove-Item $out -Recurse -Force }
