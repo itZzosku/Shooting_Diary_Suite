@@ -14,6 +14,7 @@ Data commands work on one account: add --user NAME (default: the first admin acc
   python -m diary import seed.json --replace   wipe sessions first
   python -m diary export backup.json      dump everything to JSON
   python -m diary backup DIR [--keep 12] [--mail]
+  python -m diary mail-backup DIR          email today's backup files in DIR as one zip
                                           every account: dated JSON + SQLite copy into DIR, keep newest N
                                           per account, --mail: also email the JSONs (settings in .env)
   python -m diary assign-gun GUN_ID --cal ".223 Rem" [--type Kivääri] [--from 2024-04-17] [--to 2026-07-10]
@@ -225,8 +226,38 @@ def _summary(data):
             f"Scopes: {len(data.get('scopes', []))}, zeroes {len(data.get('scope_zeros', []))}\n")
 
 
-def mail_backup(files):
-    """Email the backup JSONs (one per account) in one message. .env: DIARY_SMTP_USER, DIARY_SMTP_PASSWORD
+MAIL_MAX_BYTES = 18_000_000     # the zip; base64 makes it a third bigger and Gmail takes 25 MB per message
+
+
+def backup_zip(directory, stamp=None):
+    """Today's backup files in one zip (bytes): every account's JSON and .db, the accounts file, the club ammo
+    database and the reticle library. Too big for an email: the account .db copies go first (the JSONs hold the
+    same data), then the club database. → (zip bytes, [names in it], [names left out], [(account, json bytes)])"""
+    import io
+    import zipfile
+    stamp = stamp or time.strftime("%Y-%m-%d")
+    pick = lambda pat: sorted(glob.glob(os.path.join(directory, pat)))
+    jsons = pick(f"diary-*-{stamp}.json")
+    groups = [jsons + pick(f"users-{stamp}.db") + pick(f"library-{stamp}.db"),   # always (if at all possible)
+              pick(f"clubs-{stamp}.db"),
+              pick(f"diary-*-{stamp}.db")]
+    accounts = []
+    for p in jsons:
+        with open(p, "rb") as f:
+            accounts.append((re.match(r"diary-(.+)-\d{4}-\d{2}-\d{2}\.json$", os.path.basename(p)).group(1), f.read()))
+    for n in range(len(groups), 0, -1):
+        files = [p for g in groups[:n] for p in g]
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+            for p in files:
+                z.write(p, os.path.basename(p))
+        if buf.tell() <= MAIL_MAX_BYTES or n == 1:
+            left = [os.path.basename(p) for g in groups[n:] for p in g]
+            return buf.getvalue(), [os.path.basename(p) for p in files], left, accounts
+
+
+def mail_backup(directory):
+    """Email today's backup (backup_zip) in one message. .env: DIARY_SMTP_USER, DIARY_SMTP_PASSWORD
     (Gmail app password), optional DIARY_BACKUP_TO (default: DIARY_SMTP_USER), DIARY_SMTP_HOST, DIARY_SMTP_PORT."""
     user = os.getenv("DIARY_SMTP_USER", "").strip().strip('"\'')
     # Google shows the app password in groups; copying can bring non-breaking spaces along.
@@ -237,24 +268,32 @@ def mail_backup(files):
     host = os.getenv("DIARY_SMTP_HOST", "smtp.gmail.com")
     port = int(os.getenv("DIARY_SMTP_PORT", "587"))
 
+    stamp = time.strftime("%Y-%m-%d")
+    payload, names, left, accounts = backup_zip(directory, stamp)
+    if not names:
+        sys.exit(f"No backup files from {stamp} in {directory} – run the backup first.")
+    zname = f"shooting-diary-backup-{stamp}.zip"
     msg = EmailMessage()
-    msg["Subject"] = f"Shooting diary backup {time.strftime('%Y-%m-%d')}"
+    msg["Subject"] = f"Shooting diary backup {stamp}"
     msg["From"] = user
     msg["To"] = to
-    body = [f"Weekly backup of the shooting diary – {len(files)} account{'s' if len(files) != 1 else ''}.\n"]
-    attachments = []
-    for account, json_path in files:
-        with open(json_path, "rb") as f:
-            payload = f.read()
-        name = os.path.basename(json_path)
-        body.append(f"== {account} ({name})\n" + _summary(json.loads(payload)))
-        attachments.append((payload, name))
+    body = [f"Weekly backup of the shooting diary – {len(accounts)} account{'s' if len(accounts) != 1 else ''}, "
+            f"everything in {zname} ({len(payload) / 1e6:.1f} MB).\n"]
+    for account, raw in accounts:
+        body.append(f"== {account}\n" + _summary(json.loads(raw)))
+    body.append("In the zip:\n" + "".join(f"  {n}\n" for n in names))
+    if left:
+        body.append("Too big for one email, left on the server (diary_backups/):\n" + "".join(f"  {n}\n" for n in left))
     body.append("Restore one account on the server:\n"
                 "  ./venv/bin/python -m diary import --user NAME diary-NAME-YYYY-MM-DD.json --replace\n"
-                "Backups contain licence numbers – keep them to yourself.\n")
+                "Whole server (new machine): stop the service, then copy into diary_data/\n"
+                "  users-DATE.db → users.db, each diary-NAME-DATE.db → the file users.db names for that account\n"
+                "  (sqlite3 users.db 'SELECT username, db_file FROM users'), clubs-DATE.db → clubs.db,\n"
+                "  library-DATE.db → library.db. Or recreate the accounts and import each JSON.\n"
+                "Backups contain licence numbers and password hashes – keep them to yourself.\n")
     msg.set_content("\n".join(body))
-    for payload, name in attachments:
-        msg.add_attachment(payload, maintype="application", subtype="json", filename=name)
+    msg.add_attachment(payload, maintype="application", subtype="zip", filename=zname)
+    attachments = [(payload, zname)]
 
     if not password.isascii() or ("gmail" in host and len(password) != 16):
         sys.exit(f"DIARY_SMTP_PASSWORD looks wrong: {len(password)} characters"
@@ -510,7 +549,9 @@ def main():
     b = sub.add_parser("backup")
     b.add_argument("directory")
     b.add_argument("--keep", type=int, default=12)
-    b.add_argument("--mail", action="store_true", help="email the JSON after the backup")
+    b.add_argument("--mail", action="store_true", help="email today's backup files after the backup")
+    mb = sub.add_parser("mail-backup", help="email today's backup files in DIR (accounts, clubs, reticles) as one zip")
+    mb.add_argument("directory")
     g = sub.add_parser("assign-gun")
     g.add_argument("gun_id", nargs="?")
     g.add_argument("--cal")
@@ -567,7 +608,7 @@ def main():
         except ValueError as e:
             sys.exit(str(e))
         return print("Done.")
-    if a.cmd != "backup":
+    if a.cmd not in ("backup", "mail-backup"):
         who = _pick_user(a.user)
         if who and a.cmd not in ("chrono-stats",):
             print(f"[account: {who['username']}]", file=sys.stderr)
@@ -593,7 +634,9 @@ def main():
     elif a.cmd == "backup":
         files = backup(a.directory, max(1, a.keep))
         if a.mail and files:
-            mail_backup(files)
+            mail_backup(a.directory)
+    elif a.cmd == "mail-backup":
+        mail_backup(a.directory)
     else:
         export_json(a.path)
 

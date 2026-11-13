@@ -447,3 +447,41 @@ def test_backup_covers_every_table_and_setting(client, tmp_path):
     conn.commit()
     conn.close()
     users.delete("fresh")
+
+
+def test_mail_backup_zips_everything(client, tmp_path, monkeypatch):
+    """The weekly email: one zip with every account's JSON and .db, the accounts file, clubs and reticle library;
+    when too big, the account .db copies are left out first (the JSONs hold the same data)."""
+    import io, subprocess, sys, zipfile
+    import diary.__main__ as cli
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    d = str(tmp_path / "b")
+    for pkg in ("diary", "club", "ballistics"):
+        r = subprocess.run([sys.executable, "-m", pkg, "backup", d], capture_output=True, text=True, cwd=root)
+        assert r.returncode == 0, (pkg, r.stderr)
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def starttls(self): pass
+        def login(self, u, p): pass
+        def send_message(self, m): sent.append(m)
+    monkeypatch.setattr(cli.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("DIARY_SMTP_USER", "me@example.com")
+    monkeypatch.setenv("DIARY_SMTP_PASSWORD", "abcdabcdabcdabcd")
+    cli.mail_backup(d)
+    att = [p for p in sent[0].iter_attachments()]
+    assert len(att) == 1 and att[0].get_filename().endswith(".zip")
+    names = zipfile.ZipFile(io.BytesIO(att[0].get_payload(decode=True))).namelist()
+    for prefix, ext in (("diary-osku-", ".json"), ("diary-osku-", ".db"), ("users-", ".db"), ("library-", ".db")):
+        assert any(n.startswith(prefix) and n.endswith(ext) for n in names), (prefix, ext, names)
+    if any(f.startswith("clubs-") for f in os.listdir(d)):
+        assert any(n.startswith("clubs-") for n in names)
+    assert "== osku" in sent[0].get_body().get_content()
+    # too big: account .db copies go first, JSONs stay
+    monkeypatch.setattr(cli, "MAIL_MAX_BYTES", 1)
+    _, names, left, _ = cli.backup_zip(d)
+    assert any(n.endswith(".json") for n in names) and not any(n.startswith("diary-") and n.endswith(".db") for n in names)
+    assert any(n.startswith("diary-osku-") and n.endswith(".db") for n in left)
