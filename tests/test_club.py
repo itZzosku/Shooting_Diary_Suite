@@ -516,3 +516,32 @@ def test_ssi_query_adapts_to_schema(monkeypatch):
     with pytest.raises(ssi.SsiError):                            # other errors are not retried
         monkeypatch.setattr(ssi, "_post", lambda q, v, jwt=None, opener=None: (_ for _ in ()).throw(ssi.SsiError("SSI: Permission denied")))
         ssi.fetch("https://shootnscoreit.com/event/22/1/")
+
+
+def test_paper_log(setup):
+    """Admin types in a paper log: one entry per row, old dates allowed, paid/unpaid, price override, no doubles."""
+    app, a, ids, codes = setup
+    a.post("/ammo/api/c/testclub/moves", json={"kind": "buy", "box": ids["9 mm A"], "item": ids["Geco"], "qty": 500})
+    rows = [{"date": "2026-03-07", "name": "Liisa L", "item": ids["Geco"], "qty": 100, "paid": True},
+            {"date": "2026-03-07", "name": "Pekka P", "item": ids["S&B"], "qty": 50, "paid": False},
+            {"date": "2026-03-14", "name": "Liisa L", "item": ids["Geco"], "qty": 20, "paid": True, "price": "0.20"}]
+    url = "/ammo/api/c/testclub/paper"
+    r = a.post(url, json={"box": ids["9 mm A"], "batch": "b1", "rows": rows})
+    assert r.status_code == 200 and r.json["added"] == 3
+    assert a.post(url, json={"box": ids["9 mm A"], "batch": "b1", "rows": rows}).json["added"] == 0   # Save pressed twice
+    assert _stock(a, "9 mm A") == 500 - 170
+    log = [m for m in a.get("/ammo/api/c/testclub/log?month=2026-03").json["moves"] if m["kind"] == "use"]
+    assert len(log) == 3 and len({m["grp"] for m in log}) == 3 and len({m["ref"] for m in log}) == 3
+    assert all(m["note"] == "paper log" for m in log)
+    pekka = next(m for m in log if m["name"] == "Pekka P")
+    assert pekka["paid"] == 0 and pekka["qty"] == -50 and pekka["price"] == 0.25
+    assert {m["price"] for m in log if m["name"] == "Liisa L"} == {0.30, 0.20}
+    assert "Liisa L" in a.get("/ammo/api/c/testclub/names").json["names"]
+    # checks: ammo of another calibre, bad date, no name, too many rounds
+    for bad in ({"item": ids["762"]}, {"date": "1999-01-01"}, {"name": "x"}, {"qty": 999999}):
+        row = dict(rows[0], **bad)
+        assert a.post(url, json={"box": ids["9 mm A"], "rows": [row]}).status_code == 400, bad
+    # admins only: a box holder can't
+    h = _login(app, "chold", "chold-password-1")
+    assert h.post(url, json={"box": ids["9 mm B"], "rows": rows}).status_code == 403
+    assert h.get("/ammo/api/c/testclub/names").status_code == 403

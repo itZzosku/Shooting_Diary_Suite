@@ -1010,6 +1010,74 @@ def api_move(slug):
     return jsonify(ok=True, grp=grp)
 
 
+PAPER_MAX_ROWS = 200
+
+
+@cbp.post("/api/c/<slug>/paper")
+def api_paper(slug):
+    """Admin: shooters' entries copied by hand from a paper log. Each row becomes its own entry, as if the shooter
+    had filled in the box form (kind use, own payment code), marked "paper log" and with who typed it in.
+    Body {box, batch, rows: [{date, name, item, qty, paid, price?}]}; a resend of the same batch adds nothing twice."""
+    club, u, _r = _club_for(slug)
+    b, conn = _body(), cdb()
+    try:
+        box = conn.execute("SELECT * FROM boxes WHERE id=? AND club_id=?", (int(b.get("box")), club["id"])).fetchone()
+    except (TypeError, ValueError):
+        box = None
+    if not box:
+        return _err("Pick the box.")
+    items = {i["id"]: i for i in _items_for(conn, club["id"], box_cals(box))}
+    for r in conn.execute("SELECT * FROM items WHERE club_id=? AND archived=1", (club["id"],)):
+        if r["calibre"] in box_cals(box):
+            items.setdefault(r["id"], r)          # an old paper log can name an ammo no longer sold
+    rows = b.get("rows")
+    if not isinstance(rows, list) or not 1 <= len(rows) <= PAPER_MAX_ROWS:
+        return _err(f"Add 1–{PAPER_MAX_ROWS} rows.")
+    batch = _clean(b.get("batch"), 24)
+    latest = datetime.now(timezone.utc).date() + timedelta(days=1)
+    clean = []
+    for n, r in enumerate(rows, 1):
+        try:
+            if not isinstance(r, dict):
+                raise ValueError
+            name = _clean(r.get("name"), 60)
+            if len(name) < 2:
+                return _err(f"Row {n}: write the name.")
+            d = str(r.get("date") or "")
+            if not DATE_RE.match(d) or not _date(2000, 1, 1) <= _date.fromisoformat(d) <= latest:
+                return _err(f"Row {n}: check the date.")
+            it = items.get(int(r.get("item") or 0))
+            if not it:
+                return _err(f"Row {n}: pick the ammo.")
+            q = _int(r.get("qty"), 1, MAX_ROUNDS)
+            price = _price(r["price"]) if r.get("price") not in (None, "") else it["price"]
+        except (TypeError, ValueError):
+            return _err(f"Row {n}: rounds a whole number from 1 to {MAX_ROUNDS}, price in euros.")
+        clean.append((name, d, it, q, price, 1 if r.get("paid") else 0,
+                      f"paper:{batch}:{n}" if batch else None))
+    at, added = _now(), 0
+    for name, d, it, q, price, paid, cid in clean:
+        if cid and conn.execute("SELECT 1 FROM moves WHERE client_id=?", (cid,)).fetchone():
+            continue                               # this row of this batch is already in
+        conn.execute("INSERT INTO moves(club_id,grp,kind,box_id,item_id,qty,price,name,date,at,paid,ref,client_id,"
+                     "note,by_uid) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     (club["id"], _grp(), "use", box["id"], it["id"], -q, price, name, d, at, paid, _ref(), cid,
+                      "paper log", u["id"]))
+        added += 1
+    conn.commit()
+    return jsonify(ok=True, added=added)
+
+
+@cbp.get("/api/c/<slug>/names")
+def api_names(slug):
+    """Shooters' names already in the log (newest first) – suggestions when typing in a paper log."""
+    club, _u, _r = _club_for(slug)
+    names = [r["name"] for r in cdb().execute(
+        "SELECT name, MAX(date) AS d FROM moves WHERE club_id=? AND kind='use' AND name<>'' AND voided_at IS NULL "
+        "GROUP BY name COLLATE NOCASE ORDER BY d DESC LIMIT 500", (club["id"],))]
+    return jsonify(names=names)
+
+
 @cbp.get("/api/c/<slug>/log")
 def api_log(slug):
     """Moves for one month (YYYY-MM, default this month), optionally one box; newest first."""

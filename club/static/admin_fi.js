@@ -34,9 +34,18 @@ const ADMIN_EN={
   inUse:"It has history in the log, so it can't be deleted – archive it instead.",
   ref:"code",
   hintCals:"Separated by commas. The shooter sees each ammo on its own line in the form and fills in only what they shot.",
+  hintPaper:"Copy one box's paper log: a row per shooter and ammo. Each row becomes an entry like one from the box form, with its own payment code and a PAPER tag in the log. Untick Paid for anyone who hasn't paid.",
   hintExport:"Ammo and payments, voided entries left out. PDF for printing, Excel (entries + summary) and CSV for the books."
 };
 const ADMIN_FI={
+  "+ Paper log":"+ Paperilista","Enter from a paper log":"Kirjaa paperilistalta","+ Row":"+ Rivi","Remove row":"Poista rivi",
+  "Price € / round":"Hinta € / patruuna","current price":"nykyinen hinta","paper":"paperi",
+  "{n} entries · {r} rounds · {e}":"{n} kirjausta · {r} patruunaa · {e}","{n} entries saved":"{n} kirjausta tallennettu",
+  "Fill in at least one row.":"Täytä vähintään yksi rivi.","Check the price.":"Tarkista hinta.",
+  "Row {n}: write the name.":"Rivi {n}: kirjoita nimi.","Row {n}: rounds a whole number.":"Rivi {n}: patruunat kokonaislukuna.",
+  "Row {n}: check the date.":"Rivi {n}: tarkista päivämäärä.",
+  "Change the box? The rows typed so far are cleared.":"Vaihdetaanko laatikko? Tähän asti kirjoitetut rivit tyhjennetään.",
+  hintPaper:"Kopioi yhden laatikon paperilista: rivi per ampuja ja patruuna. Jokaisesta rivistä tulee kirjaus kuten laatikon lomakkeelta, omalla maksukoodillaan ja PAPERI-merkinnällä lokissa. Poista Maksettu-ruksi niiltä, jotka eivät ole maksaneet.",
   "Officers":"Toimitsijat","Own entry":"Oma kirjaus","Difference":"Erotus","Missing €":"Puuttuu €","Status":"Tila",
   "Default ammo per stage (optional)":"Oletuspatruuna rasteittain (valinnainen)","All stages":"Kaikki rastit","Stage":"Rasti","No ammo in these boxes.":"Näissä laatikoissa ei ole patruunoita.",
   hintStageAmmo:"Toimitsijasivu avaa rastin näillä patruunoilla valmiiksi (esim. pistooli + kivääri -rastilla molemmat). Ilman valintaa ampujan edellisellä rastilla käyttämä patruuna.",

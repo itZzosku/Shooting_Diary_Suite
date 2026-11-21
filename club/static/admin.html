@@ -53,6 +53,10 @@
 .sarow span{display:flex;flex-wrap:wrap;gap:5px}
 .sachip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:.8rem;font-weight:600;color:var(--fg)}
 .sachip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.prow{display:grid;grid-template-columns:9.2em minmax(0,1fr) 5.2em auto auto;gap:6px;align-items:center;border-top:1px solid var(--line);padding:8px 0}
+.prow:first-child{border-top:0}.prow input,.prow select{min-width:0}.prow .it{grid-column:1/-1}
+.prow .x{background:none;border:0;color:var(--muted);font-size:1.1rem;padding:4px 6px;min-height:0}
+@media (max-width:560px){.prow{grid-template-columns:minmax(0,1fr) 5.2em auto auto}.prow [data-k=date]{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -96,7 +100,7 @@
     <label class="check"><input type="checkbox" id="lHideVoid"> <span data-t="Hide voided"></span></label>
     <div class="rows" id="log"></div>
     <p class="hint" id="logHint"></p>
-    <div id="exportRow"><button type="button" class="ghost" id="exportBtn" data-t="Export for the treasurer…"></button></div>
+    <div id="exportRow" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="ghost" id="exportBtn" data-t="Export for the treasurer…"></button><button type="button" class="ghost" id="paperBtn" data-t="+ Paper log"></button></div>
   </section>
 
   <!-- Season fees (admins): who has paid this year – for the match desk -->
@@ -222,7 +226,7 @@ async function load(){
 function renderHead(){
   document.title=S.club.name+" · "+T("Club ammo");$("clubName").textContent=S.club.name;
   $("roleTxt").textContent=" · "+T(isAdmin()?"admin":"box holder");
-  $("setupTab").hidden=!isAdmin();$("matchTab").hidden=!isAdmin();$("feesTab").hidden=!isAdmin();
+  $("setupTab").hidden=!isAdmin();$("paperBtn").hidden=!isAdmin();$("matchTab").hidden=!isAdmin();$("feesTab").hidden=!isAdmin();
 }
 
 /* ---- warnings ---- */
@@ -261,16 +265,17 @@ function renderStock(){
       <span><b class="num">${fmt(tot)}</b>${isAdmin()&&lv?` <button class="link quiet" type="button" data-level="${esc(c)}" style="margin-left:8px">${T("Level")}</button>`:""}</span></div>`}).join("")}</div>`;
   const any=S.boxes.some(b=>!b.archived&&mayBox(b));
   // Refill / Move / Count right under the boxes
-  $("stock").innerHTML=`<div class="cal"><div class="calhead"><h2>${T("Boxes")}</h2></div>${boxes}<div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${any?`<button class="ghost" type="button" data-act="buy">${T("+ Refill")}</button><button class="ghost" type="button" data-act="move">${T("Move")}</button><button class="ghost" type="button" data-act="count">${T("Count")}</button>`:""}</div></div>`+cals+merchHtml;
+  $("stock").innerHTML=`<div class="cal"><div class="calhead"><h2>${T("Boxes")}</h2></div>${boxes}<div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${any?`<button class="ghost" type="button" data-act="buy">${T("+ Refill")}</button><button class="ghost" type="button" data-act="move">${T("Move")}</button><button class="ghost" type="button" data-act="count">${T("Count")}</button>`:""}${isAdmin()?`<button class="ghost" type="button" data-act="paper">${T("+ Paper log")}</button>`:""}</div></div>`+cals+merchHtml;
   $("stockActs").innerHTML="";
 }
 $("stock").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches("[data-box]"))boxSheet(boxOf(+e.target.dataset.box))});
 $("stock").addEventListener("click",e=>{const lb=e.target.closest("[data-lowbox]");if(lb)return boxLowSheet(boxOf(+lb.dataset.lowbox),lb.dataset.cal);
   const b=e.target.closest("[data-box]");if(b)return boxSheet(boxOf(+b.dataset.box));
   const pm=e.target.closest("[data-pm]");if(pm)return merchSheet(S.products.find(p=>p.id===+pm.dataset.pm));
-  const ac=e.target.closest("[data-act]");if(ac)return moveSheet(ac.dataset.act,null);
+  const ac=e.target.closest("[data-act]");if(ac)return ac.dataset.act==="paper"?paperSheet():moveSheet(ac.dataset.act,null);
   const l=e.target.closest("[data-level]");if(l)levelSheet(l.dataset.level)});
-$("stockActs").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b)moveSheet(b.dataset.act,null)});
+$("stockActs").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b)b.dataset.act==="paper"?paperSheet():moveSheet(b.dataset.act,null)});
+$("paperBtn").addEventListener("click",()=>paperSheet(LOG_BOX&&boxOf(LOG_BOX)));
 
 /* ---- sheet ---- */
 let onSave=null;
@@ -350,6 +355,57 @@ function moveSheet(kind,b){
   });
   $("sBody").onchange=e=>{if(e.target.id==="mBox"){cur=+e.target.value;const keep=v("mQty");$("sBody").innerHTML=html();$("mQty").value=keep}};
 }
+/* Paper log (admins): copy a box's paper sheet row by row; each row is saved as a shooter's entry ("paper log") */
+let NAMES=null;
+function paperSheet(b){
+  const boxes=S.boxes.filter(x=>!x.archived);if(!boxes.length)return;
+  let cur=(b||boxes[0]).id;
+  const batch=Math.random().toString(36).slice(2,12)+Date.now().toString(36);   // a second Save of the same sheet adds nothing twice
+  const its=()=>S.items.filter(i=>boxOf(cur).cals.includes(i.calibre)&&!i.archived);
+  const itSel=(sel)=>{const l=its();return l.length>1?`<select data-k="item" class="it">${l.map(i=>`<option value="${i.id}"${i.id===sel?" selected":""}>${esc(boxOf(cur).cals.length>1?i.calibre+(i.name?" "+i.name:""):itemName(i))} · ${eur(i.price)}</option>`).join("")}</select>`:""};
+  const rowHtml=(d,item)=>`<div class="prow" data-r><input type="date" data-k="date" value="${d||today()}" aria-label="${T("Date")}">
+    <input type="text" data-k="name" maxlength="60" list="pNames" placeholder="${T("Name")}" autocomplete="off">
+    <input type="number" data-k="qty" inputmode="numeric" min="1" placeholder="${T("Rounds")}">
+    <label class="check" style="gap:4px"><input type="checkbox" data-k="paid" checked>${T("Paid")}</label>
+    <button type="button" class="x" data-rm aria-label="${T("Remove row")}">✕</button>${itSel(item)}</div>`;
+  const html=()=>`<p class="hint" style="margin:0">${T("hintPaper")}</p>
+    <div class="grid2"><label class="f">${T("Box")}<select id="pBox">${boxOpts(cur)}</select></label>
+      <label class="f">${T("Price € / round")}<input type="text" inputmode="decimal" id="pPrice" placeholder="${T("current price")}"></label></div>
+    ${its().length?"":`<div class="msg">${T("Add an ammo price for this calibre first (Setup).")}</div>`}
+    <datalist id="pNames">${(NAMES||[]).map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
+    <div id="pRows">${rowHtml()}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><button type="button" class="ghost" id="pAdd">${T("+ Row")}</button><span class="hint" id="pSum"></span></div>`;
+  const rows=()=>[...document.querySelectorAll("#pRows [data-r]")];
+  const val=(r,k)=>{const e=r.querySelector(`[data-k="${k}"]`);return e?(e.type==="checkbox"?e.checked:e.value.trim()):""};
+  const itemOfRow=r=>+val(r,"item")||(its()[0]||{}).id;
+  const filled=()=>rows().filter(r=>val(r,"name")||val(r,"qty"));
+  const priceOver=()=>{const t=(v("pPrice")||"").trim().replace(",",".");return t===""?null:+t};
+  const sum=()=>{const f=filled(),po=priceOver();let n=0,e=0;
+    f.forEach(r=>{const q=+val(r,"qty")||0;n+=q;e+=q*(po!=null&&isFinite(po)?po:(itemOf(itemOfRow(r))||{}).price||0)});
+    $("pSum").textContent=f.length?T("{n} entries · {r} rounds · {e}",{n:f.length,r:fmt(n),e:eur(e)}):""};
+  const add=()=>{const l=rows().at(-1);$("pRows").insertAdjacentHTML("beforeend",rowHtml(l&&val(l,"date"),l&&itemOfRow(l)));return rows().at(-1)};
+  sheet(T("Enter from a paper log"),html(),async()=>{
+    const f=filled();if(!f.length)throw new Error(T("Fill in at least one row."));
+    const po=priceOver();if(po!=null&&!(po>=0&&po<=100))throw new Error(T("Check the price."));
+    const out=f.map((r,i)=>{const n=i+1,q=+val(r,"qty");
+      if(val(r,"name").length<2)throw new Error(T("Row {n}: write the name.",{n}));
+      if(!(q>=1&&Number.isInteger(q)))throw new Error(T("Row {n}: rounds a whole number.",{n}));
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(val(r,"date")))throw new Error(T("Row {n}: check the date.",{n}));
+      return{date:val(r,"date"),name:val(r,"name"),qty:q,item:itemOfRow(r),paid:val(r,"paid"),price:po}});
+    const j=await api("POST",`c/${SLUG}/paper`,{box:cur,batch,rows:out});toast(T("{n} entries saved",{n:j.added}));
+  });
+  $("sBody").onclick=e=>{if(e.target.id==="pAdd"){add().querySelector('[data-k="name"]').focus();return}
+    const x=e.target.closest("[data-rm]");if(x){const r=x.closest("[data-r]");if(rows().length>1)r.remove();else r.querySelectorAll("input[type=text],input[type=number]").forEach(i=>i.value="");sum()}};
+  $("sBody").oninput=e=>{const r=e.target.closest("[data-r]");
+    if(r&&r===rows().at(-1)&&(val(r,"name")||val(r,"qty")))add();      // always one empty row at the end
+    sum()};
+  $("sBody").onchange=e=>{if(e.target.id==="pBox"){
+      if(filled().length&&!confirm(T("Change the box? The rows typed so far are cleared.")))return void(e.target.value=cur);
+      cur=+e.target.value;const pr=v("pPrice");$("sBody").innerHTML=html();$("pPrice").value=pr;sum()}
+    else sum()};
+  if(!NAMES)api("GET",`c/${SLUG}/names`).then(j=>{NAMES=j.names;const dl=$("pNames");if(dl)dl.innerHTML=NAMES.map(n=>`<option value="${esc(n)}">`).join("")}).catch(()=>{});
+  const first=document.querySelector('#pRows [data-k="name"]');if(first)first.focus();
+}
 function handSheet(b){
   sheet(T("Hand over {name}",{name:b.name}),`<label class="f">${T("New holder")}<input type="text" id="hName" maxlength="60" value="${esc(b.holder_name)}"></label>
     <label class="f">${T("Their diary account (optional – gives rights to this box)")}<input type="text" id="hUser" maxlength="32" value="${esc(b.holder_user||"")}" autocapitalize="none"></label>`,
@@ -420,7 +476,7 @@ function renderLog(){
   $("log").innerHTML=list.length?list.map(g=>{
     const vd=!!g.voided_at,r0=g.rows[0];let what,right;
     if(g.kind==="use"){const n=g.rows.reduce((a,r)=>a-r.qty,0);
-      what=`<b>${esc(g.name||T("Shooter"))}</b> · ${fmt(n)} × ${esc(g.rows.map(r=>r.iname||r.ical).join(", "))}${g.paid?"":unpaidTag}
+      what=`<b>${esc(g.name||T("Shooter"))}</b> · ${fmt(n)} × ${esc(g.rows.map(r=>r.iname||r.ical).join(", "))}${g.paid?"":unpaidTag}${g.note==="paper log"?`<span class="tag">${T("paper")}</span>`:""}
         <br><small>${fiDate(g.date)} · ${esc(g.bname)} · ${T("ref")} <b class="num">${esc(g.ref)}</b></small>`;right=eur(amt(g))}
     else if(g.kind==="move"){const out=g.rows.find(r=>r.qty<0),inn=g.rows.find(r=>r.qty>0);
       what=`${T("Move")} ${fmt(inn.qty)} ${esc(inn.iname||inn.ical)} · ${esc(out.bname)} → ${esc(inn.bname)}<br><small>${meta(g)}</small>`;right=""}
