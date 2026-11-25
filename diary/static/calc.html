@@ -264,7 +264,7 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
    angle (mrad) = offset (mm) / distance (m); 1 mrad = 3.4377 MOA; clicks = angle / click value.
    Group low → dial UP, group left → dial RIGHT. */
 const MRAD_MOA=21600/(2*Math.PI*1000);
-const CLICKS=[["0.25 MOA","¼ MOA",0.25],["0.5 MOA","½ MOA",0.5],["1 MOA","1 MOA",1],["0.1 MRAD","0.1 MRAD",0.1*MRAD_MOA],["0.05 MRAD","0.05 MRAD",0.05*MRAD_MOA],["0.1 MIL","0.1 mil (NATO, 1/6400)",0.3375]];
+const CLICKS=[["0.25 MOA","¼ MOA",0.25],["0.5 MOA","½ MOA",0.5],["1 MOA","1 MOA",1],["1.5 MOA","1.5 MOA",1.5],["0.1 MRAD","0.1 MRAD",0.1*MRAD_MOA],["0.05 MRAD","0.05 MRAD",0.05*MRAD_MOA],["0.1 MIL","0.1 mil (NATO, 1/6400)",0.3375]];
 const CK="click-calc";
 let st={};try{st=JSON.parse(localStorage.getItem(CK)||"{}")}catch(e){}
 const C={y:st.y||-1,x:st.x||-1,scopes:[]};
